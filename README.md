@@ -238,7 +238,9 @@ The response includes classification flags and the signals that caused each matc
     "recommendedActions": ["Review the primary source and contact the school adviser."],
     "requiresHumanReview": true,
     "provider": "Groq",
-    "model": "openai/gpt-oss-20b"
+    "model": "openai/gpt-oss-20b",
+    "evaluation": { "verdict": "YES", "reason": "The assessment is supported.", "model": "qwen/qwen3.8-27b" },
+    "attempts": 1
   }
 }
 ```
@@ -250,6 +252,7 @@ Create a Groq API key, then add it only to the ignored `.env` file:
 ```env
 GROQ_API_KEY=gsk_...
 GROQ_MODEL=openai/gpt-oss-20b
+GROQ_JUDGE_MODEL=qwen/qwen3.8-27b
 ```
 
 Restart Spring Boot after changing `.env`. During each authenticated Federal Register
@@ -257,10 +260,50 @@ import, the backend sends only relevant profile fields (not the user's name or e
 policy metadata, deterministic visa matches, and a bounded source excerpt to Groq. Groq
 returns strict structured JSON with `HIGH`, `MEDIUM`, `LOW`, or `NOT_APPLICABLE` urgency,
 confidence, reasons, actions, and a human-review flag. The RAG Inspector displays that
-assessment immediately above the imported source.
+assessment immediately above the imported source. The same Groq key is used for the
+Qwen judge; `GROQ_JUDGE_MODEL` is optional and defaults to the value above. Make sure
+the model is available to your Groq account. Qwen is a preview model and may change.
+
+Qwen independently checks the generated urgency and recommended next steps against the
+same profile and policy excerpt. A `YES` verdict returns the assessment. A `NO` gives
+the generator feedback and retries once; a second `NO`, invalid response, or unavailable
+judge returns an `UNAVAILABLE` assessment requiring human review, without displaying
+the unapproved recommendation. A successful judge verdict is not proof of legal accuracy.
+High-urgency results always require human review. Confidence is model-reported and is not
+a calibrated probability. This review is based on the first 12,000 characters, not the
+whole document; the deterministic notification rules remain separate. Both prompts use
+the stated visa type and instruct the models not to assume that an I-140 filing means a
+different current immigration status. The judge can still make mistakes; consult the
+official source and a qualified adviser when appropriate.
+
+To inspect the judge result in the terminal, sign in using the instructions above and run:
+
+```bash
+curl -s -X POST http://localhost:8080/ingestion/federal-register/2026-14439 \
+  -H "Authorization: Bearer $TOKEN" | jq '.impactAssessment'
+```
+
+Check `evaluation.verdict` (`YES`, `NO`, or `UNAVAILABLE`), `evaluation.reason`, and
+`attempts`. Re-imports reuse vectors but run a fresh profile assessment and judgment.
 
 If `GROQ_API_KEY` is absent or the provider call fails, ingestion and pgvector indexing
 still complete. The response uses `UNAVAILABLE` instead of fabricating an assessment.
+The generator reports HTTP 429 as a rate or quota limit and HTTP 401/403 as an
+authentication or access failure; check Groq usage, your key, and model access as
+appropriate. An unavailable independent review can also be caused by a judge API or
+response error. Check the Spring Boot terminal for `Groq impact generator`,
+`Groq impact judge`, or `Impact judge` warnings: they include an HTTP status or error
+type without logging the API key, policy text, profile details, or provider response.
+The displayed `attempts` counts generator attempts; a retained `NO` may be from an
+earlier attempt if the retry fails.
+
+To run the focused generator and judge tests in WSL:
+
+```bash
+./mvnw '-Dtest=ImpactJudgeServiceTests,ProfileImpactAssessmentServiceTests' test
+```
+
+These tests mock Groq; they do not verify live API credentials, model access, or model quality.
 
 The chunk count can vary. Importing the same unchanged document again returns
 `"alreadyIndexed":true` and `"chunksIndexed":0`; this means the existing vectors were

@@ -11,5 +11,7 @@ public record ProfileImpactAssessment(
         List<String> recommendedActions,
         boolean requiresHumanReview,
         String provider,
-        String model) {
+        String model,
+        JudgeEvaluation evaluation,
+        int attempts) {
 }
