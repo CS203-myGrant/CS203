@@ -466,3 +466,47 @@ have indexed them. Do not judge correctness from answer text alone: inspect `cit
 ```bash
 ./mvnw test
 ```
+
+## Support chat verification and AI setup
+
+The **Feedback** button on Notifications opens the human support chat.
+Human messages are delivered to the in-app **Feedback inbox** for ADMIN and MANAGER
+accounts. Staff must sign in and monitor that inbox; this does not send email or connect
+an external customer service system. Use a separate browser or private window to try
+both sides with existing applicant and staff accounts.
+
+With PostgreSQL running and local `.env` configured, run:
+
+```bash
+./mvnw test -Dtest=SupportIntegrationTest,FeedbackServiceTests,RagServiceTests
+node --test src/test/js/api-response.test.cjs
+```
+
+The integration tests use real PostgreSQL persistence and JWT authentication. They
+check applicant-to-staff delivery, the return reply, applicant access restrictions,
+and an unavailable AI returning HTTP 503 while the same JWT remains usable. Test
+accounts and messages roll back. The vector service is mocked to simulate an outage.
+The JavaScript tests check that HTTP 403 and 503 preserve the session, while 401
+requires signing in again.
+
+The separate RAG inspector calls `/rag/query`. The existing RAG flow is:
+
+1. Ingest policy documents using the RAG inspector (or `/ingestion/documents`).
+2. Split documents and embed their text with Ollama `mxbai-embed-large`.
+3. Store embeddings and source metadata in PostgreSQL/pgvector.
+4. Embed the user's question and retrieve matching chunks filtered by visa type.
+5. Pass the retrieved text and question to Ollama `llama3.2` and return an answer
+   with citations. If nothing matches, return an insufficient-evidence answer.
+
+Start Ollama and confirm both models are available with `ollama list`. If missing,
+run `ollama pull mxbai-embed-large` and `ollama pull llama3.2`. Import a source before
+asking about it; an empty index cannot provide a grounded answer.
+
+A hosted AI API can replace the answer-generation model while keeping retrieval.
+Add the chosen provider's Spring AI chat integration, keep its API key in server-side
+configuration, and configure the `ChatClient` injected into `RagService` to use that
+provider. Send retrieved evidence along with the question. A direct API call with only
+the question is ordinary chat, without retrieval from your documents. Keeping the
+current embedding model avoids rebuilding the existing 1024-dimensional vector index;
+changing the embedding model requires re-embedding the documents and checking dimensions.
+The existing Groq impact-assessment configuration is separate from this RAG chat client.

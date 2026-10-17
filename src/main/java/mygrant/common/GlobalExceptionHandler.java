@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import mygrant.ingestion.PolicyAlreadyExistsException;
+import mygrant.feedback.FeedbackAccessDeniedException;
+import mygrant.feedback.FeedbackNotFoundException;
 import mygrant.notifications.NotificationNotFoundException;
 import mygrant.policies.PolicyNotFoundException;
 
@@ -37,6 +39,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NotificationNotFoundException.class)
     public ResponseEntity<ApiError> handleNotificationNotFound(NotificationNotFoundException exception) {
         return response(HttpStatus.NOT_FOUND, exception.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(FeedbackNotFoundException.class)
+    public ResponseEntity<ApiError> handleFeedbackNotFound(FeedbackNotFoundException exception) {
+        return response(HttpStatus.NOT_FOUND, exception.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(FeedbackAccessDeniedException.class)
+    public ResponseEntity<ApiError> handleFeedbackAccessDenied(FeedbackAccessDeniedException exception) {
+        return response(HttpStatus.FORBIDDEN, exception.getMessage(), Map.of());
     }
 
     @ExceptionHandler(PolicyAlreadyExistsException.class)
