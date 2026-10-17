@@ -33,6 +33,8 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
+            .exceptionHandling(errors -> errors.authenticationEntryPoint((request, response, exception) ->
+                response.sendError(401, "Please sign in to continue")))
             .csrf(csrf -> csrf.disable()) // Disabled for REST APIs
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session
@@ -40,7 +42,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // A notification stream closing re-dispatches the already-authorized request,
                 // and the JWT filter does not run again for that dispatch.
-                .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
+                .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                 .requestMatchers("/", "/mygrant-prototype.html", "/favicon.ico",
                         "/api/v1/auth/register", "/api/v1/auth/login",
                         "/api/v1/auth/workos/login", "/api/v1/auth/workos/callback",
