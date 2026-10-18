@@ -1516,7 +1516,7 @@ function renderProofGrid(ingest, result, evidenceItems){
       <div class="proof-kicker">STEP 3 &middot; PROFILE IMPACT</div>
       <h3>${impact ? escapeHtml(formatUrgency(impact.urgency)) : 'Waiting for import'}</h3>
       <p>${impact ? escapeHtml(impact.summary) : 'Groq compares the imported source with the signed-in user profile.'}</p>
-      <span class="live-pill ${impact && impact.urgency!=='UNAVAILABLE'?'pass':''}">${impact ? `${escapeHtml(impact.confidence)}% confidence` : 'Waiting'}</span>
+      <span class="live-pill ${impact && impact.urgency!=='UNAVAILABLE'?'pass':''}">${impact ? (impact.urgency==='UNAVAILABLE' ? 'Human review required' : `${escapeHtml(impact.confidence)}% model-reported confidence`) : 'Waiting'}</span>
     </div>
     <div class="proof-card">
       <div class="proof-kicker">STEP 4 &middot; RAG ANSWER</div>
@@ -1538,14 +1538,16 @@ function renderProfileImpact(impact){
     <div class="proof-kicker">PROFILE-SPECIFIC LLM ASSESSMENT</div>
     <div class="evidence-meta">
       <span class="live-pill ${ready?'pass':''}">${escapeHtml(formatUrgency(impact.urgency))}</span>
-      <span class="evidence-pill">${escapeHtml(impact.confidence)}% confidence</span>
+      ${ready?`<span class="evidence-pill">${escapeHtml(impact.confidence)}% model-reported confidence</span>`:''}
       <span class="evidence-pill">${escapeHtml(impact.provider)} &middot; ${escapeHtml(impact.model)}</span>
+      ${impact.evaluation?`<span class="evidence-pill">Judge: ${escapeHtml(impact.evaluation.verdict)} &middot; ${escapeHtml(impact.evaluation.model)}</span>`:''}
       ${impact.requiresHumanReview?'<span class="evidence-pill">Human review</span>':''}
     </div>
     <p style="font-size:14.5px;line-height:1.65;margin:12px 0;">${escapeHtml(impact.summary)}</p>
+    ${impact.evaluation?`<p class="rag-status">Independent review: ${escapeHtml(impact.evaluation.reason)} (${escapeHtml(impact.attempts)} attempt(s))</p>`:''}
     ${reasons?`<div class="block-label">Why this urgency was assigned</div><ul class="warning-list">${reasons}</ul>`:''}
     ${actions?`<div class="block-label">Recommended next steps</div><ul class="warning-list">${actions}</ul>`:''}
-    ${ready?'<p class="rag-status">This is automated triage based on the imported source, not legal advice.</p>':''}
+    ${ready?'<p class="rag-status">Automated triage based on a policy excerpt; judge approval is not a guarantee. Not legal advice.</p>':''}
   </div>`;
 }
 function renderFederalRegisterSource(ingest){
