@@ -261,7 +261,9 @@ The response includes classification flags and the signals that caused each matc
     "recommendedActions": ["Review the primary source and contact the school adviser."],
     "requiresHumanReview": true,
     "provider": "Groq",
-    "model": "openai/gpt-oss-20b"
+    "model": "openai/gpt-oss-20b",
+    "evaluation": { "verdict": "YES", "reason": "The assessment is supported.", "model": "qwen/qwen3.8-27b" },
+    "attempts": 1
   }
 }
 ```
@@ -273,6 +275,7 @@ Create a Groq API key, then add it only to the ignored `.env` file:
 ```env
 GROQ_API_KEY=gsk_...
 GROQ_MODEL=openai/gpt-oss-20b
+GROQ_JUDGE_MODEL=qwen/qwen3.8-27b
 ```
 
 Restart Spring Boot after changing `.env`. During each authenticated Federal Register
@@ -280,10 +283,50 @@ import, the backend sends only relevant profile fields (not the user's name or e
 policy metadata, deterministic visa matches, and a bounded source excerpt to Groq. Groq
 returns strict structured JSON with `HIGH`, `MEDIUM`, `LOW`, or `NOT_APPLICABLE` urgency,
 confidence, reasons, actions, and a human-review flag. The RAG Inspector displays that
-assessment immediately above the imported source.
+assessment immediately above the imported source. The same Groq key is used for the
+Qwen judge; `GROQ_JUDGE_MODEL` is optional and defaults to the value above. Make sure
+the model is available to your Groq account. Qwen is a preview model and may change.
+
+Qwen independently checks the generated urgency and recommended next steps against the
+same profile and policy excerpt. A `YES` verdict returns the assessment. A `NO` gives
+the generator feedback and retries once; a second `NO`, invalid response, or unavailable
+judge returns an `UNAVAILABLE` assessment requiring human review, without displaying
+the unapproved recommendation. A successful judge verdict is not proof of legal accuracy.
+High-urgency results always require human review. Confidence is model-reported and is not
+a calibrated probability. This review is based on the first 12,000 characters, not the
+whole document; the deterministic notification rules remain separate. Both prompts use
+the stated visa type and instruct the models not to assume that an I-140 filing means a
+different current immigration status. The judge can still make mistakes; consult the
+official source and a qualified adviser when appropriate.
+
+To inspect the judge result in the terminal, sign in using the instructions above and run:
+
+```bash
+curl -s -X POST http://localhost:8080/ingestion/federal-register/2026-14439 \
+  -H "Authorization: Bearer $TOKEN" | jq '.impactAssessment'
+```
+
+Check `evaluation.verdict` (`YES`, `NO`, or `UNAVAILABLE`), `evaluation.reason`, and
+`attempts`. Re-imports reuse vectors but run a fresh profile assessment and judgment.
 
 If `GROQ_API_KEY` is absent or the provider call fails, ingestion and pgvector indexing
 still complete. The response uses `UNAVAILABLE` instead of fabricating an assessment.
+The generator reports HTTP 429 as a rate or quota limit and HTTP 401/403 as an
+authentication or access failure; check Groq usage, your key, and model access as
+appropriate. An unavailable independent review can also be caused by a judge API or
+response error. Check the Spring Boot terminal for `Groq impact generator`,
+`Groq impact judge`, or `Impact judge` warnings: they include an HTTP status or error
+type without logging the API key, policy text, profile details, or provider response.
+The displayed `attempts` counts generator attempts; a retained `NO` may be from an
+earlier attempt if the retry fails.
+
+To run the focused generator and judge tests in WSL:
+
+```bash
+./mvnw '-Dtest=ImpactJudgeServiceTests,ProfileImpactAssessmentServiceTests' test
+```
+
+These tests mock Groq; they do not verify live API credentials, model access, or model quality.
 
 The chunk count can vary. Importing the same unchanged document again returns
 `"alreadyIndexed":true` and `"chunksIndexed":0`; this means the existing vectors were
@@ -489,3 +532,47 @@ have indexed them. Do not judge correctness from answer text alone: inspect `cit
 ```bash
 ./mvnw test
 ```
+
+## Support chat verification and AI setup
+
+The **Feedback** button on Notifications opens the human support chat.
+Human messages are delivered to the in-app **Feedback inbox** for ADMIN and MANAGER
+accounts. Staff must sign in and monitor that inbox; this does not send email or connect
+an external customer service system. Use a separate browser or private window to try
+both sides with existing applicant and staff accounts.
+
+With PostgreSQL running and local `.env` configured, run:
+
+```bash
+./mvnw test -Dtest=SupportIntegrationTest,FeedbackServiceTests,RagServiceTests
+node --test src/test/js/api-response.test.cjs
+```
+
+The integration tests use real PostgreSQL persistence and JWT authentication. They
+check applicant-to-staff delivery, the return reply, applicant access restrictions,
+and an unavailable AI returning HTTP 503 while the same JWT remains usable. Test
+accounts and messages roll back. The vector service is mocked to simulate an outage.
+The JavaScript tests check that HTTP 403 and 503 preserve the session, while 401
+requires signing in again.
+
+The separate RAG inspector calls `/rag/query`. The existing RAG flow is:
+
+1. Ingest policy documents using the RAG inspector (or `/ingestion/documents`).
+2. Split documents and embed their text with Ollama `mxbai-embed-large`.
+3. Store embeddings and source metadata in PostgreSQL/pgvector.
+4. Embed the user's question and retrieve matching chunks filtered by visa type.
+5. Pass the retrieved text and question to Ollama `llama3.2` and return an answer
+   with citations. If nothing matches, return an insufficient-evidence answer.
+
+Start Ollama and confirm both models are available with `ollama list`. If missing,
+run `ollama pull mxbai-embed-large` and `ollama pull llama3.2`. Import a source before
+asking about it; an empty index cannot provide a grounded answer.
+
+A hosted AI API can replace the answer-generation model while keeping retrieval.
+Add the chosen provider's Spring AI chat integration, keep its API key in server-side
+configuration, and configure the `ChatClient` injected into `RagService` to use that
+provider. Send retrieved evidence along with the question. A direct API call with only
+the question is ordinary chat, without retrieval from your documents. Keeping the
+current embedding model avoids rebuilding the existing 1024-dimensional vector index;
+changing the embedding model requires re-embedding the documents and checking dimensions.
+The existing Groq impact-assessment configuration is separate from this RAG chat client.
