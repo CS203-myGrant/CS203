@@ -479,6 +479,10 @@ const initialState = () => ({
   frDocNumber: '2026-14439',
   documents: null,
   documentsError: null,
+  deletionChallenge: null,
+  deletionExpiresAt: null,
+  deletionError: null,
+  deletionPending: false,
   feedbackConversation: null,
   feedbackMessages: [],
   feedbackLoading: false,
@@ -1214,6 +1218,107 @@ async function saveProfile(event){
   }
 }
 
+function renderDeletionPanel(){
+  const awaitingConfirmation = Boolean(state.deletionChallenge);
+
+  return `
+    <section class="detail-card" style="margin-top:36px;border-left:4px solid var(--urgent);">
+      <h2>Delete account</h2>
+      <p style="line-height:1.6;">
+        This permanently deletes your profile, uploaded immigration documents,
+        notifications, and sign-in identity. This cannot be undone.
+      </p>
+
+      ${state.deletionError
+        ? `<div class="auth-error" style="margin:14px 0;">${escapeHtml(state.deletionError)}</div>`
+        : ''}
+
+      ${awaitingConfirmation
+        ? `
+          <p class="auth-error" style="margin:14px 0;">
+            Final confirmation: your deletion request expires at
+            ${escapeHtml(new Date(state.deletionExpiresAt).toLocaleString())}.
+            Click the button below only if you want to permanently delete this account.
+          </p>
+          <div class="form-actions">
+            <button class="btn ghost" type="button" onclick="cancelAccountDeletion()">Cancel</button>
+            <button class="btn" type="button" style="background:var(--urgent);border-color:var(--urgent);"
+              onclick="confirmAccountDeletion()" ${state.deletionPending ? 'disabled' : ''}>
+              ${state.deletionPending ? 'Deleting…' : 'Permanently delete my account'}
+            </button>
+          </div>
+        `
+        : `
+          <button class="btn ghost" type="button" onclick="requestAccountDeletion()">
+            Delete my account
+          </button>
+        `
+      }
+    </section>
+  `;
+}
+
+async function requestAccountDeletion(){
+  state.deletionError = null;
+
+  try {
+    const response = await apiFetch('/api/v1/account/deletion-request', {
+      method: 'POST'
+    });
+    const result = await parseApiResponse(response);
+
+    // Keep the one-time challenge only in memory; never put it in web storage.
+    state.deletionChallenge = result.challenge;
+    state.deletionExpiresAt = result.expiresAt;
+    render();
+  } catch (error) {
+    state.deletionError = error.message;
+    render();
+  }
+}
+
+function cancelAccountDeletion(){
+  state.deletionChallenge = null;
+  state.deletionExpiresAt = null;
+  state.deletionError = null;
+  render();
+}
+
+async function confirmAccountDeletion(){
+  if (!state.deletionChallenge) return;
+
+  state.deletionPending = true;
+  state.deletionError = null;
+  render();
+
+  try {
+    const response = await apiFetch('/api/v1/account/deletion-confirm', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({challenge: state.deletionChallenge})
+    });
+    await parseApiResponse(response);
+    finishDeletedAccount();
+  } catch (error) {
+    state.deletionPending = false;
+    state.deletionError = error.message;
+    render();
+  }
+}
+
+function finishDeletedAccount(){
+  if (notificationStreamController) notificationStreamController.abort();
+  notificationStreamController = null;
+  document.getElementById('popup-stack').innerHTML = '';
+
+  sessionStorage.removeItem('mygrantToken');
+  state = initialState();
+
+  document.getElementById('app').classList.remove('active');
+  document.getElementById('login').style.display = 'flex';
+  setAuthMessage('Your account has been permanently deleted.');
+}
+
 function renderAccountProfile(){
   const user = state.user || {};
 
@@ -1287,6 +1392,7 @@ function renderAccountProfile(){
         `).join('')
   }
 </div>
+  ${renderDeletionPanel()}
   `;
 }
 

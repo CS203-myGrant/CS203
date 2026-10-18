@@ -137,6 +137,29 @@ WorkOS cannot deliver webhooks to `localhost`. For local testing, expose port 80
 with a temporary HTTPS tunnel such as ngrok and use the generated HTTPS URL in the
 WorkOS Dashboard. The Resend sender must be a verified sending domain or address.
 
+### Google account welcome emails
+
+WorkOS creates the account and emits a signed `user.created` webhook. The backend
+verifies that webhook and sends one welcome email through Resend. Add these values
+to the local `.env` file:
+
+```env
+WORKOS_WEBHOOK_SECRET=whsec_...
+RESEND_API_KEY=re_...
+RESEND_FROM_EMAIL=MyGrant <onboarding@your-verified-domain.example>
+```
+
+Configure this public HTTPS endpoint in the WorkOS Dashboard and subscribe it to
+the `user.created` event:
+
+```text
+https://your-public-host.example/api/v1/webhooks/workos
+```
+
+WorkOS cannot deliver webhooks to `localhost`. For local testing, expose port 8080
+with a temporary HTTPS tunnel such as ngrok and use the generated HTTPS URL in the
+WorkOS Dashboard. The Resend sender must be a verified sending domain or address.
+
 ## Architecture
 
 The Java code follows Maven's standard source layout. Feature packages live under

@@ -11,4 +11,6 @@ public interface ImmigrationDocumentRepository
     List<ImmigrationDocument> findByUserIdOrderByUploadedAtDesc(Long userId);
 
     Optional<ImmigrationDocument> findByIdAndUserId(Long id, Long userId);
+
+    void deleteAllByUserId(Long userId);
 }

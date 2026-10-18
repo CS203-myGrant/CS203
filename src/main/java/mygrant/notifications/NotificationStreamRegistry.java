@@ -46,6 +46,14 @@ public class NotificationStreamRegistry {
         }
     }
 
+    /** Closes every live notification stream for an account being deleted. */
+    public void closeAll(Long userId) {
+        List<SseEmitter> userEmitters = emitters.remove(userId);
+        if (userEmitters != null) {
+            userEmitters.forEach(SseEmitter::complete);
+        }
+    }
+
     private void remove(Long userId, SseEmitter emitter) {
         emitters.computeIfPresent(userId, (ignored, userEmitters) -> {
             userEmitters.remove(emitter);

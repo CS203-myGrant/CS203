@@ -2,6 +2,7 @@ package mygrant.user;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Instant;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -20,19 +21,19 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "full_name", nullable = false, length = 100)
+    @Column(name = "full_name", length = 100)
     private String fullName;
 
-    @Column(name = "email", nullable = false, unique = true, length = 100)
+    @Column(name = "email", unique = true, length = 100)
     private String email;
 
-    @Column(name = "password_hash", nullable = false)
+    @Column(name = "password_hash")
     private String passwordHash;
 
     @Column(name = "workos_user_id", unique = true, length = 100)
     private String workosUserId;
 
-    @Column(name = "visa_type", nullable = false, length = 20)
+    @Column(name = "visa_type", length = 20)
     private String visaType; // e.g., "F-1", "J-1", "H-1B"
 
     @Column(name = "academic_level", length = 50)
@@ -56,6 +57,12 @@ public class User {
 
     @Column(name = "profile_complete", nullable = false)
     private boolean profileComplete = true;
+
+    @Column(name = "active", nullable = false)
+    private boolean active = true;
+
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
 
     // Default Constructor for JPA
     public User() {}
@@ -173,5 +180,31 @@ public class User {
 
     public void setProfileComplete(boolean profileComplete) {
         this.profileComplete = profileComplete;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    /** Clears identifying and profile values while retaining an inactive account tombstone. */
+    public void anonymizeAndDeactivate(Instant deletedAt) {
+        this.fullName = null;
+        this.email = null;
+        this.passwordHash = null;
+        this.workosUserId = null;
+        this.visaType = null;
+        this.academicLevel = null;
+        this.programEndDate = null;
+        this.currentLocation = null;
+        this.upcomingTravelDate = null;
+        this.profileComplete = false;
+        this.active = false;
+        if (this.deletedAt == null) {
+            this.deletedAt = deletedAt;
+        }
     }
 }

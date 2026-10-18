@@ -79,7 +79,7 @@ public class UserService {
 
         User user = optionalUser.get();
 
-        if (user.getPasswordHash() == null
+        if (!user.isActive() || user.getPasswordHash() == null
                 || !passwordEncoder.matches(userLogin.getUserPassword(), user.getPasswordHash())) {
             throw new InvalidCredentialsException("Invalid email or password");
         }
@@ -102,6 +102,8 @@ public class UserService {
             user.setWorkosUserId(workOsUser.id());
             user.setProfileComplete(false);
             user = userRepository.save(user);
+        } else if (!user.isActive()) {
+            throw new InvalidCredentialsException("Invalid email or password");
         } else if (user.getWorkosUserId() == null) {
             user.setWorkosUserId(workOsUser.id());
             user = userRepository.save(user);

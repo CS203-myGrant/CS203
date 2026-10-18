@@ -5,7 +5,9 @@ import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -67,6 +69,20 @@ public class WorkOsService {
             throw new IllegalStateException("WorkOS returned an unverified email");
         }
         return workOsUser;
+    }
+
+    /** Permanently deletes the WorkOS user; a missing user is already in the desired state. */
+    public void deleteUser(String userId) {
+        ensureConfigured();
+        try {
+            client.method(HttpMethod.DELETE)
+                    .uri("/user_management/users/{userId}", userId)
+                    .header("Authorization", "Bearer " + apiKey)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (HttpClientErrorException.NotFound ignored) {
+            // Retrying account deletion after WorkOS already removed the identity is safe.
+        }
     }
 
     private void ensureConfigured() {
