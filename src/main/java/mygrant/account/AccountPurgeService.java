@@ -5,6 +5,8 @@ import java.time.Instant;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import mygrant.feedback.FeedbackConversationRepository;
+import mygrant.feedback.FeedbackMessageRepository;
 import mygrant.notifications.NotificationRepository;
 import mygrant.notifications.NotificationStreamRegistry;
 import mygrant.user.ImmigrationDocumentRepository;
@@ -23,6 +25,8 @@ public class AccountPurgeService {
     private final AccountDeletionRequestRepository deletionRequestRepository;
     private final AccountDeletionAuditRepository auditRepository;
     private final NotificationStreamRegistry notificationStreamRegistry;
+    private final FeedbackConversationRepository feedbackConversationRepository;
+    private final FeedbackMessageRepository feedbackMessageRepository;
 
     public AccountPurgeService(UserRepository userRepository,
             UserProfileRepository userProfileRepository,
@@ -30,7 +34,9 @@ public class AccountPurgeService {
             NotificationRepository notificationRepository,
             AccountDeletionRequestRepository deletionRequestRepository,
             AccountDeletionAuditRepository auditRepository,
-            NotificationStreamRegistry notificationStreamRegistry) {
+            NotificationStreamRegistry notificationStreamRegistry,
+            FeedbackConversationRepository feedbackConversationRepository,
+            FeedbackMessageRepository feedbackMessageRepository) {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
         this.immigrationDocumentRepository = immigrationDocumentRepository;
@@ -38,6 +44,8 @@ public class AccountPurgeService {
         this.deletionRequestRepository = deletionRequestRepository;
         this.auditRepository = auditRepository;
         this.notificationStreamRegistry = notificationStreamRegistry;
+        this.feedbackConversationRepository = feedbackConversationRepository;
+        this.feedbackMessageRepository = feedbackMessageRepository;
     }
 
     /**
@@ -57,6 +65,11 @@ public class AccountPurgeService {
         userProfileRepository.deleteById(userId);
         immigrationDocumentRepository.deleteAllByUserId(userId);
         deletionRequestRepository.deleteAllByUserId(userId);
+        // Remove messages authored by this user even when they belong to another
+        // user's conversation, then remove the user's own conversations. The
+        // latter cascades to their remaining messages at the database level.
+        feedbackMessageRepository.deleteAllBySenderId(userId);
+        feedbackConversationRepository.deleteAllByUserId(userId);
 
         user.anonymizeAndDeactivate(deletedAt);
         userRepository.save(user);

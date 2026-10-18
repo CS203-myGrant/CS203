@@ -8,4 +8,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface FeedbackConversationRepository extends JpaRepository<FeedbackConversation, Long> {
     Optional<FeedbackConversation> findFirstByUserIdAndStatusOrderByCreatedAtDesc(Long userId, String status);
     List<FeedbackConversation> findAllByOrderByUpdatedAtDesc();
+
+    void deleteAllByUserId(Long userId);
 }

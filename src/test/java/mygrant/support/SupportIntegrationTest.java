@@ -76,7 +76,7 @@ class SupportIntegrationTest {
         String applicant = account(UserRole.APPLICANT);
         when(vectors.similaritySearch(any(org.springframework.ai.vectorstore.SearchRequest.class)))
                 .thenThrow(new ResourceAccessException("Ollama unavailable"));
-        mvc.perform(post("/rag/query").header("Authorization", applicant)
+        mvc.perform(post("/api/v1/rag/query").header("Authorization", applicant)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"question\":\"What changed?\",\"visaType\":\"F-1\"}"))
                 .andExpect(status().isServiceUnavailable())

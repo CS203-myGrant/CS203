@@ -18,7 +18,7 @@ import mygrant.ingestion.federalregister.FederalRegisterIngestionService;
 
 /** HTTP entry points for manual policy and Federal Register imports. */
 @RestController
-@RequestMapping("/ingestion")
+@RequestMapping("/api/v1/ingestion")
 public class IngestionController {
 
     private final PolicyIngestionService ingestionService;
