@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import jakarta.validation.Valid;
 import mygrant.feedback.dto.FeedbackConversationResponse;
@@ -41,17 +42,20 @@ public class FeedbackController {
     }
 
     @GetMapping("/admin/conversations")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public List<FeedbackConversationResponse> conversations(Authentication authentication) {
         return feedbackService.staffConversations(authentication.getName());
     }
 
     @GetMapping("/admin/conversations/{id}/messages")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public List<FeedbackMessageResponse> staffMessages(Authentication authentication,
             @PathVariable Long id) {
         return feedbackService.staffMessages(authentication.getName(), id);
     }
 
     @PostMapping("/admin/conversations/{id}/messages")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public FeedbackMessageResponse staffSend(Authentication authentication, @PathVariable Long id,
             @Valid @RequestBody FeedbackMessageRequest request) {
         return feedbackService.sendAsStaff(authentication.getName(), id, request.message());

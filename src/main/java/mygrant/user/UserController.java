@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import mygrant.user.dto.LoginResponse;
 import mygrant.user.dto.UserCreation;
 import mygrant.user.dto.UserLogin;
+import mygrant.user.dto.RefreshTokenRequest;
 
 @CrossOrigin(origins = "*")
 @RestController
@@ -37,6 +38,11 @@ public class UserController {
     public ResponseEntity<?> login(@Valid @RequestBody UserLogin userLogin) {
         LoginResponse response = userService.loginUser(userLogin);
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/api/v1/auth/refresh")
+    public ResponseEntity<LoginResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
+        return ResponseEntity.ok(userService.refresh(request.refreshToken()));
     }
 
     @GetMapping("/api/v1/users/me")

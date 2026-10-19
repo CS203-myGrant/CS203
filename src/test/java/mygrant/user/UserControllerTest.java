@@ -76,6 +76,20 @@ class UserControllerTest {
     }
 
     @Test
+    void refreshReturnsNewAccessAndRefreshTokens() throws Exception {
+        LoginResponse response = successResponse();
+        response.setRefreshToken("new-refresh-token");
+        when(userService.refresh("old-refresh-token")).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"old-refresh-token\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").value("token"))
+                .andExpect(jsonPath("$.refreshToken").value("new-refresh-token"));
+    }
+
+    @Test
     void invalidLoginReturnsUnauthorized() throws Exception {
         when(userService.loginUser(any()))
                 .thenThrow(new InvalidCredentialsException("Invalid email or password"));
@@ -102,8 +116,9 @@ class UserControllerTest {
                                   "visaType": "F-1"
                                 }
                                 """))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message").value("An account with that email already exists"));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Registration could not be completed"))
+                .andExpect(jsonPath("$.validationErrors.userEmail").doesNotExist());
     }
 
     @Test

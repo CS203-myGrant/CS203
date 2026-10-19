@@ -19,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import mygrant.auth.JwtService;
+import mygrant.auth.RefreshTokenRepository;
 import mygrant.common.DuplicateEmailException;
 import mygrant.common.InvalidCredentialsException;
 import mygrant.user.dto.LoginResponse;
@@ -40,6 +41,9 @@ class UserServiceTests {
 
     @Mock
     private JwtService jwtService;
+
+    @Mock
+    private RefreshTokenRepository refreshTokenRepository;
 
     @Captor
     private ArgumentCaptor<User> saved;
@@ -155,7 +159,8 @@ class UserServiceTests {
                 userRepository,
                 userProfileRepository,
                 passwordEncoder,
-                jwtService
+                jwtService,
+                refreshTokenRepository
         );
     }
 
@@ -165,7 +170,9 @@ class UserServiceTests {
         when(userProfileRepository.save(any(UserProfile.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(jwtService.generateToken("student@example.com")).thenReturn("token");
+        when(jwtService.generateAccessToken(any(User.class))).thenReturn("token");
+        when(jwtService.generateRefreshToken(any(User.class))).thenReturn("refresh-token");
+        when(jwtService.extractExpiration("refresh-token")).thenReturn(java.time.Instant.now().plusSeconds(3600));
         
     }
 }

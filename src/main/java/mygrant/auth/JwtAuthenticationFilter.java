@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import mygrant.user.UserRepository;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -41,6 +42,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             String subject = jwtService.extractSubject(token);
+            String tokenRole = jwtService.extractRole(token);
 
             var user = subject == null ? java.util.Optional.<mygrant.user.User>empty()
                     : userRepository.findByEmail(subject);
@@ -48,7 +50,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     && SecurityContextHolder.getContext().getAuthentication() == null
                     && user.isPresent()
                     && user.get().isActive()
-                    && jwtService.isTokenValid(token, user.get().getEmail())) {
+                    && jwtService.isAccessTokenValid(token, user.get().getEmail())
+                    && tokenRole != null
+                    && tokenRole.equals(user.get().getRole().name())) {
                 if (!user.get().isProfileComplete()
                         && !request.getRequestURI().equals("/api/v1/profiles/me")
                         && !request.getRequestURI().equals("/api/v1/account/deletion-request")
@@ -59,7 +63,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
 
                 UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(subject, null, java.util.Collections.emptyList());
+                        new UsernamePasswordAuthenticationToken(subject, null,
+                                java.util.List.of(new SimpleGrantedAuthority("ROLE_" + tokenRole)));
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             }

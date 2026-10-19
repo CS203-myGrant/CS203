@@ -561,10 +561,14 @@ function consumeWorkosRedirect(){
     location.hash.replace(/^#/,'').replace(/^\?/,'')
   );
   const token = params.get('workosToken');
+  const refreshToken = params.get('workosRefreshToken');
   const error = params.get('workosError');
 
   if (token) {
     sessionStorage.setItem('mygrantToken', token);
+  }
+  if (refreshToken) {
+    sessionStorage.setItem('mygrantRefreshToken', refreshToken);
   }
 
   if (token || error) {
@@ -581,6 +585,7 @@ const initialState = () => ({
   user: null,
   profile: null,
   token: sessionStorage.getItem('mygrantToken'),
+  refreshToken: sessionStorage.getItem('mygrantRefreshToken'),
   policyRecords: null,
   policyError: null,
   notifications: null,
@@ -752,6 +757,7 @@ function logout(){
   notificationStreamController = null;
   document.getElementById('popup-stack').innerHTML='';
   sessionStorage.removeItem('mygrantToken');
+  sessionStorage.removeItem('mygrantRefreshToken');
   state = initialState();
   document.getElementById('app').classList.remove('active');
   document.getElementById('login').style.display='flex';
@@ -804,15 +810,32 @@ async function loadImmigrationDocuments() {
 async function apiFetch(path,options={}){
   const headers=new Headers(options.headers || {});
   if(state.token) headers.set('Authorization',`Bearer ${state.token}`);
-  return fetch(`${API_BASE}${path}`,{...options,headers});
+  let response = await fetch(`${API_BASE}${path}`,{...options,headers});
+  if(response.status===401 && state.refreshToken){
+    const refreshed = await fetch(`${API_BASE}/api/v1/auth/refresh`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({refreshToken:state.refreshToken})
+    });
+    if(refreshed.ok){
+      const tokens=await refreshed.json();
+      state.token=tokens.token;
+      state.refreshToken=tokens.refreshToken || state.refreshToken;
+      sessionStorage.setItem('mygrantToken',state.token);
+      sessionStorage.setItem('mygrantRefreshToken',state.refreshToken);
+      headers.set('Authorization',`Bearer ${state.token}`);
+      response = await fetch(`${API_BASE}${path}`,{...options,headers});
+    }
+  }
+  return response;
 }
 async function authenticate(path,payload){
   setAuthMessage(''); setAuthBusy('Connecting to Spring Boot...');
   try{
     const response=await fetch(`${API_BASE}${path}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const user=await parseApiResponse(response);
-    state.user=user; state.token=user.token; state.ragVisaType=user.visaType || 'F-1';
+    state.user=user; state.token=user.token; state.refreshToken=user.refreshToken; state.ragVisaType=user.visaType || 'F-1';
     sessionStorage.setItem('mygrantToken',user.token);
+    sessionStorage.setItem('mygrantRefreshToken',user.refreshToken);
     enterApp(roleForUser(user.role));
   }catch(error){ setAuthMessage(error instanceof TypeError?'Cannot reach Spring Boot on http://localhost:8080. Start the application first.':error.message); }
   finally{ setAuthBusy(''); }
@@ -855,6 +878,7 @@ async function restoreSession(){
     enterApp(roleForUser(state.user.role));
   }catch(error){
     sessionStorage.removeItem('mygrantToken');
+    sessionStorage.removeItem('mygrantRefreshToken');
     state.token = null;
     setAuthMessage(error.message);
   }finally{
@@ -1454,6 +1478,7 @@ function finishDeletedAccount(){
   document.getElementById('popup-stack').innerHTML = '';
 
   sessionStorage.removeItem('mygrantToken');
+  sessionStorage.removeItem('mygrantRefreshToken');
   state = initialState();
 
   document.getElementById('app').classList.remove('active');

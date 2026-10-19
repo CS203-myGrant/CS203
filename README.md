@@ -38,8 +38,11 @@ export JWT_SECRET="$(openssl rand -base64 32)"
 
 ### Authentication and JWT
 
-The application uses JWT bearer tokens for authenticated requests. The signing
-secret is read from the `JWT_SECRET` environment variable and must not be
+The application uses short-lived JWT bearer access tokens and seven-day refresh
+tokens. Access tokens include the user's role and are used for authenticated and
+role-protected requests. Refresh tokens are stored as hashes, rotated after use,
+and rejected after revocation or reuse. The signing secret is read from the
+`JWT_SECRET` environment variable and must not be
 committed to this repository.
 
 From WSL, set the secret in the same terminal session used to start Spring Boot:
@@ -86,6 +89,15 @@ TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
   }' | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
 
   echo $TOKEN
+```
+
+The response also contains `refreshToken`. Exchange it for a new access token
+when the 15-minute access token expires:
+
+```bash
+curl -s -X POST http://localhost:8080/api/v1/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken":"<refresh-token>"}'
 ```
 
 Use the token to access the authenticated profile endpoint:
@@ -400,8 +412,8 @@ action-required flag needs: the flag only fires when the field the policy touche
 already populated. An account registered without those fields still receives the alert,
 but it arrives unflagged.
 
-Registering an email that already exists returns HTTP 409 with a clear duplicate-email
-message; sign in instead. Invalid JSON or dates return HTTP 400, and invalid login
+Registering an email that already exists returns HTTP 400 with a generic registration
+error that does not disclose whether the email is registered. Invalid JSON or dates return HTTP 400, and invalid login
 credentials return HTTP 401 without revealing whether the email exists.
 
 ### 2. Import a document that affects that category
