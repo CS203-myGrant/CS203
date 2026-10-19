@@ -10,7 +10,7 @@ import mygrant.rag.dto.RagQueryRequest;
 import mygrant.rag.dto.RagQueryResponse;
 
 @RestController
-@RequestMapping("/rag")
+@RequestMapping("/api/v1/rag")
 public class RagController {
 
     private final RagService ragService;

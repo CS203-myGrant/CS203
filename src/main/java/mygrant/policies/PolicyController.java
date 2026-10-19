@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** Read-only HTTP access to stored policy records. */
 @RestController
-@RequestMapping("/policies")
+@RequestMapping("/api/v1/policies")
 public class PolicyController {
 
     private final PolicyService policyService;

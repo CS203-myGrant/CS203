@@ -174,13 +174,13 @@ The vector dimension is `1024`, matching the configured `mxbai-embed-large` mode
 The implemented RAG path is:
 
 ```text
-POST /ingestion/documents
+POST /api/v1/ingestion/documents
   -> save the original policy in policy_documents
   -> split the policy into chunks
   -> create Ollama embeddings
   -> store chunks and citation metadata in pgvector
 
-POST /rag/query
+POST /api/v1/rag/query
   -> embed the question
   -> retrieve relevant chunks filtered by visa type
   -> rank primary/effective evidence first
@@ -193,7 +193,7 @@ POST /rag/query
 Ingest a recent policy document:
 
 ```http
-POST /ingestion/documents
+POST /api/v1/ingestion/documents
 Content-Type: application/json
 
 {
@@ -213,7 +213,7 @@ Content-Type: application/json
 Query the indexed evidence:
 
 ```http
-POST /rag/query
+POST /api/v1/rag/query
 Content-Type: application/json
 
 {
@@ -222,7 +222,7 @@ Content-Type: application/json
 }
 ```
 
-Read stored policy records with `GET /policies` or `GET /policies/{id}`.
+Read stored policy records with `GET /api/v1/policies` or `GET /api/v1/policies/{id}`.
 
 ## Import and classify a Federal Register document
 
@@ -238,7 +238,7 @@ document number:
 
 ```bash
 curl -s -X POST \
-  http://localhost:8080/ingestion/federal-register/2026-14439 \
+  http://localhost:8080/api/v1/ingestion/federal-register/2026-14439 \
   -H "Authorization: Bearer $TOKEN" | jq
 ```
 
@@ -302,7 +302,7 @@ official source and a qualified adviser when appropriate.
 To inspect the judge result in the terminal, sign in using the instructions above and run:
 
 ```bash
-curl -s -X POST http://localhost:8080/ingestion/federal-register/2026-14439 \
+curl -s -X POST http://localhost:8080/api/v1/ingestion/federal-register/2026-14439 \
   -H "Authorization: Bearer $TOKEN" | jq '.impactAssessment'
 ```
 
@@ -335,13 +335,13 @@ reused, not that no vectors exist.
 Confirm the metadata was stored:
 
 ```bash
-curl -s http://localhost:8080/policies | jq
+curl -s http://localhost:8080/api/v1/policies | jq
 ```
 
 Then confirm that its vector chunks are retrievable for F-1:
 
 ```bash
-curl -s -X POST http://localhost:8080/rag/query \
+curl -s -X POST http://localhost:8080/api/v1/rag/query \
   -H "Content-Type: application/json" \
   -d '{
     "question": "What does the fixed period of admission policy change for F-1 students?",
@@ -484,7 +484,7 @@ both Ollama models should be listed.
 ### 2. Ask an F-1 question
 
 ```bash
-curl -s -X POST http://localhost:8080/rag/query \
+curl -s -X POST http://localhost:8080/api/v1/rag/query \
   -H "Content-Type: application/json" \
   -d '{
     "question": "What does the fixed period of admission rule change for F-1 students, and when is it effective?",
@@ -500,7 +500,7 @@ the API failed.
 ### 3. Ask a J-1 question
 
 ```bash
-curl -s -X POST http://localhost:8080/rag/query \
+curl -s -X POST http://localhost:8080/api/v1/rag/query \
   -H "Content-Type: application/json" \
   -d '{
     "question": "Does the fixed period of admission rule also apply to J-1 exchange visitors?",
@@ -515,7 +515,7 @@ Check for citation `2026-14439` and compare the answer with the linked source.
 Ask about this F-1/J-1 rule using an H-1B filter:
 
 ```bash
-curl -s -X POST http://localhost:8080/rag/query \
+curl -s -X POST http://localhost:8080/api/v1/rag/query \
   -H "Content-Type: application/json" \
   -d '{
     "question": "What does rule 2026-14439 change for F-1 students?",
@@ -555,9 +555,9 @@ accounts and messages roll back. The vector service is mocked to simulate an out
 The JavaScript tests check that HTTP 403 and 503 preserve the session, while 401
 requires signing in again.
 
-The separate RAG inspector calls `/rag/query`. The existing RAG flow is:
+The separate RAG inspector calls `/api/v1/rag/query`. The existing RAG flow is:
 
-1. Ingest policy documents using the RAG inspector (or `/ingestion/documents`).
+1. Ingest policy documents using the RAG inspector (or `/api/v1/ingestion/documents`).
 2. Split documents and embed their text with Ollama `mxbai-embed-large`.
 3. Store embeddings and source metadata in PostgreSQL/pgvector.
 4. Embed the user's question and retrieve matching chunks filtered by visa type.

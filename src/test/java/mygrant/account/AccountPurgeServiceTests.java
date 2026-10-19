@@ -13,6 +13,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import mygrant.feedback.FeedbackConversationRepository;
+import mygrant.feedback.FeedbackMessageRepository;
 import mygrant.notifications.NotificationRepository;
 import mygrant.notifications.NotificationStreamRegistry;
 import mygrant.user.ImmigrationDocumentRepository;
@@ -46,6 +48,12 @@ class AccountPurgeServiceTests {
     @Mock
     private NotificationStreamRegistry notificationStreamRegistry;
 
+    @Mock
+    private FeedbackConversationRepository feedbackConversationRepository;
+
+    @Mock
+    private FeedbackMessageRepository feedbackMessageRepository;
+
     private User user;
     private AccountPurgeService purgeService;
 
@@ -66,7 +74,9 @@ class AccountPurgeServiceTests {
                 notificationRepository,
                 deletionRequestRepository,
                 auditRepository,
-                notificationStreamRegistry);
+                notificationStreamRegistry,
+                feedbackConversationRepository,
+                feedbackMessageRepository);
     }
 
     @Test
@@ -80,6 +90,8 @@ class AccountPurgeServiceTests {
         verify(userProfileRepository).deleteById(USER_ID);
         verify(immigrationDocumentRepository).deleteAllByUserId(USER_ID);
         verify(deletionRequestRepository).deleteAllByUserId(USER_ID);
+        verify(feedbackMessageRepository).deleteAllBySenderId(USER_ID);
+        verify(feedbackConversationRepository).deleteAllByUserId(USER_ID);
         verify(notificationStreamRegistry).closeAll(USER_ID);
         verify(userRepository).save(user);
         org.mockito.ArgumentCaptor<AccountDeletionAudit> auditCaptor =
@@ -113,6 +125,8 @@ class AccountPurgeServiceTests {
                 .save(org.mockito.ArgumentMatchers.any(AccountDeletionAudit.class));
         verify(notificationStreamRegistry, times(2)).closeAll(USER_ID);
         verify(notificationRepository, times(2)).deleteAllByUserId(USER_ID);
+        verify(feedbackMessageRepository, times(2)).deleteAllBySenderId(USER_ID);
+        verify(feedbackConversationRepository, times(2)).deleteAllByUserId(USER_ID);
         verify(userRepository, times(2)).save(user);
     }
 
@@ -124,6 +138,8 @@ class AccountPurgeServiceTests {
 
         verify(userRepository).findById(USER_ID);
         verify(notificationRepository, org.mockito.Mockito.never()).deleteAllByUserId(USER_ID);
+        verify(feedbackMessageRepository, org.mockito.Mockito.never()).deleteAllBySenderId(USER_ID);
+        verify(feedbackConversationRepository, org.mockito.Mockito.never()).deleteAllByUserId(USER_ID);
         verify(notificationStreamRegistry, org.mockito.Mockito.never()).closeAll(USER_ID);
         verify(auditRepository, org.mockito.Mockito.never())
                 .save(org.mockito.ArgumentMatchers.any(AccountDeletionAudit.class));
