@@ -108,6 +108,17 @@ policies from PostgreSQL, and sends the JWT with Federal Register import and RAG
 Do not use VS Code Live Server for normal testing; opening the Spring URL avoids sending
 API requests to the static-file server.
 
+### Using the interface
+
+- After a student completes onboarding, use the profile icon in the top header to view
+  or edit their profile. The icon is hidden for staff and incomplete student profiles.
+- Open **Notifications** to see matching policy alerts, then use **Feedback** to contact
+  the support team. Applicant and staff messages appear in distinct chat bubbles; staff
+  can reply through the **Feedback inbox**.
+- Open the **RAG inspector** to import a Federal Register document and inspect the
+  resulting policy assessment. Keep PostgreSQL and the configured AI services running
+  for the relevant features.
+
 Configuration can be overridden with `DATABASE_URL`, `DATABASE_USERNAME`,
 `DATABASE_PASSWORD`, `OLLAMA_BASE_URL`, and `OLLAMA_EMBEDDING_MODEL`.
 `JWT_SECRET` is required and must be a Base64-encoded key of at least 32 bytes.
