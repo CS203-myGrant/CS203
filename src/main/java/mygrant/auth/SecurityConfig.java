@@ -58,6 +58,8 @@ public class SecurityConfig {
                 // still require a JWT, which Swagger UI sends via its Authorize button.
                 .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**",
                         "/actuator/health").permitAll()
+                .requestMatchers("/api/v1/ingestion/**", "/api/v1/admin/**").hasRole("ADMIN")
+                .requestMatchers("/api/v1/review/**").hasAnyRole("MANAGER", "ADMIN")
                 .anyRequest().authenticated())
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
@@ -69,7 +71,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOriginPatterns(List.of("http://localhost:*", "http://127.0.0.1:*"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

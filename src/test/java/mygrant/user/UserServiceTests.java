@@ -143,6 +143,29 @@ class UserServiceTests {
         verifyNoInteractions(jwtService);
     }
 
+    @Test
+    void updatesAUsersRole() {
+        User user = new User();
+        user.setId(7L);
+        user.setRole(UserRole.APPLICANT);
+        when(userRepository.findById(7L)).thenReturn(java.util.Optional.of(user));
+        when(userRepository.save(user)).thenReturn(user);
+
+        LoginResponse response = service().updateRole(7L, UserRole.MANAGER);
+
+        assertThat(user.getRole()).isEqualTo(UserRole.MANAGER);
+        assertThat(response.getRole()).isEqualTo(UserRole.MANAGER);
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void rejectsRoleUpdateForAnUnknownUser() {
+        when(userRepository.findById(404L)).thenReturn(java.util.Optional.empty());
+
+        assertThatThrownBy(() -> service().updateRole(404L, UserRole.MANAGER))
+                .isInstanceOf(UserNotFoundException.class);
+    }
+
     private UserCreation registration() {
         UserCreation registration = new UserCreation();
         registration.setUserName("Student");

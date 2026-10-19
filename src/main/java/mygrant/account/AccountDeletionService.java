@@ -15,7 +15,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import mygrant.account.dto.DeletionRequestResponse;
 import mygrant.account.dto.DeletionConfirmationResponse;
-import mygrant.workos.WorkOsService;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
 
@@ -29,15 +28,12 @@ public class AccountDeletionService {
     private final UserRepository userRepository;
     private final AccountDeletionRequestRepository deletionRequestRepository;
     private final AccountPurgeService accountPurgeService;
-    private final WorkOsService workOsService;
-
     public AccountDeletionService(UserRepository userRepository,
             AccountDeletionRequestRepository deletionRequestRepository,
-            AccountPurgeService accountPurgeService, WorkOsService workOsService) {
+            AccountPurgeService accountPurgeService) {
         this.userRepository = userRepository;
         this.deletionRequestRepository = deletionRequestRepository;
         this.accountPurgeService = accountPurgeService;
-        this.workOsService = workOsService;
     }
 
     /** Creates a challenge without changing or deleting the account. */
@@ -60,7 +56,7 @@ public class AccountDeletionService {
         return new DeletionRequestResponse(challenge, expiresAt);
     }
 
-    /** Validates the user's one-time challenge, removes their WorkOS identity, and purges local data. */
+    /** Validates the user's one-time challenge and purges local data. */
     @Transactional
     public DeletionConfirmationResponse confirmDeletion(String authenticatedEmail, String challenge) {
         User user = userRepository.findByEmail(authenticatedEmail)
@@ -74,10 +70,8 @@ public class AccountDeletionService {
         deletionRequest.markConfirmed(now);
         deletionRequestRepository.save(deletionRequest);
 
-        if (user.getWorkosUserId() != null) {
-            workOsService.deleteUser(user.getWorkosUserId());
-        }
-
+        // Keep the WorkOS identity so the same external account can sign up again.
+        // Local profile and application data are removed by the purge service.
         accountPurgeService.purge(user.getId());
         return new DeletionConfirmationResponse("deleted", now);
     }

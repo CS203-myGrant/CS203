@@ -1,6 +1,7 @@
 package mygrant.user;
 
 import java.util.Optional;
+import java.util.List;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -175,5 +176,23 @@ public class UserService {
         user.setUpcomingTravelDate(profile.getUpcomingTravelDate());
         user.setProfileComplete(true);
         return new LoginResponse(userRepository.save(user));
+    }
+
+    @Transactional
+    public LoginResponse updateRole(Long userId, UserRole role) {
+        if (role == null) {
+            throw new IllegalArgumentException("Role is required");
+        }
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+        user.setRole(role);
+        return new LoginResponse(userRepository.save(user));
+    }
+
+    @Transactional(readOnly = true)
+    public List<LoginResponse> listUsers() {
+        return userRepository.findAllByActiveTrueOrderByIdAsc().stream()
+                .map(LoginResponse::new)
+                .toList();
     }
 }

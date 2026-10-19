@@ -1,5 +1,6 @@
 package mygrant.account;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.mockito.Mockito.when;
@@ -76,5 +77,23 @@ class AccountControllerSecurityTest {
         mockMvc.perform(post("/api/v1/account/deletion-request")
                         .header("Authorization", "Bearer token"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void incompleteProfileCanLoadCurrentUser() throws Exception {
+        User user = new User();
+        user.setEmail("workos-user@example.com");
+        user.setRole(mygrant.user.UserRole.APPLICANT);
+        user.setProfileComplete(false);
+        when(jwtService.extractSubject("token")).thenReturn(user.getEmail());
+        when(jwtService.extractRole("token")).thenReturn("APPLICANT");
+        when(jwtService.isAccessTokenValid("token", user.getEmail())).thenReturn(true);
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(java.util.Optional.of(user));
+
+        // AccountController is the slice under test, so a 404 proves the JWT
+        // filter allowed the request through instead of returning its profile 403.
+        mockMvc.perform(get("/api/v1/users/me")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isNotFound());
     }
 }
