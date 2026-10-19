@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -20,6 +21,7 @@ import jakarta.servlet.DispatcherType;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -49,7 +51,7 @@ public class SecurityConfig {
                 // and the JWT filter does not run again for that dispatch.
                 .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                 .requestMatchers("/", "/mygrant-prototype.html", "/favicon.ico",
-                        "/api/v1/auth/register", "/api/v1/auth/login",
+                        "/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh",
                         "/api/v1/auth/workos/login", "/api/v1/auth/workos/callback",
                         "/api/v1/webhooks/workos").permitAll()
                 // API docs and the health probe are public; the endpoints they describe

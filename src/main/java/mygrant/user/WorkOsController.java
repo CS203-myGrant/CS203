@@ -45,8 +45,9 @@ public class WorkOsController {
         }
 
         try {
-            String token = userService.loginWorkOsUser(workOsService.authenticate(code)).getToken();
-            URI location = URI.create("/#workosToken=" + token);
+            var login = userService.loginWorkOsUser(workOsService.authenticate(code));
+            URI location = URI.create("/#workosToken=" + login.getToken()
+                    + "&workosRefreshToken=" + login.getRefreshToken());
             return ResponseEntity.status(302).header(HttpHeaders.LOCATION, location.toString()).build();
         } catch (RuntimeException exception) {
             return redirectWithError("WorkOS sign-in could not be completed.");

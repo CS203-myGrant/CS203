@@ -95,6 +95,6 @@ class SupportIntegrationTest {
                 "unused-test-password-hash", "F-1", null, null);
         user.setRole(role);
         users.saveAndFlush(user);
-        return "Bearer " + jwt.generateToken(user.getEmail());
+        return "Bearer " + jwt.generateAccessToken(user);
     }
 }

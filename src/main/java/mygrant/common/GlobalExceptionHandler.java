@@ -28,7 +28,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DuplicateEmailException.class)
     public ResponseEntity<ApiError> handleDuplicateEmail(DuplicateEmailException exception) {
-        return response(HttpStatus.CONFLICT, exception.getMessage(), Map.of("userEmail", exception.getMessage()));
+        return response(HttpStatus.BAD_REQUEST, "Registration could not be completed", Map.of());
     }
 
     @ExceptionHandler(PolicyNotFoundException.class)
