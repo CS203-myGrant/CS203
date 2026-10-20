@@ -4,13 +4,16 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.nio.charset.StandardCharsets;
+import jakarta.servlet.http.HttpServletRequest;
+import java.io.IOException;
 import mygrant.account.AccountPurgeService;
+import mygrant.user.User;
 import mygrant.user.UserRepository;
 
 @RestController
@@ -41,7 +44,8 @@ public class WorkOsWebhookController {
     @PostMapping
     public ResponseEntity<Void> receive(
             @RequestHeader(value = "WorkOS-Signature", required = false) String signature,
-            @RequestBody String payload) {
+            HttpServletRequest request) throws IOException {
+        String payload = new String(request.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         if (!verifier.isValid(payload, signature)) {
             return ResponseEntity.badRequest().build();
         }
@@ -60,9 +64,20 @@ public class WorkOsWebhookController {
                             user.path("email").asText(), emailFailure);
                 }
             } else if ("user.deleted".equals(event.path("event").asText())) {
-                String workOsUserId = event.path("data").path("id").asText("");
-                userRepository.findByWorkosUserId(workOsUserId)
-                        .ifPresent(user -> accountPurgeService.purge(user.getId()));
+                JsonNode deletedUser = event.path("data");
+                String workOsUserId = deletedUser.path("id").asText("");
+                String email = deletedUser.path("email").asText("");
+                User localUser = userRepository.findByWorkosUserId(workOsUserId)
+                        .orElseGet(() -> email.isBlank()
+                                ? null
+                                : userRepository.findByEmail(email).orElse(null));
+                if (localUser != null) {
+                    accountPurgeService.purge(localUser.getId());
+                    LOGGER.info("Purged local account for deleted WorkOS user {}", workOsUserId);
+                } else {
+                    LOGGER.warn("No local account matched deleted WorkOS user {} ({})",
+                            workOsUserId, email);
+                }
             }
             return ResponseEntity.ok().build();
         } catch (Exception exception) {

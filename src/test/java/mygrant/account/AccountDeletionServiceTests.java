@@ -27,6 +27,7 @@ import org.springframework.web.server.ResponseStatusException;
 import mygrant.account.dto.DeletionRequestResponse;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
+import mygrant.workos.WorkOsService;
 
 @ExtendWith(MockitoExtension.class)
 class AccountDeletionServiceTests {
@@ -43,6 +44,9 @@ class AccountDeletionServiceTests {
     @Mock
     private AccountPurgeService accountPurgeService;
 
+    @Mock
+    private WorkOsService workOsService;
+
     @Captor
     private ArgumentCaptor<AccountDeletionRequest> deletionRequestCaptor;
 
@@ -58,7 +62,8 @@ class AccountDeletionServiceTests {
         service = new AccountDeletionService(
                 userRepository,
                 deletionRequestRepository,
-                accountPurgeService);
+                accountPurgeService,
+                workOsService);
     }
 
     @Test
@@ -99,6 +104,7 @@ class AccountDeletionServiceTests {
                 .isEqualTo(HttpStatus.BAD_REQUEST);
 
         verifyNoInteractions(accountPurgeService);
+        verifyNoInteractions(workOsService);
     }
 
     @Test
@@ -116,6 +122,7 @@ class AccountDeletionServiceTests {
 
         assertThat(request.getConfirmedAt()).isNotNull();
         verify(accountPurgeService).purge(USER_ID);
+        verifyNoInteractions(workOsService);
 
         assertThatThrownBy(() -> service.confirmDeletion(EMAIL, "x".repeat(43)))
                 .isInstanceOf(ResponseStatusException.class)
@@ -140,6 +147,7 @@ class AccountDeletionServiceTests {
 
         service.confirmDeletion(EMAIL, "x".repeat(43));
 
+        verify(workOsService).deleteUser("user_workos_123");
         verify(accountPurgeService).purge(USER_ID);
     }
 

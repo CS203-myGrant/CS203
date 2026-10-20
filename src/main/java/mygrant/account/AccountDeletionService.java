@@ -17,6 +17,7 @@ import mygrant.account.dto.DeletionRequestResponse;
 import mygrant.account.dto.DeletionConfirmationResponse;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
+import mygrant.workos.WorkOsService;
 
 /** Creates short-lived, single-use challenges for account deletion confirmation. */
 @Service
@@ -28,12 +29,15 @@ public class AccountDeletionService {
     private final UserRepository userRepository;
     private final AccountDeletionRequestRepository deletionRequestRepository;
     private final AccountPurgeService accountPurgeService;
+    private final WorkOsService workOsService;
     public AccountDeletionService(UserRepository userRepository,
             AccountDeletionRequestRepository deletionRequestRepository,
-            AccountPurgeService accountPurgeService) {
+            AccountPurgeService accountPurgeService,
+            WorkOsService workOsService) {
         this.userRepository = userRepository;
         this.deletionRequestRepository = deletionRequestRepository;
         this.accountPurgeService = accountPurgeService;
+        this.workOsService = workOsService;
     }
 
     /** Creates a challenge without changing or deleting the account. */
@@ -70,8 +74,11 @@ public class AccountDeletionService {
         deletionRequest.markConfirmed(now);
         deletionRequestRepository.save(deletionRequest);
 
-        // Keep the WorkOS identity so the same external account can sign up again.
-        // Local profile and application data are removed by the purge service.
+        // Delete the external identity as well as local application data. A later
+        // Google sign-in can then provision a fresh WorkOS and local account.
+        if (user.getWorkosUserId() != null && !user.getWorkosUserId().isBlank()) {
+            workOsService.deleteUser(user.getWorkosUserId());
+        }
         accountPurgeService.purge(user.getId());
         return new DeletionConfirmationResponse("deleted", now);
     }
