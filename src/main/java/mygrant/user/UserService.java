@@ -144,6 +144,21 @@ public class UserService {
         return tokens(user);
     }
 
+    @Transactional
+    public void logout(String email, String refreshToken) {
+        User user = userRepository.findByEmail(email.trim().toLowerCase())
+                .filter(User::isActive)
+                .orElseThrow(() ->
+                        new InvalidCredentialsException("Invalid logout request"));
+
+        refreshTokenRepository.findByTokenHashAndRevokedAtIsNull(hash(refreshToken))
+                .filter(token -> Objects.equals(token.getUserId(), user.getId()))
+                .ifPresent(token -> {
+                    token.revoke();
+                    refreshTokenRepository.save(token);
+                });
+    }
+
     private LoginResponse tokens(User user) {
         String accessToken = jwtService.generateAccessToken(user);
         String refreshToken = jwtService.generateRefreshToken(user);

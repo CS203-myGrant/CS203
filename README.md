@@ -120,6 +120,19 @@ policies from PostgreSQL, and sends the JWT with Federal Register import and RAG
 Do not use VS Code Live Server for normal testing; opening the Spring URL avoids sending
 API requests to the static-file server.
 
+### Device sessions and logout
+
+Each successful login creates an independent device session with its own refresh token.
+Refreshing or logging out on one device revokes only that device's refresh token;
+other signed-in devices remain usable.
+
+The API uses stateless JWT access tokens. Logging out immediately removes the
+device's local tokens and revokes its refresh token, so it cannot obtain another
+access token. An access token already issued before logout is not server-revoked
+and remains valid only until its configured expiry (15 minutes by default). Account
+deletion/deactivation is different: inactive accounts are rejected by the JWT
+authentication filter on every request, across all devices.
+
 ### Using the interface
 
 - After a student completes onboarding, use the profile icon in the top header to view

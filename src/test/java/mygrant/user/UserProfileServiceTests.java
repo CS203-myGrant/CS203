@@ -162,4 +162,29 @@ class UserProfileServiceTests {
     private UserProfile profile(User user) {
         return UserProfile.fromUser(user);
     }
+
+    @Test
+    void clearsCurrentLocationWhenAnEmptyStringIsSupplied() {
+    User user = user();
+    user.setCurrentLocation("US");
+    UserProfile profile = profile(user);
+
+    when(userRepository.findByEmail(user.getEmail()))
+        .thenReturn(Optional.of(user));
+    when(userProfileRepository.findById(user.getId()))
+        .thenReturn(Optional.of(profile));
+    when(userProfileRepository.save(any(UserProfile.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+
+    UpdateProfileRequest request = new UpdateProfileRequest(
+        null, null, null, "",
+        null, null, null, null, null, null, null,
+        null, null, null
+    );
+
+    ProfileResponse response = service().updateProfile(user.getEmail(), request);
+
+    assertThat(response.currentLocation()).isNull();
+    assertThat(user.getCurrentLocation()).isNull();
+    }
 }

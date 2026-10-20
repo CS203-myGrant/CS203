@@ -7,12 +7,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
 
 import jakarta.validation.Valid;
 import mygrant.user.dto.LoginResponse;
 import mygrant.user.dto.UserCreation;
 import mygrant.user.dto.UserLogin;
 import mygrant.user.dto.RefreshTokenRequest;
+
 
 @CrossOrigin(origins = "*")
 @RestController
@@ -43,6 +46,14 @@ public class UserController {
     @PostMapping("/api/v1/auth/refresh")
     public ResponseEntity<LoginResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
         return ResponseEntity.ok(userService.refresh(request.refreshToken()));
+    }
+
+    @PostMapping("/api/v1/auth/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void logout(
+            Authentication authentication,
+            @Valid @RequestBody RefreshTokenRequest request) {
+        userService.logout(authentication.getName(), request.refreshToken());
     }
 
     @GetMapping("/api/v1/users/me")

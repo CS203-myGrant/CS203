@@ -618,6 +618,7 @@ let state = initialState();
 let notificationStreamController = null;
 let feedbackPollTimer = null;
 let permissionPromptedThisSession = false;
+let refreshPromise = null;
 
 /* ---------- RAG pipeline scenarios ----------
    Each one traces a real /api/v1/rag/query call end to end so you can see, at every
@@ -749,16 +750,38 @@ async function submitProfileCompletion(event){
     error.style.display='block';
   }
 }
-function logout(){
+async function logout(){
+  const accessToken = state.token;
+  const refreshToken = state.refreshToken;
+
+  try {
+    if (accessToken && refreshToken) {
+      await fetch(`${API_BASE}/api/v1/auth/logout`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({refreshToken})
+      });
+    }
+  } finally {
+    clearLocalSession();
+  }
+}
+
+function clearLocalSession(){
   stopFeedbackPolling();
   if(notificationStreamController) notificationStreamController.abort();
   notificationStreamController = null;
-  document.getElementById('popup-stack').innerHTML='';
+  document.getElementById('popup-stack').innerHTML = '';
+
   sessionStorage.removeItem('mygrantToken');
   sessionStorage.removeItem('mygrantRefreshToken');
+
   state = initialState();
   document.getElementById('app').classList.remove('active');
-  document.getElementById('login').style.display='flex';
+  document.getElementById('login').style.display = 'flex';
 }
 
 function showAuthMode(mode){
@@ -782,7 +805,7 @@ function roleForUser(role){ return role==='ADMIN'?'admin':role==='MANAGER'?'mana
 async function parseApiResponse(response){
   const body=await response.json().catch(()=>null);
   if(response.status===401){
-    if(state.token){ logout(); }
+    if(state.token){ clearLocalSession(); }
     throw new Error(body?.message || 'Your session is invalid or has expired. Please sign in again.');
   }
   if(!response.ok){
@@ -805,26 +828,66 @@ async function loadImmigrationDocuments() {
     render();
   }
 }
-async function apiFetch(path,options={}){
-  const headers=new Headers(options.headers || {});
-  if(state.token) headers.set('Authorization',`Bearer ${state.token}`);
-  let response = await fetch(`${API_BASE}${path}`,{...options,headers});
-  if(response.status===401 && state.refreshToken){
-    const refreshed = await fetch(`${API_BASE}/api/v1/auth/refresh`,{
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({refreshToken:state.refreshToken})
-    });
-    if(refreshed.ok){
-      const tokens=await refreshed.json();
-      state.token=tokens.token;
-      state.refreshToken=tokens.refreshToken || state.refreshToken;
-      sessionStorage.setItem('mygrantToken',state.token);
-      sessionStorage.setItem('mygrantRefreshToken',state.refreshToken);
-      headers.set('Authorization',`Bearer ${state.token}`);
-      response = await fetch(`${API_BASE}${path}`,{...options,headers});
-    }
+async function apiFetch(path, options = {}) {
+  const headers = new Headers(options.headers || {});
+
+  if (state.token) {
+    headers.set('Authorization', `Bearer ${state.token}`);
   }
-  return response;
+
+  let response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers
+  });
+
+  if (response.status !== 401 || !state.refreshToken) {
+    return response;
+  }
+
+  const refreshed = await refreshCurrentSession();
+
+  if (!refreshed) {
+    return response;
+  }
+
+  headers.set('Authorization', `Bearer ${state.token}`);
+
+  return fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers
+  });
+}
+async function refreshCurrentSession() {
+  if (!refreshPromise) {
+    const refreshToken = state.refreshToken;
+
+    refreshPromise = fetch(`${API_BASE}/api/v1/auth/refresh`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({refreshToken})
+    })
+      .then(async response => {
+        if (!response.ok) {
+          return false;
+        }
+
+        const tokens = await response.json();
+
+        state.token = tokens.token;
+        state.refreshToken = tokens.refreshToken;
+
+        sessionStorage.setItem('mygrantToken', state.token);
+        sessionStorage.setItem('mygrantRefreshToken', state.refreshToken);
+
+        return true;
+      })
+      .catch(() => false)
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+
+  return refreshPromise;
 }
 async function authenticate(path,payload){
   setAuthMessage(''); setAuthBusy('Connecting to Spring Boot...');
@@ -875,9 +938,7 @@ async function restoreSession(){
 
     enterApp(roleForUser(state.user.role));
   }catch(error){
-    sessionStorage.removeItem('mygrantToken');
-    sessionStorage.removeItem('mygrantRefreshToken');
-    state.token = null;
+    clearLocalSession();
     setAuthMessage(error.message);
   }finally{
     setAuthBusy('');
@@ -1387,7 +1448,7 @@ async function saveProfile(event){
     visaType: value('profile-visa-type'),
     countryOfOrigin: value('profile-origin') || null,
     countryOfCitizenship: value('profile-citizenship') || null,
-    currentLocation: value('profile-location') || null,
+    currentLocation: value('profile-location'),
     employmentStatus: value('profile-employment-status') || null,
     employer: value('profile-employer') || null,
     visaStartDate: value('profile-visa-start') || null,
