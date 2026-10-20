@@ -120,6 +120,37 @@ policies from PostgreSQL, and sends the JWT with Federal Register import and RAG
 Do not use VS Code Live Server for normal testing; opening the Spring URL avoids sending
 API requests to the static-file server.
 
+### Admin account setup
+
+The application can create or promote one admin account during startup. Add the admin
+credentials to the local `.env` file:
+
+```env
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=use-a-strong-local-password
+```
+
+Both values must be provided. The password is hashed before it is stored. Never commit
+the real password, `.env`, or any other secret to Git.
+
+Load the variables in WSL and restart Spring Boot:
+
+```bash
+set -a
+source .env
+set +a
+./mvnw spring-boot:run
+```
+
+Then open `http://localhost:8080/` and sign in using `ADMIN_EMAIL` and
+`ADMIN_PASSWORD`. Admin users can access the RAG inspector, import tools, and the
+user-management controls. From the admin view, an admin can change another user's role
+to `APPLICANT`, `MANAGER`, or `ADMIN`.
+
+After a role change, the affected user must sign out and sign in again so that a new JWT
+containing the updated role is issued. If either admin variable is omitted, admin
+bootstrap is skipped.
+
 ### Device sessions and logout
 
 Each successful login creates an independent device session with its own refresh token.
