@@ -31,7 +31,7 @@ jobs:
       DATABASE_URL: jdbc:postgresql://localhost:5432/policy_impact
       DATABASE_USERNAME: policy_user
       DATABASE_PASSWORD: policy_password
-      JWT_SECRET: ci-only-test-secret-at-least-32-characters-long
+      JWT_SECRET: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 
     steps:
       - name: Check out source
