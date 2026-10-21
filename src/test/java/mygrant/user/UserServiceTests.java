@@ -6,9 +6,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import mygrant.auth.JwtService;
+import mygrant.auth.RefreshToken;
 import mygrant.auth.RefreshTokenRepository;
 import mygrant.common.DuplicateEmailException;
 import mygrant.common.InvalidCredentialsException;
@@ -143,6 +148,29 @@ class UserServiceTests {
         verifyNoInteractions(jwtService);
     }
 
+    @Test
+    void updatesAUsersRole() {
+        User user = new User();
+        user.setId(7L);
+        user.setRole(UserRole.APPLICANT);
+        when(userRepository.findById(7L)).thenReturn(java.util.Optional.of(user));
+        when(userRepository.save(user)).thenReturn(user);
+
+        LoginResponse response = service().updateRole(7L, UserRole.MANAGER);
+
+        assertThat(user.getRole()).isEqualTo(UserRole.MANAGER);
+        assertThat(response.getRole()).isEqualTo(UserRole.MANAGER);
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void rejectsRoleUpdateForAnUnknownUser() {
+        when(userRepository.findById(404L)).thenReturn(java.util.Optional.empty());
+
+        assertThatThrownBy(() -> service().updateRole(404L, UserRole.MANAGER))
+                .isInstanceOf(UserNotFoundException.class);
+    }
+
     private UserCreation registration() {
         UserCreation registration = new UserCreation();
         registration.setUserName("Student");
@@ -174,5 +202,152 @@ class UserServiceTests {
         when(jwtService.generateRefreshToken(any(User.class))).thenReturn("refresh-token");
         when(jwtService.extractExpiration("refresh-token")).thenReturn(java.time.Instant.now().plusSeconds(3600));
         
+    }
+
+    @Test
+    void separateLoginsCreateIndependentRefreshTokensForTheSameUser() {
+        User user = activeUser();
+        UserLogin login = loginRequest();
+
+        when(userRepository.findByEmail("student@example.com"))
+                .thenReturn(java.util.Optional.of(user));
+        when(passwordEncoder.matches("password1", "hash")).thenReturn(true);
+
+        when(jwtService.generateAccessToken(user))
+                .thenReturn("access-token-a", "access-token-b");
+        when(jwtService.generateRefreshToken(user))
+                .thenReturn("refresh-token-a", "refresh-token-b");
+        when(jwtService.extractExpiration("refresh-token-a"))
+                .thenReturn(Instant.now().plusSeconds(3600));
+        when(jwtService.extractExpiration("refresh-token-b"))
+                .thenReturn(Instant.now().plusSeconds(3600));
+
+        service().loginUser(login);
+        service().loginUser(login);
+
+        ArgumentCaptor<RefreshToken> refreshTokens =
+                ArgumentCaptor.forClass(RefreshToken.class);
+
+        verify(refreshTokenRepository, times(2)).save(refreshTokens.capture());
+
+        assertThat(refreshTokens.getAllValues()).hasSize(2);
+        assertThat(refreshTokens.getAllValues().get(0).getUserId())
+                .isEqualTo(user.getId());
+        assertThat(refreshTokens.getAllValues().get(1).getUserId())
+                .isEqualTo(user.getId());
+        assertThat(refreshTokens.getAllValues().get(0).getTokenHash())
+                .isNotEqualTo(refreshTokens.getAllValues().get(1).getTokenHash());
+    }
+
+    @Test
+    void logoutRevokesOnlyThatDevicesRefreshToken() {
+        User user = activeUser();
+
+        RefreshToken deviceAToken = new RefreshToken(
+                user.getId(),
+                sha256("refresh-token-a"),
+                Instant.now().plusSeconds(3600)
+        );
+
+        RefreshToken deviceBToken = new RefreshToken(
+                user.getId(),
+                sha256("refresh-token-b"),
+                Instant.now().plusSeconds(3600)
+        );
+
+        when(userRepository.findByEmail("student@example.com"))
+                .thenReturn(java.util.Optional.of(user));
+
+        when(refreshTokenRepository.findByTokenHashAndRevokedAtIsNull(
+                sha256("refresh-token-a")))
+                .thenReturn(java.util.Optional.of(deviceAToken));
+
+        service().logout("student@example.com", "refresh-token-a");
+
+        assertThat(deviceAToken.getRevokedAt()).isNotNull();
+        verify(refreshTokenRepository).save(deviceAToken);
+
+        when(jwtService.extractSubject("refresh-token-b"))
+                .thenReturn("student@example.com");
+        when(jwtService.extractTokenId("refresh-token-b"))
+                .thenReturn("device-b");
+        when(jwtService.isRefreshTokenValid(
+                "refresh-token-b", "student@example.com"))
+                .thenReturn(true);
+
+        when(refreshTokenRepository.findByTokenHashAndRevokedAtIsNull(
+                sha256("refresh-token-b")))
+                .thenReturn(java.util.Optional.of(deviceBToken));
+
+        when(jwtService.generateAccessToken(user))
+                .thenReturn("new-access-token-b");
+        when(jwtService.generateRefreshToken(user))
+                .thenReturn("new-refresh-token-b");
+        when(jwtService.extractExpiration("new-refresh-token-b"))
+                .thenReturn(Instant.now().plusSeconds(3600));
+
+        LoginResponse refreshed = service().refresh("refresh-token-b");
+
+        assertThat(refreshed.getToken()).isEqualTo("new-access-token-b");
+        assertThat(refreshed.getRefreshToken()).isEqualTo("new-refresh-token-b");
+    }
+
+    @Test
+    void loggedOutDeviceCannotRefreshAgain() {
+        User user = activeUser();
+
+        RefreshToken deviceAToken = new RefreshToken(
+                user.getId(),
+                sha256("refresh-token-a"),
+                Instant.now().plusSeconds(3600)
+        );
+
+        when(userRepository.findByEmail("student@example.com"))
+                .thenReturn(java.util.Optional.of(user));
+
+        when(refreshTokenRepository.findByTokenHashAndRevokedAtIsNull(
+                sha256("refresh-token-a")))
+                .thenReturn(java.util.Optional.of(deviceAToken));
+
+        service().logout("student@example.com", "refresh-token-a");
+
+        when(jwtService.extractSubject("refresh-token-a"))
+                .thenReturn("student@example.com");
+        when(jwtService.extractTokenId("refresh-token-a"))
+                .thenReturn("device-a");
+        when(jwtService.isRefreshTokenValid(
+                "refresh-token-a", "student@example.com"))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service().refresh("refresh-token-a"))
+                .isInstanceOf(InvalidCredentialsException.class)
+                .hasMessage("Invalid refresh token");
+    }
+
+    private User activeUser() {
+        User user = new User();
+        user.setId(1L);
+        user.setEmail("student@example.com");
+        user.setPasswordHash("hash");
+        user.setRole(UserRole.APPLICANT);
+        return user;
+    }
+
+    private UserLogin loginRequest() {
+        UserLogin login = new UserLogin();
+        login.setUserEmail("student@example.com");
+        login.setUserPassword("password1");
+        return login;
+    }
+
+    private String sha256(String value) {
+        try {
+            return HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-256")
+                            .digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+            );
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 }

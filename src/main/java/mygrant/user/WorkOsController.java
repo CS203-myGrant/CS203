@@ -8,12 +8,16 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import mygrant.auth.JwtService;
 import mygrant.workos.WorkOsService;
 
 @RestController
 public class WorkOsController {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(WorkOsController.class);
 
     private final WorkOsService workOsService;
     private final JwtService jwtService;
@@ -50,6 +54,7 @@ public class WorkOsController {
                     + "&workosRefreshToken=" + login.getRefreshToken());
             return ResponseEntity.status(302).header(HttpHeaders.LOCATION, location.toString()).build();
         } catch (RuntimeException exception) {
+            LOGGER.warn("WorkOS callback could not complete", exception);
             return redirectWithError("WorkOS sign-in could not be completed.");
         }
     }

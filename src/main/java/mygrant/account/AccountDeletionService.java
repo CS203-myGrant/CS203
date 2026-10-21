@@ -15,9 +15,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 import mygrant.account.dto.DeletionRequestResponse;
 import mygrant.account.dto.DeletionConfirmationResponse;
-import mygrant.workos.WorkOsService;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
+import mygrant.workos.WorkOsService;
 
 /** Creates short-lived, single-use challenges for account deletion confirmation. */
 @Service
@@ -30,10 +30,10 @@ public class AccountDeletionService {
     private final AccountDeletionRequestRepository deletionRequestRepository;
     private final AccountPurgeService accountPurgeService;
     private final WorkOsService workOsService;
-
     public AccountDeletionService(UserRepository userRepository,
             AccountDeletionRequestRepository deletionRequestRepository,
-            AccountPurgeService accountPurgeService, WorkOsService workOsService) {
+            AccountPurgeService accountPurgeService,
+            WorkOsService workOsService) {
         this.userRepository = userRepository;
         this.deletionRequestRepository = deletionRequestRepository;
         this.accountPurgeService = accountPurgeService;
@@ -60,7 +60,7 @@ public class AccountDeletionService {
         return new DeletionRequestResponse(challenge, expiresAt);
     }
 
-    /** Validates the user's one-time challenge, removes their WorkOS identity, and purges local data. */
+    /** Validates the user's one-time challenge and purges local data. */
     @Transactional
     public DeletionConfirmationResponse confirmDeletion(String authenticatedEmail, String challenge) {
         User user = userRepository.findByEmail(authenticatedEmail)
@@ -74,10 +74,11 @@ public class AccountDeletionService {
         deletionRequest.markConfirmed(now);
         deletionRequestRepository.save(deletionRequest);
 
-        if (user.getWorkosUserId() != null) {
+        // Delete the external identity as well as local application data. A later
+        // Google sign-in can then provision a fresh WorkOS and local account.
+        if (user.getWorkosUserId() != null && !user.getWorkosUserId().isBlank()) {
             workOsService.deleteUser(user.getWorkosUserId());
         }
-
         accountPurgeService.purge(user.getId());
         return new DeletionConfirmationResponse("deleted", now);
     }

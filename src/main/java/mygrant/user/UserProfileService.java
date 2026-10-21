@@ -92,7 +92,10 @@ public class UserProfileService {
         }
 
         if (request.currentLocation() != null) {
-            profile.setCurrentLocation(request.currentLocation().trim());
+            String currentLocation = request.currentLocation().trim();
+            profile.setCurrentLocation(
+                    currentLocation.isEmpty() ? null : currentLocation
+            );
         }
 
         if (request.employmentStatus() != null) {
