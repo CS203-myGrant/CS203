@@ -1,0 +1,48 @@
+name: PR build and test
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Maven tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: policy_impact
+          POSTGRES_USER: policy_user
+          POSTGRES_PASSWORD: policy_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U policy_user -d policy_impact"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: jdbc:postgresql://localhost:5432/policy_impact
+      DATABASE_USERNAME: policy_user
+      DATABASE_PASSWORD: policy_password
+      JWT_SECRET: ci-only-test-secret-at-least-32-characters-long
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Run tests
+        run: ./mvnw test
