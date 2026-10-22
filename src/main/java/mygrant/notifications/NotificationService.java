@@ -110,13 +110,12 @@ public class NotificationService {
                 .getOrDefault(PolicyImpactRules.normalizeVisaType(user.getVisaType()), Set.of());
         List<ProfileField> toReview = policyFields.stream().filter(field -> field.isFilledIn(profile)).toList();
         if (toReview.isEmpty()) {
-                    return new Notification(
-                user.getId(),
-                profile.getVersion(),
-                event.policyId(),
-                message,
-                toReview
-        );  
+            return new Notification(
+                    user.getId(),
+                    profile.getVersion(),
+                    event.policyId(),
+                    message,
+                    toReview);
         }
         String labels = toReview.stream().map(ProfileField::label).collect(Collectors.joining(", "));
         return new Notification(

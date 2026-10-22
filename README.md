@@ -6,20 +6,19 @@ Java/Spring Boot backend for profile-aware immigration policy retrieval and impa
 
 - Java 21+
 - Docker Desktop (for PostgreSQL with pgvector)
-- Ollama with the `mxbai-embed-large` and `llama3.2` models
+- Ollama with the `mxbai-embed-large` embedding model
 
 Set `JAVA_HOME` to your JDK installation before using the Maven Wrapper.
 
 ## Run locally in WSL
 
 From the cloned `CS203` directory (not the parent `Project` directory), start
-PostgreSQL and install the Ollama models:
+PostgreSQL and install the Ollama embedding model:
 
 ```bash
 docker compose up -d
 docker compose ps
 ollama pull mxbai-embed-large
-ollama pull llama3.2
 ```
 
 Make sure the Ollama server is running. If it is not already running, use a separate
@@ -251,7 +250,7 @@ POST /api/v1/rag/query
   -> embed the question
   -> retrieve relevant chunks filtered by visa type
   -> rank primary/effective evidence first
-  -> generate a grounded Ollama answer
+  -> generate a grounded OpenAI GPT-6.1 Sol answer
   -> return citations, confidence and review status
 ```
 
@@ -327,9 +326,9 @@ The response includes classification flags and the signals that caused each matc
     "reasons": ["The profile contains upcoming travel near the effective date."],
     "recommendedActions": ["Review the primary source and contact the school adviser."],
     "requiresHumanReview": true,
-    "provider": "Groq",
-    "model": "openai/gpt-oss-20b",
-    "evaluation": { "verdict": "YES", "reason": "The assessment is supported.", "model": "qwen/qwen3.8-27b" },
+    "provider": "OpenAI",
+    "model": "gpt-6.1-sol",
+    "evaluation": { "verdict": "YES", "reason": "The assessment is supported.", "model": "claude-haiku-5-5" },
     "attempts": 1
   }
 }
@@ -337,28 +336,30 @@ The response includes classification flags and the signals that caused each matc
 
 ### Enable profile-specific urgency classification
 
-Create a Groq API key, then add it only to the ignored `.env` file:
+Add OpenAI and Anthropic API keys only to the ignored `.env` file:
 
 ```env
-GROQ_API_KEY=gsk_...
-GROQ_MODEL=openai/gpt-oss-20b
-GROQ_JUDGE_MODEL=qwen/qwen3.8-27b
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-6.1-sol
+ANTHROPIC_API_KEY=...
+ANTHROPIC_JUDGE_MODEL=claude-haiku-5-5
 ```
 
 Restart Spring Boot after changing `.env`. During each authenticated Federal Register
 import, the backend sends only relevant profile fields (not the user's name or email),
-policy metadata, deterministic visa matches, and a bounded source excerpt to Groq. Groq
+policy metadata, deterministic visa matches, and a bounded source excerpt to OpenAI GPT-6.1 Sol. OpenAI
 returns strict structured JSON with `HIGH`, `MEDIUM`, `LOW`, or `NOT_APPLICABLE` urgency,
 confidence, reasons, actions, and a human-review flag. The RAG Inspector displays that
-assessment immediately above the imported source. The same Groq key is used for the
-Qwen judge; `GROQ_JUDGE_MODEL` is optional and defaults to the value above. Make sure
-the model is available to your Groq account. Qwen is a preview model and may change.
+assessment immediately above the imported source. Claude Haiku 5.5 independently judges
+the generated assessment using the Anthropic API.
 
-Qwen independently checks the generated urgency and recommended next steps against the
-same profile and policy excerpt. A `YES` verdict returns the assessment. A `NO` gives
-the generator feedback and retries once; a second `NO`, invalid response, or unavailable
-judge returns an `UNAVAILABLE` assessment requiring human review, without displaying
-the unapproved recommendation. A successful judge verdict is not proof of legal accuracy.
+Claude Haiku 5.5 independently checks the generated urgency and recommended next steps against the
+same profile and policy excerpt. A `YES` verdict returns the assessment. A `NO` returns a
+safe human-review response without retrying either model. If Claude is unavailable, the
+single OpenAI assessment is returned with an `UNAVAILABLE` judge result, a clear
+"not independently double-checked" notice, and a link to contact the myGRANT team.
+If OpenAI is unavailable, Claude produces one fallback assessment with the same notice;
+it is never treated as its own independent approval. A successful judge verdict is not proof of legal accuracy.
 High-urgency results always require human review. Confidence is model-reported and is not
 a calibrated probability. This review is based on the first 12,000 characters, not the
 whole document; the deterministic notification rules remain separate. Both prompts use
@@ -376,16 +377,11 @@ curl -s -X POST http://localhost:8080/api/v1/ingestion/federal-register/2026-144
 Check `evaluation.verdict` (`YES`, `NO`, or `UNAVAILABLE`), `evaluation.reason`, and
 `attempts`. Re-imports reuse vectors but run a fresh profile assessment and judgment.
 
-If `GROQ_API_KEY` is absent or the provider call fails, ingestion and pgvector indexing
-still complete. The response uses `UNAVAILABLE` instead of fabricating an assessment.
-The generator reports HTTP 429 as a rate or quota limit and HTTP 401/403 as an
-authentication or access failure; check Groq usage, your key, and model access as
-appropriate. An unavailable independent review can also be caused by a judge API or
-response error. Check the Spring Boot terminal for `Groq impact generator`,
-`Groq impact judge`, or `Impact judge` warnings: they include an HTTP status or error
-type without logging the API key, policy text, profile details, or provider response.
-The displayed `attempts` counts generator attempts; a retained `NO` may be from an
-earlier attempt if the retry fails.
+If both providers are unavailable, ingestion and pgvector indexing still complete and the
+response uses `UNAVAILABLE` rather than fabricating an assessment. In a single-provider
+failure, the working provider returns one unverified assessment instead of starting a retry loop.
+Spring Boot logs only the error type or HTTP status; it does not log API keys, policy text,
+profile details, or provider responses. The displayed `attempts` is always `1`.
 
 To run the focused generator and judge tests in WSL:
 
@@ -393,7 +389,7 @@ To run the focused generator and judge tests in WSL:
 ./mvnw '-Dtest=ImpactJudgeServiceTests,ProfileImpactAssessmentServiceTests' test
 ```
 
-These tests mock Groq; they do not verify live API credentials, model access, or model quality.
+These tests mock OpenAI and Claude; they do not verify live API credentials, model access, or model quality.
 
 The chunk count can vary. Importing the same unchanged document again returns
 `"alreadyIndexed":true` and `"chunksIndexed":0`; this means the existing vectors were
@@ -546,7 +542,7 @@ docker compose ps
 ```
 
 The health response should contain `"status":"UP"`; PostgreSQL should be healthy and
-both Ollama models should be listed.
+the Ollama embedding model should be listed.
 
 ### 2. Ask an F-1 question
 
@@ -622,24 +618,20 @@ accounts and messages roll back. The vector service is mocked to simulate an out
 The JavaScript tests check that HTTP 403 and 503 preserve the session, while 401
 requires signing in again.
 
-The separate RAG inspector calls `/api/v1/rag/query`. The existing RAG flow is:
+The separate RAG inspector calls `/api/v1/rag/query`. The RAG flow is:
 
 1. Ingest policy documents using the RAG inspector (or `/api/v1/ingestion/documents`).
 2. Split documents and embed their text with Ollama `mxbai-embed-large`.
 3. Store embeddings and source metadata in PostgreSQL/pgvector.
 4. Embed the user's question and retrieve matching chunks filtered by visa type.
-5. Pass the retrieved text and question to Ollama `llama3.2` and return an answer
+5. Pass the retrieved text and question to OpenAI `gpt-6.1-sol` and return an answer
    with citations. If nothing matches, return an insufficient-evidence answer.
 
-Start Ollama and confirm both models are available with `ollama list`. If missing,
-run `ollama pull mxbai-embed-large` and `ollama pull llama3.2`. Import a source before
+Start Ollama and confirm the embedding model is available with `ollama list`. If missing,
+run `ollama pull mxbai-embed-large`. Import a source before
 asking about it; an empty index cannot provide a grounded answer.
 
-A hosted AI API can replace the answer-generation model while keeping retrieval.
-Add the chosen provider's Spring AI chat integration, keep its API key in server-side
-configuration, and configure the `ChatClient` injected into `RagService` to use that
-provider. Send retrieved evidence along with the question. A direct API call with only
-the question is ordinary chat, without retrieval from your documents. Keeping the
-current embedding model avoids rebuilding the existing 1024-dimensional vector index;
-changing the embedding model requires re-embedding the documents and checking dimensions.
-The existing Groq impact-assessment configuration is separate from this RAG chat client.
+OpenAI is used only after evidence retrieval; sending a question without retrieved
+evidence is not part of this RAG flow. Keeping the current embedding model avoids
+rebuilding the existing 1024-dimensional vector index; changing the embedding model
+requires re-embedding the documents and checking dimensions.
