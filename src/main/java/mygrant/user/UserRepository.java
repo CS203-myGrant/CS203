@@ -13,6 +13,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByEmail(String email);
     Optional<User> findByEmail(String email);
     Optional<User> findByWorkosUserId(String workosUserId);
+    List<User> findAllByActiveTrueOrderByIdAsc();
 
     /**
      * Matches users by role and visa type. Registration stores the visa type verbatim, so

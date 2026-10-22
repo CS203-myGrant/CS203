@@ -1,12 +1,19 @@
 package mygrant.user;
 
 import java.util.Optional;
+import java.util.List;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Objects;
 
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import mygrant.auth.JwtService;
+import mygrant.auth.RefreshToken;
+import mygrant.auth.RefreshTokenRepository;
 import mygrant.common.InvalidCredentialsException;
 import mygrant.common.DuplicateEmailException;
 import mygrant.user.dto.LoginResponse;
@@ -23,16 +30,19 @@ public class UserService {
     private final UserProfileRepository userProfileRepository;
     private final BCryptPasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     public UserService(
             UserRepository userRepository,
             UserProfileRepository userProfileRepository,
             BCryptPasswordEncoder passwordEncoder,
-            JwtService jwtService) {
+            JwtService jwtService,
+            RefreshTokenRepository refreshTokenRepository) {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.refreshTokenRepository = refreshTokenRepository;
     }
 
     @Transactional
@@ -64,9 +74,7 @@ public class UserService {
             throw new DuplicateEmailException();
         }
         userProfileRepository.save(UserProfile.fromUser(savedUser));
-        String token = jwtService.generateToken(savedUser.getEmail());
-        
-        return new LoginResponse(savedUser, token);
+        return tokens(savedUser);
     }
 
     public LoginResponse loginUser(UserLogin userLogin) {
@@ -84,8 +92,7 @@ public class UserService {
             throw new InvalidCredentialsException("Invalid email or password");
         }
 
-        String token = jwtService.generateToken(user.getEmail());
-        return new LoginResponse(user, token);
+        return tokens(user);
     }
 
     public LoginResponse loginWorkOsUser(WorkOsUser workOsUser) {
@@ -109,7 +116,69 @@ public class UserService {
             user = userRepository.save(user);
         }
 
-        return new LoginResponse(user, jwtService.generateToken(user.getEmail()));
+        return tokens(user);
+    }
+
+    @Transactional
+    public LoginResponse refresh(String refreshToken) {
+        String email;
+        String tokenId;
+        try {
+            email = jwtService.extractSubject(refreshToken);
+            tokenId = jwtService.extractTokenId(refreshToken);
+        } catch (RuntimeException exception) {
+            throw new InvalidCredentialsException("Invalid refresh token");
+        }
+        if (tokenId == null || !jwtService.isRefreshTokenValid(refreshToken, email)) {
+            throw new InvalidCredentialsException("Invalid refresh token");
+        }
+        User user = userRepository.findByEmail(email)
+                .filter(User::isActive)
+                .orElseThrow(() -> new InvalidCredentialsException("Invalid refresh token"));
+        RefreshToken stored = refreshTokenRepository
+                .findByTokenHashAndRevokedAtIsNull(hash(refreshToken))
+                .filter(token -> Objects.equals(token.getUserId(), user.getId()) && token.isUsable())
+                .orElseThrow(() -> new InvalidCredentialsException("Invalid refresh token"));
+        stored.revoke();
+        refreshTokenRepository.save(stored);
+        return tokens(user);
+    }
+
+    @Transactional
+    public void logout(String email, String refreshToken) {
+        User user = userRepository.findByEmail(email.trim().toLowerCase())
+                .filter(User::isActive)
+                .orElseThrow(() ->
+                        new InvalidCredentialsException("Invalid logout request"));
+
+        refreshTokenRepository.findByTokenHashAndRevokedAtIsNull(hash(refreshToken))
+                .filter(token -> Objects.equals(token.getUserId(), user.getId()))
+                .ifPresent(token -> {
+                    token.revoke();
+                    refreshTokenRepository.save(token);
+                });
+    }
+
+    private LoginResponse tokens(User user) {
+        String accessToken = jwtService.generateAccessToken(user);
+        String refreshToken = jwtService.generateRefreshToken(user);
+        refreshTokenRepository.save(new RefreshToken(user.getId(), hash(refreshToken),
+                jwtService.extractExpiration(refreshToken)));
+        return new LoginResponse(user, accessToken, refreshToken);
+    }
+
+    private String hash(String token) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(token.getBytes(StandardCharsets.UTF_8));
+            StringBuilder result = new StringBuilder();
+            for (byte value : digest) {
+                result.append(String.format("%02x", value));
+            }
+            return result.toString();
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
     }
 
     public LoginResponse completeProfile(String email, ProfileCompletion profile) {
@@ -122,5 +191,23 @@ public class UserService {
         user.setUpcomingTravelDate(profile.getUpcomingTravelDate());
         user.setProfileComplete(true);
         return new LoginResponse(userRepository.save(user));
+    }
+
+    @Transactional
+    public LoginResponse updateRole(Long userId, UserRole role) {
+        if (role == null) {
+            throw new IllegalArgumentException("Role is required");
+        }
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+        user.setRole(role);
+        return new LoginResponse(userRepository.save(user));
+    }
+
+    @Transactional(readOnly = true)
+    public List<LoginResponse> listUsers() {
+        return userRepository.findAllByActiveTrueOrderByIdAsc().stream()
+                .map(LoginResponse::new)
+                .toList();
     }
 }

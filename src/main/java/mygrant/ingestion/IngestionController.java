@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
 
 import jakarta.validation.Valid;
@@ -32,6 +33,7 @@ public class IngestionController {
 
     /** Indexes a policy supplied in the request body. */
     @PostMapping("/documents")
+    @PreAuthorize("hasRole('ADMIN')")
     @ResponseStatus(HttpStatus.CREATED)
     public IngestionResponse ingest(@Valid @RequestBody IngestPolicyRequest request) {
         return ingestionService.ingest(request);
@@ -39,6 +41,7 @@ public class IngestionController {
 
     /** Downloads, classifies, and indexes a published Federal Register document. */
     @PostMapping("/federal-register/{documentNumber}")
+    @PreAuthorize("hasRole('ADMIN')")
     @ResponseStatus(HttpStatus.CREATED)
     public FederalRegisterIngestionResponse ingestFederalRegister(
             @PathVariable String documentNumber, Principal principal) {

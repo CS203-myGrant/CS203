@@ -37,8 +37,11 @@ export JWT_SECRET="$(openssl rand -base64 32)"
 
 ### Authentication and JWT
 
-The application uses JWT bearer tokens for authenticated requests. The signing
-secret is read from the `JWT_SECRET` environment variable and must not be
+The application uses short-lived JWT bearer access tokens and seven-day refresh
+tokens. Access tokens include the user's role and are used for authenticated and
+role-protected requests. Refresh tokens are stored as hashes, rotated after use,
+and rejected after revocation or reuse. The signing secret is read from the
+`JWT_SECRET` environment variable and must not be
 committed to this repository.
 
 From WSL, set the secret in the same terminal session used to start Spring Boot:
@@ -87,6 +90,15 @@ TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
   echo $TOKEN
 ```
 
+The response also contains `refreshToken`. Exchange it for a new access token
+when the 15-minute access token expires:
+
+```bash
+curl -s -X POST http://localhost:8080/api/v1/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken":"<refresh-token>"}'
+```
+
 Use the token to access the authenticated profile endpoint:
 
 ```bash
@@ -106,6 +118,61 @@ there or sign in with an existing account. The browser stores the JWT in session
 policies from PostgreSQL, and sends the JWT with Federal Register import and RAG requests.
 Do not use VS Code Live Server for normal testing; opening the Spring URL avoids sending
 API requests to the static-file server.
+
+### Admin account setup
+
+The application can create or promote one admin account during startup. Add the admin
+credentials to the local `.env` file:
+
+```env
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=use-a-strong-local-password
+```
+
+Both values must be provided. The password is hashed before it is stored. Never commit
+the real password, `.env`, or any other secret to Git.
+
+Load the variables in WSL and restart Spring Boot:
+
+```bash
+set -a
+source .env
+set +a
+./mvnw spring-boot:run
+```
+
+Then open `http://localhost:8080/` and sign in using `ADMIN_EMAIL` and
+`ADMIN_PASSWORD`. Admin users can access the RAG inspector, import tools, and the
+user-management controls. From the admin view, an admin can change another user's role
+to `APPLICANT`, `MANAGER`, or `ADMIN`.
+
+After a role change, the affected user must sign out and sign in again so that a new JWT
+containing the updated role is issued. If either admin variable is omitted, admin
+bootstrap is skipped.
+
+### Device sessions and logout
+
+Each successful login creates an independent device session with its own refresh token.
+Refreshing or logging out on one device revokes only that device's refresh token;
+other signed-in devices remain usable.
+
+The API uses stateless JWT access tokens. Logging out immediately removes the
+device's local tokens and revokes its refresh token, so it cannot obtain another
+access token. An access token already issued before logout is not server-revoked
+and remains valid only until its configured expiry (15 minutes by default). Account
+deletion/deactivation is different: inactive accounts are rejected by the JWT
+authentication filter on every request, across all devices.
+
+### Using the interface
+
+- After a student completes onboarding, use the profile icon in the top header to view
+  or edit their profile. The icon is hidden for staff and incomplete student profiles.
+- Open **Notifications** to see matching policy alerts, then use **Feedback** to contact
+  the support team. Applicant and staff messages appear in distinct chat bubbles; staff
+  can reply through the **Feedback inbox**.
+- Open the **RAG inspector** to import a Federal Register document and inspect the
+  resulting policy assessment. Keep PostgreSQL and the configured AI services running
+  for the relevant features.
 
 Configuration can be overridden with `DATABASE_URL`, `DATABASE_USERNAME`,
 `DATABASE_PASSWORD`, `OLLAMA_BASE_URL`, and `OLLAMA_EMBEDDING_MODEL`.
@@ -385,8 +452,8 @@ action-required flag needs: the flag only fires when the field the policy touche
 already populated. An account registered without those fields still receives the alert,
 but it arrives unflagged.
 
-Registering an email that already exists returns HTTP 409 with a clear duplicate-email
-message; sign in instead. Invalid JSON or dates return HTTP 400, and invalid login
+Registering an email that already exists returns HTTP 400 with a generic registration
+error that does not disclose whether the email is registered. Invalid JSON or dates return HTTP 400, and invalid login
 credentials return HTTP 401 without revealing whether the email exists.
 
 ### 2. Import a document that affects that category

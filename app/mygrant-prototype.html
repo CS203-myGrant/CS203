@@ -132,6 +132,11 @@
   .nav-badge{font-size:12px;font-weight:700;background:var(--urgent);color:#fff;padding:0 7px;border-radius:10px;min-width:20px;text-align:center;line-height:18px;}
   .switch-role{background:var(--primary);border:0;border-radius:4px;color:#fff;font-size:15px;font-weight:700;padding:8px 16px;}
   .switch-role:hover{background:#2378C3;}
+  /* Header shortcut replaces the student profile link in the side navigation. */
+  .profile-btn{width:40px;height:40px;border-radius:50%;border:2px solid #fff;background:transparent;color:#fff;padding:0;display:inline-flex;align-items:center;justify-content:center;}
+  .profile-btn svg{width:22px;height:22px;fill:currentColor;}
+  .profile-btn:hover{background:var(--ink-soft);}
+  .profile-btn.active{background:#fff;color:var(--ink);}
 
   .main{padding:16px 24px 72px;max-width:1100px;margin:0 auto;}
   .main > *{max-width:980px;}
@@ -422,6 +427,9 @@
       </a>
       <div class="header-tools">
         <span class="role-tag" id="role-tag">STUDENT VIEW</span>
+        <button class="profile-btn" id="profile-btn" data-view="profile" type="button" onclick="goto('profile')" aria-label="Your profile" title="Your profile" style="display:none;">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7z"/></svg>
+        </button>
         <button class="switch-role" onclick="logout()">Sign out</button>
       </div>
     </div>
@@ -431,7 +439,6 @@
     <div id="nav-student" class="nav-group" style="display:none;">
       <div class="nav-label">Case</div>
       <a class="nav-link" data-view="dashboard" onclick="goto('dashboard')">Your alerts<span id="nav-unread" class="nav-badge" style="display:none;">0</span></a>
-      <a class="nav-link" data-view="profile" onclick="goto('profile')">Your profile</a>
     </div>
 
     <div id="nav-manager" class="nav-group" style="display:none;">
@@ -542,10 +549,14 @@ function consumeWorkosRedirect(){
     location.hash.replace(/^#/,'').replace(/^\?/,'')
   );
   const token = params.get('workosToken');
+  const refreshToken = params.get('workosRefreshToken');
   const error = params.get('workosError');
 
   if (token) {
     sessionStorage.setItem('mygrantToken', token);
+  }
+  if (refreshToken) {
+    sessionStorage.setItem('mygrantRefreshToken', refreshToken);
   }
 
   if (token || error) {
@@ -562,6 +573,7 @@ const initialState = () => ({
   user: null,
   profile: null,
   token: sessionStorage.getItem('mygrantToken'),
+  refreshToken: sessionStorage.getItem('mygrantRefreshToken'),
   policyRecords: null,
   policyError: null,
   notifications: null,
@@ -593,13 +605,17 @@ const initialState = () => ({
   feedbackInboxBadge: 0,
   feedbackUserBadge: 0,
   inboxLastSeen: 0,
-  seenFeedbackMsgIds: []
+  seenFeedbackMsgIds: [],
+  adminUsers: [],
+  adminUsersLoading: false,
+  adminUsersError: null
 });
 let state = initialState();
 let notificationStreamController = null;
 let feedbackPollTimer = null;
 let feedbackBadgeTimer = null;
 let permissionPromptedThisSession = false;
+let refreshPromise = null;
 
 /* ---------- RAG pipeline scenarios ----------
    Each one traces a real /api/v1/rag/query call end to end so you can see, at every
@@ -668,7 +684,8 @@ function enterApp(role){
   document.getElementById('nav-student').style.display = role==='student' ? 'block':'none';
   document.getElementById('nav-manager').style.display = role==='manager' ? 'block':'none';
   document.getElementById('nav-admin').style.display = role==='admin' ? 'block':'none';
-  document.getElementById('nav-tools').style.display = role!=='admin' ? 'block':'none';
+  // Show the profile shortcut only to students who have completed onboarding.
+  document.getElementById('profile-btn').style.display = role==='student' && state.user?.profileComplete !== false ? 'inline-flex':'none';
   document.getElementById('role-tag').textContent = role.toUpperCase()+' VIEW';
   if(state.user && state.user.profileComplete === false){
     document.querySelectorAll('.nav-group').forEach(element=>element.style.display='none');
@@ -731,16 +748,39 @@ async function submitProfileCompletion(event){
     error.style.display='block';
   }
 }
-function logout(){
+async function logout(){
+  const accessToken = state.token;
+  const refreshToken = state.refreshToken;
+
+  try {
+    if (accessToken && refreshToken) {
+      await fetch(`${API_BASE}/api/v1/auth/logout`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({refreshToken})
+      });
+    }
+  } finally {
+    clearLocalSession();
+  }
+}
+
+function clearLocalSession(){
   stopFeedbackPolling();
   if(feedbackBadgeTimer){ clearInterval(feedbackBadgeTimer); feedbackBadgeTimer=null; }
   if(notificationStreamController) notificationStreamController.abort();
   notificationStreamController = null;
-  document.getElementById('popup-stack').innerHTML='';
+  document.getElementById('popup-stack').innerHTML = '';
+
   sessionStorage.removeItem('mygrantToken');
+  sessionStorage.removeItem('mygrantRefreshToken');
+
   state = initialState();
   document.getElementById('app').classList.remove('active');
-  document.getElementById('login').style.display='flex';
+  document.getElementById('login').style.display = 'flex';
 }
 
 function showAuthMode(mode){
@@ -764,7 +804,7 @@ function roleForUser(role){ return role==='ADMIN'?'admin':role==='MANAGER'?'mana
 async function parseApiResponse(response){
   const body=await response.json().catch(()=>null);
   if(response.status===401){
-    if(state.token){ logout(); }
+    if(state.token){ clearLocalSession(); }
     throw new Error(body?.message || 'Your session is invalid or has expired. Please sign in again.');
   }
   if(!response.ok){
@@ -787,18 +827,75 @@ async function loadImmigrationDocuments() {
     render();
   }
 }
-async function apiFetch(path,options={}){
-  const headers=new Headers(options.headers || {});
-  if(state.token) headers.set('Authorization',`Bearer ${state.token}`);
-  return fetch(`${API_BASE}${path}`,{...options,headers});
+async function apiFetch(path, options = {}) {
+  const headers = new Headers(options.headers || {});
+
+  if (state.token) {
+    headers.set('Authorization', `Bearer ${state.token}`);
+  }
+
+  let response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers
+  });
+
+  if (response.status !== 401 || !state.refreshToken) {
+    return response;
+  }
+
+  const refreshed = await refreshCurrentSession();
+
+  if (!refreshed) {
+    return response;
+  }
+
+  headers.set('Authorization', `Bearer ${state.token}`);
+
+  return fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers
+  });
+}
+async function refreshCurrentSession() {
+  if (!refreshPromise) {
+    const refreshToken = state.refreshToken;
+
+    refreshPromise = fetch(`${API_BASE}/api/v1/auth/refresh`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({refreshToken})
+    })
+      .then(async response => {
+        if (!response.ok) {
+          return false;
+        }
+
+        const tokens = await response.json();
+
+        state.token = tokens.token;
+        state.refreshToken = tokens.refreshToken;
+
+        sessionStorage.setItem('mygrantToken', state.token);
+        sessionStorage.setItem('mygrantRefreshToken', state.refreshToken);
+
+        return true;
+      })
+      .catch(() => false)
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+
+  return refreshPromise;
 }
 async function authenticate(path,payload){
   setAuthMessage(''); setAuthBusy('Connecting to Spring Boot...');
   try{
     const response=await fetch(`${API_BASE}${path}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const user=await parseApiResponse(response);
-    state.user=user; state.token=user.token; state.ragVisaType=user.visaType || 'F-1';
+    state.user=user; state.token=user.token; state.refreshToken=user.refreshToken; state.ragVisaType=user.visaType || 'F-1';
     sessionStorage.setItem('mygrantToken',user.token);
+    sessionStorage.setItem('mygrantRefreshToken',user.refreshToken);
     enterApp(roleForUser(user.role));
   }catch(error){ setAuthMessage(error instanceof TypeError?'Cannot reach Spring Boot on http://localhost:8080. Start the application first.':error.message); }
   finally{ setAuthBusy(''); }
@@ -840,8 +937,7 @@ async function restoreSession(){
 
     enterApp(roleForUser(state.user.role));
   }catch(error){
-    sessionStorage.removeItem('mygrantToken');
-    state.token = null;
+    clearLocalSession();
     setAuthMessage(error.message);
   }finally{
     setAuthBusy('');
@@ -1044,20 +1140,53 @@ function startFeedbackBadgePoll(role){
 
 function goto(view, param){
   stopFeedbackPolling();
+  if(view === 'rag' && state.role !== 'admin'){
+    showToast('The RAG inspector is available to administrators only.');
+    view = homeView();
+  }
   if (view === 'profile') {
     loadProfile();
     loadImmigrationDocuments();
   }
   state.view = view;
   if(param) state.openAlert = param;
-  document.querySelectorAll('.nav-link').forEach(l=>l.classList.toggle('active', l.dataset.view===view));
+  document.querySelectorAll('.nav-link, .profile-btn').forEach(l=>l.classList.toggle('active', l.dataset.view===view));
   updateBreadcrumb(view);
   render();
   // Reload both on every visit so a policy imported since login shows up here.
   if(view==='dashboard'){ loadPolicies(); loadNotifications(); }
+  if(view==='admin' && state.role==='admin'){ loadAdminUsers(); }
   if(view==='feedback') openHumanFeedback();
   if(view==='feedbackInbox'){ state.inboxLastSeen=Date.now(); updateInboxBadge(state.staffConversations); loadStaffConversations(); }
   window.scrollTo(0,0);
+}
+async function loadAdminUsers(){
+  state.adminUsersLoading = true;
+  state.adminUsersError = null;
+  render();
+  try{
+    const response = await apiFetch('/api/v1/admin/users');
+    state.adminUsers = await parseApiResponse(response);
+  }catch(error){
+    state.adminUsers = [];
+    state.adminUsersError = error.message;
+  }finally{
+    state.adminUsersLoading = false;
+    if(state.view === 'admin') render();
+  }
+}
+async function updateAdminUserRole(userId, role){
+  try{
+    const response = await apiFetch(`/api/v1/admin/users/${userId}/role`,{
+      method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({role})
+    });
+    await parseApiResponse(response);
+    showToast('User role updated. They must sign in again for the new permissions.');
+    await loadAdminUsers();
+  }catch(error){
+    showToast(error.message);
+    await loadAdminUsers();
+  }
 }
 const VIEW_LABELS = {
   dashboard:'Your alerts', notifications:'Notifications', notificationDetail:'Alert detail', alertDetail:'Alert detail',
@@ -1374,7 +1503,7 @@ async function saveProfile(event){
     visaType: value('profile-visa-type'),
     countryOfOrigin: value('profile-origin') || null,
     countryOfCitizenship: value('profile-citizenship') || null,
-    currentLocation: value('profile-location') || null,
+    currentLocation: value('profile-location'),
     employmentStatus: value('profile-employment-status') || null,
     employer: value('profile-employer') || null,
     visaStartDate: value('profile-visa-start') || null,
@@ -1496,6 +1625,7 @@ function finishDeletedAccount(){
   document.getElementById('popup-stack').innerHTML = '';
 
   sessionStorage.removeItem('mygrantToken');
+  sessionStorage.removeItem('mygrantRefreshToken');
   state = initialState();
 
   document.getElementById('app').classList.remove('active');
@@ -1640,6 +1770,19 @@ function renderAdmin(){
       <td style="font-family:var(--mono);font-size:12px;color:var(--muted);">${s.last}</td>
       <td><button class="btn ghost small" onclick="toggleSource(${i})">${s.status==='disabled'?'Enable':'Disable'}</button></td>
     </tr>`).join('');
+  const userRows = state.adminUsers.map(user=>`
+    <tr>
+      <td>${escapeHtml(user.userName || 'Unnamed user')}</td>
+      <td>${escapeHtml(user.userEmail || '')}</td>
+      <td><select onchange="updateAdminUserRole(${user.userId}, this.value)">
+        ${['APPLICANT','MANAGER','ADMIN'].map(role=>`<option value="${role}" ${user.role===role?'selected':''}>${role}</option>`).join('')}
+      </select></td>
+    </tr>`).join('');
+  const usersContent = state.adminUsersLoading
+    ? '<p class="rag-status">Loading users...</p>'
+    : state.adminUsersError
+      ? `<div class="rag-error">${escapeHtml(state.adminUsersError)}</div>`
+      : `<table><tr><th>Name</th><th>Email</th><th>Role</th></tr>${userRows || '<tr><td colspan="3">No users found.</td></tr>'}</table>`;
   return `
     <div class="page-head">
       <h1>Monitored sources</h1>
@@ -1650,6 +1793,8 @@ function renderAdmin(){
       ${rows}
     </table>
     <button class="btn ghost small" onclick="openModal()">Add a source</button>
+    <div class="page-head" style="margin-top:42px;"><h2>User access</h2><p class="sub">Assign applicant, manager, or administrator access.</p></div>
+    ${usersContent}
   `;
 }
 function toggleSource(i){
@@ -1869,6 +2014,10 @@ function renderFederalRegisterSource(ingest){
 }
 async function submitFederalRegisterImport(event){
   event.preventDefault();
+  if(state.role !== 'admin'){
+    showToast('Only administrators can import policy sources.');
+    return;
+  }
   const documentNumber = document.getElementById('fr-doc-number').value.trim();
   if(!documentNumber) return;
   Object.assign(state,{frDocNumber:documentNumber,ingestLoading:true,ingestResult:null,ingestError:null});

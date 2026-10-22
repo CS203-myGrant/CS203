@@ -16,6 +16,7 @@ import mygrant.feedback.FeedbackAccessDeniedException;
 import mygrant.feedback.FeedbackNotFoundException;
 import mygrant.notifications.NotificationNotFoundException;
 import mygrant.policies.PolicyNotFoundException;
+import mygrant.user.UserNotFoundException;
 
 
 @RestControllerAdvice
@@ -28,11 +29,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DuplicateEmailException.class)
     public ResponseEntity<ApiError> handleDuplicateEmail(DuplicateEmailException exception) {
-        return response(HttpStatus.CONFLICT, exception.getMessage(), Map.of("userEmail", exception.getMessage()));
+        return response(HttpStatus.BAD_REQUEST, "Registration could not be completed", Map.of());
     }
 
     @ExceptionHandler(PolicyNotFoundException.class)
     public ResponseEntity<ApiError> handleNotFound(PolicyNotFoundException exception) {
+        return response(HttpStatus.NOT_FOUND, exception.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<ApiError> handleUserNotFound(UserNotFoundException exception) {
         return response(HttpStatus.NOT_FOUND, exception.getMessage(), Map.of());
     }
 
