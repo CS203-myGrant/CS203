@@ -3,7 +3,6 @@ package mygrant.impact;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -33,69 +32,51 @@ import mygrant.user.UserRepository;
 class ProfileImpactAssessmentServiceTests {
 
     @Test
-    void reportsRateLimitWithoutExposingProviderResponse() {
+    void reportsProviderFailureWithoutExposingProviderResponse() {
         Harness harness = harness();
-        harness.server.expect(requestTo("https://api.groq.test/chat/completions"))
+        harness.server.expect(requestTo("https://api.openai.test/chat/completions"))
                 .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS).body("sensitive provider details"));
         ProfileImpactAssessment result = harness.service.assess("student@example.com", document(),
                 "DHS", "policy content", classification());
         assertThat(result.urgency()).isEqualTo(ImpactUrgency.UNAVAILABLE);
-        assertThat(result.summary()).contains("rate or quota limit").doesNotContain("sensitive");
+        assertThat(result.summary()).contains("temporarily unavailable").doesNotContain("sensitive");
         assertThat(result.requiresHumanReview()).isTrue();
         harness.server.verify();
     }
 
     @Test
-    void retriesRejectedAssessmentThenReturnsOnlyApprovedResult() throws Exception {
+    void approvedJudgeReturnsAssessment() throws Exception {
         Harness harness = harness();
         harness.respondWithCandidate("First attempt");
-        harness.respondWithCandidate("Revised assessment");
         when(harness.judge.evaluate(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
-                .thenReturn(new JudgeEvaluation(JudgeEvaluation.Verdict.NO, "Action lacks evidence", "qwen-test"))
-                .thenReturn(new JudgeEvaluation(JudgeEvaluation.Verdict.YES, "Supported", "qwen-test"));
+                .thenReturn(new JudgeEvaluation(JudgeEvaluation.Verdict.YES, "Supported", "claude-test"));
 
         ProfileImpactAssessment result = harness.service.assess("student@example.com", document(),
                 "DHS", "policy content", classification());
 
-        assertThat(result.summary()).isEqualTo("Revised assessment");
+        assertThat(result.urgency()).isEqualTo(ImpactUrgency.HIGH);
         assertThat(result.evaluation().verdict()).isEqualTo(JudgeEvaluation.Verdict.YES);
-        assertThat(result.attempts()).isEqualTo(2);
+        assertThat(result.evaluation().model()).isEqualTo("claude-test");
+        assertThat(result.attempts()).isEqualTo(1);
         assertThat(result.requiresHumanReview()).isTrue();
-        verify(harness.judge, times(2)).evaluate(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+        verify(harness.judge).evaluate(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
         harness.server.verify();
     }
 
     @Test
-    void rejectedTwiceReturnsSafeFallbackInsteadOfRawAssessment() throws Exception {
+    void unavailableJudgeReturnsAssessmentMarkedAsUnverified() throws Exception {
         Harness harness = harness();
         harness.respondWithCandidate("Unverified claim");
-        harness.respondWithCandidate("Still unverified");
         when(harness.judge.evaluate(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
-                .thenReturn(new JudgeEvaluation(JudgeEvaluation.Verdict.NO, "Unsupported", "qwen-test"));
+                .thenReturn(new JudgeEvaluation(JudgeEvaluation.Verdict.UNAVAILABLE, "Unavailable", "claude-test"));
 
         ProfileImpactAssessment result = harness.service.assess("student@example.com", document(),
                 "DHS", "policy content", classification());
 
-        assertThat(result.urgency()).isEqualTo(ImpactUrgency.UNAVAILABLE);
-        assertThat(result.summary()).doesNotContain("unverified");
+        assertThat(result.urgency()).isEqualTo(ImpactUrgency.HIGH);
+        assertThat(result.summary()).isEqualTo("Unverified claim");
         assertThat(result.requiresHumanReview()).isTrue();
-        assertThat(result.evaluation().verdict()).isEqualTo(JudgeEvaluation.Verdict.NO);
-        assertThat(result.attempts()).isEqualTo(2);
-        harness.server.verify();
-    }
-
-    @Test
-    void judgeFailureReturnsFallbackWithoutRetryingGenerator() throws Exception {
-        Harness harness = harness();
-        harness.respondWithCandidate("Unverified claim");
-        when(harness.judge.evaluate(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
-                .thenReturn(new JudgeEvaluation(JudgeEvaluation.Verdict.UNAVAILABLE, "Unavailable", "qwen-test"));
-
-        ProfileImpactAssessment result = harness.service.assess("student@example.com", document(),
-                "DHS", "policy content", classification());
-
-        assertThat(result.urgency()).isEqualTo(ImpactUrgency.UNAVAILABLE);
-        assertThat(result.requiresHumanReview()).isTrue();
+        assertThat(result.evaluation().verdict()).isEqualTo(JudgeEvaluation.Verdict.UNAVAILABLE);
         assertThat(result.attempts()).isEqualTo(1);
         harness.server.verify();
     }
@@ -112,37 +93,45 @@ class ProfileImpactAssessmentServiceTests {
         when(users.findByEmail("student@example.com")).thenReturn(Optional.of(user));
         when(profiles.findById(7L)).thenReturn(Optional.of(UserProfile.fromUser(user)));
         return new Harness(server, judge, new ProfileImpactAssessmentService(builder, new ObjectMapper(),
-                users, profiles, judge, "secret", "test-model", "https://api.groq.test"));
+                users, profiles, judge, "secret", "test-model", "https://api.openai.test"));
     }
 
     private record Harness(MockRestServiceServer server, ImpactJudgeService judge,
             ProfileImpactAssessmentService service) {
         void respondWithCandidate(String summary) throws Exception {
-            ObjectMapper mapper = new ObjectMapper();
-            String candidate = mapper.writeValueAsString(Map.of("urgency", "HIGH", "confidence", 80,
+            String candidate = candidateJson(summary);
+            String response = new ObjectMapper().writeValueAsString(
+                    Map.of("choices", List.of(Map.of("message", Map.of("content", candidate)))));
+            server.expect(requestTo("https://api.openai.test/chat/completions"))
+                    .andRespond(withSuccess(response, MediaType.APPLICATION_JSON));
+        }
+
+        String candidateJson(String summary) throws Exception {
+            return new ObjectMapper().writeValueAsString(Map.of("urgency", "HIGH", "confidence", 80,
                     "summary", summary, "reasons", List.of("Reason"),
                     "recommendedActions", List.of("Review source"), "requiresHumanReview", false));
-            String response = mapper.writeValueAsString(Map.of("choices", List.of(Map.of("message", Map.of("content", candidate)))));
-            server.expect(requestTo("https://api.groq.test/chat/completions"))
-                    .andRespond(withSuccess(response, MediaType.APPLICATION_JSON));
         }
     }
 
     @Test
-    void reportsUnavailableWhenGroqIsNotConfigured() {
+    void reportsUnavailableWhenOpenAiIsNotConfigured() {
+        UserRepository users = mock(UserRepository.class);
+        User user = new User();
+        user.setId(7L);
+        when(users.findByEmail("student@example.com")).thenReturn(Optional.of(user));
         ProfileImpactAssessmentService service = new ProfileImpactAssessmentService(
-                RestClient.builder(), new ObjectMapper(), mock(UserRepository.class),
+                RestClient.builder(), new ObjectMapper(), users,
                 mock(UserProfileRepository.class), mock(ImpactJudgeService.class), "", "test-model", "https://example.test");
 
         ProfileImpactAssessment result = service.assess("student@example.com", document(),
                 "DHS", "policy content", classification());
 
         assertThat(result.urgency()).isEqualTo(ImpactUrgency.UNAVAILABLE);
-        assertThat(result.summary()).contains("GROQ_API_KEY");
+        assertThat(result.summary()).contains("temporarily unavailable");
     }
 
     @Test
-    void parsesStrictStructuredAssessmentFromGroq() {
+    void parsesStrictStructuredAssessmentFromOpenAi() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         UserRepository users = mock(UserRepository.class);
@@ -156,7 +145,7 @@ class ProfileImpactAssessmentServiceTests {
         when(users.findByEmail("student@example.com")).thenReturn(Optional.of(user));
         when(profiles.findById(7L)).thenReturn(Optional.of(profile));
 
-        server.expect(requestTo("https://api.groq.test/chat/completions"))
+        server.expect(requestTo("https://api.openai.test/chat/completions"))
                 .andExpect(header("Authorization", "Bearer secret"))
                 .andRespond(withSuccess("""
                         {"choices":[{"message":{"content":"{\\"urgency\\":\\"HIGH\\",\\"confidence\\":92,\\"summary\\":\\"Travel may be affected.\\",\\"reasons\\":[\\"Upcoming travel overlaps the effective period.\\"],\\"recommendedActions\\":[\\"Review the primary source.\\"],\\"requiresHumanReview\\":true}"}}]}
@@ -164,16 +153,16 @@ class ProfileImpactAssessmentServiceTests {
 
         ImpactJudgeService judge = mock(ImpactJudgeService.class);
         when(judge.evaluate(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
-                .thenReturn(new JudgeEvaluation(JudgeEvaluation.Verdict.YES, "Supported", "qwen-test"));
+                .thenReturn(new JudgeEvaluation(JudgeEvaluation.Verdict.YES, "Supported", "claude-test"));
         ProfileImpactAssessmentService service = new ProfileImpactAssessmentService(builder,
-                new ObjectMapper(), users, profiles, judge, "secret", "test-model", "https://api.groq.test");
+                new ObjectMapper(), users, profiles, judge, "secret", "test-model", "https://api.openai.test");
         ProfileImpactAssessment result = service.assess("student@example.com", document(),
                 "DHS", "policy content", classification());
 
         assertThat(result.urgency()).isEqualTo(ImpactUrgency.HIGH);
         assertThat(result.confidence()).isEqualTo(92);
         assertThat(result.recommendedActions()).containsExactly("Review the primary source.");
-        assertThat(result.provider()).isEqualTo("Groq");
+        assertThat(result.provider()).isEqualTo("OpenAI");
         assertThat(result.evaluation().verdict()).isEqualTo(JudgeEvaluation.Verdict.YES);
         server.verify();
     }

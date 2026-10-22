@@ -14,11 +14,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 
 import mygrant.common.Confidence;
+import mygrant.ai.OpenAiGenerationService;
 import mygrant.rag.dto.RagQueryRequest;
 
 @ExtendWith(MockitoExtension.class)
@@ -28,17 +28,13 @@ class RagServiceTests {
     private VectorStore vectorStore;
 
     @Mock
-    private ChatClient.Builder chatClientBuilder;
-
-    @Mock
-    private ChatClient chatClient;
+    private OpenAiGenerationService generator;
 
     private RagService ragService;
 
     @BeforeEach
     void setUp() {
-        when(chatClientBuilder.build()).thenReturn(chatClient);
-        ragService = new RagService(vectorStore, chatClientBuilder, new EvidenceRanker());
+        ragService = new RagService(vectorStore, generator, new EvidenceRanker());
     }
 
     @Test
@@ -50,7 +46,7 @@ class RagServiceTests {
         assertThat(response.confidence()).isEqualTo(Confidence.LOW);
         assertThat(response.requiresReview()).isTrue();
         assertThat(response.citations()).isEmpty();
-        verify(chatClient, never()).prompt();
+        verify(generator, never()).generate(any(), any());
     }
 
     @Test

@@ -6,13 +6,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
 
 import mygrant.common.Confidence;
+import mygrant.ai.OpenAiGenerationService;
 import mygrant.rag.dto.CitationResponse;
 import mygrant.rag.dto.RagQueryRequest;
 import mygrant.rag.dto.RagQueryResponse;
@@ -26,13 +26,13 @@ public class RagService {
     private static final String DISCLAIMER = "This is informational guidance and not legal advice.";
 
     private final VectorStore vectorStore;
-    private final ChatClient chatClient;
+    private final OpenAiGenerationService generator;
     private final EvidenceRanker evidenceRanker;
 
-    public RagService(VectorStore vectorStore, ChatClient.Builder chatClientBuilder,
+    public RagService(VectorStore vectorStore, OpenAiGenerationService generator,
             EvidenceRanker evidenceRanker) {
         this.vectorStore = vectorStore;
-        this.chatClient = chatClientBuilder.build();
+        this.generator = generator;
         this.evidenceRanker = evidenceRanker;
     }
 
@@ -52,8 +52,7 @@ public class RagService {
         }
 
         Assessment assessment = assess(evidence);
-        String answer = chatClient.prompt()
-                .system("""
+        String answer = generator.generate("""
                         You are myGRANT, an immigration policy information system.
                         Answer only from the supplied evidence.
                         Never invent dates, requirements, exceptions, or legal outcomes.
@@ -61,17 +60,14 @@ public class RagService {
                         If the evidence is incomplete or conflicting, explicitly say so.
                         Refer to evidence using its bracketed number, such as [1].
                         Do not describe the response as legal advice.
-                        """)
-                .user("""
+                        """, """
                         User visa type: %s
 
                         Evidence:
                         %s
 
                         Question: %s
-                        """.formatted(visaType, formatEvidence(evidence), request.question()))
-                .call()
-                .content();
+                        """.formatted(visaType, formatEvidence(evidence), request.question()));
 
         List<CitationResponse> citations = createCitations(evidence);
         return new RagQueryResponse(answer, assessment.confidence(), assessment.requiresReview(),
