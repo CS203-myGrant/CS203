@@ -63,6 +63,7 @@ public class UserService {
         user.setCurrentLocation(userCreation.getCurrentLocation());
         user.setUpcomingTravelDate(userCreation.getUpcomingTravelDate());
         user.setRole(UserRole.APPLICANT);
+        user.setProfileComplete(false);
         user.setPasswordHash(passwordEncoder.encode(userCreation.getUserPassword()));
 
         User savedUser;

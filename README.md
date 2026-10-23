@@ -106,6 +106,12 @@ curl -s http://localhost:8080/api/v1/profiles/me \
   -H "Authorization: Bearer $TOKEN"
 ```
 
+New email/password and WorkOS accounts start with `profileComplete = false`.
+Until onboarding is saved, the account can access only profile/onboarding,
+current-user, and account-deletion endpoints. F-1, J-1, and H-1B profiles do not
+need Visa Bulletin fields. Immigrant profiles must provide an immigrant category,
+chargeability area, and priority date together.
+
 Wait for `Started MyGrantApplication` before testing. Keep this terminal open while
 using the API or browser interface. After code changes, stop Spring with `Ctrl+C`
 and run `./mvnw spring-boot:run` again; a running JVM does not reload Java changes.

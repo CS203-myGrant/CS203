@@ -20,6 +20,29 @@ public record UpdateProfileRequest(
         LocalDate priorityDate,
         String academicLevel,
         LocalDate programEndDate,
-        LocalDate upcomingTravelDate
+        LocalDate upcomingTravelDate,
+        String immigrantCategory,
+        String chargeabilityArea
 ) {
+    public UpdateProfileRequest(
+            String visaType,
+            String countryOfOrigin,
+            String countryOfCitizenship,
+            String currentLocation,
+            String employmentStatus,
+            String employer,
+            LocalDate visaStartDate,
+            LocalDate visaExpiryDate,
+            LocalDate optStartDate,
+            LocalDate i140FilingDate,
+            LocalDate priorityDate,
+            String academicLevel,
+            LocalDate programEndDate,
+            LocalDate upcomingTravelDate
+    ) {
+        this(visaType, countryOfOrigin, countryOfCitizenship, currentLocation,
+                employmentStatus, employer, visaStartDate, visaExpiryDate,
+                optStartDate, i140FilingDate, priorityDate, academicLevel,
+                programEndDate, upcomingTravelDate, null, null);
+    }
 }

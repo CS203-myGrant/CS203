@@ -71,6 +71,7 @@ class UserServiceTests {
         assertThat(saved.getValue().getCurrentLocation()).isNull();
         assertThat(saved.getValue().getUpcomingTravelDate()).isNull();
         assertThat(saved.getValue().getVisaType()).isEqualTo("F-1");
+        assertThat(saved.getValue().isProfileComplete()).isFalse();
         assertThat(saved.getValue().getProgramEndDate()).isEqualTo(LocalDate.parse("2028-05-31"));
         assertThat(response.getCurrentLocation()).isNull();
         assertThat(response.getUpcomingTravelDate()).isNull();

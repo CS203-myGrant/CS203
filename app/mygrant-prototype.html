@@ -704,7 +704,7 @@ function startWorkosLogin(){
   window.location.href = `${API_BASE}/api/v1/auth/workos/login`;
 }
 function renderProfileCompletion(){
-  return `<div class="page-head"><h1>Complete your profile</h1><p class="sub">Your Google account is connected. Add your visa details before using myGRANT.</p></div>
+  return `<div class="page-head"><h1>Complete your profile</h1><p class="sub">Add your visa details before using myGRANT.</p></div>
     <form class="form-grid" onsubmit="submitProfileCompletion(event)">
       <div class="field"><label for="workos-visa">Visa category</label><select id="workos-visa" required><option>F-1</option><option>J-1</option><option>H-1B</option></select></div>
       <div class="field"><label for="workos-origin">Country of origin</label><input id="workos-origin" list="workos-country-options" autocomplete="country-name" placeholder="Start typing a country"></div>
@@ -713,6 +713,9 @@ function renderProfileCompletion(){
       <div class="field"><label for="workos-end-date">Program end date</label><input id="workos-end-date" type="date"></div>
       <div class="field"><label for="workos-location">Current location</label><select id="workos-location"><option value="">Not specified</option><option value="US">US</option><option value="ABROAD">Abroad</option></select></div>
       <div class="field"><label for="workos-travel-date">Upcoming travel date</label><input id="workos-travel-date" type="date"></div>
+      <div class="field"><label for="workos-immigrant-category">Immigrant category (if applicable)</label><input id="workos-immigrant-category" placeholder="e.g. EB-2"></div>
+      <div class="field"><label for="workos-chargeability">Chargeability area (if applicable)</label><input id="workos-chargeability" placeholder="Country of chargeability"></div>
+      <div class="field"><label for="workos-priority-date">Priority date (if applicable)</label><input id="workos-priority-date" type="date"></div>
       <datalist id="workos-country-options">${countryOptions()}</datalist>
       <div class="form-actions"><button class="btn" type="submit">Save profile</button></div>
       <div id="profile-error" class="auth-error" style="display:none;grid-column:1/-1;"></div>
@@ -730,7 +733,10 @@ async function submitProfileCompletion(event){
       academicLevel:document.getElementById('workos-level').value || null,
       programEndDate:document.getElementById('workos-end-date').value || null,
       currentLocation:document.getElementById('workos-location').value || null,
-      upcomingTravelDate:document.getElementById('workos-travel-date').value || null
+      upcomingTravelDate:document.getElementById('workos-travel-date').value || null,
+      priorityDate:document.getElementById('workos-priority-date').value || null,
+      immigrantCategory:document.getElementById('workos-immigrant-category').value.trim() || null,
+      chargeabilityArea:document.getElementById('workos-chargeability').value.trim() || null
     })});
     state.profile = await parseApiResponse(response);
 
@@ -1488,6 +1494,16 @@ function renderProfileForm(){
         <input id="profile-priority-date" type="date" value="${escapeAttribute(profile.priorityDate || '')}">
       </div>
 
+      <div class="field">
+        <label for="profile-immigrant-category">Immigrant category</label>
+        <input id="profile-immigrant-category" placeholder="e.g. EB-2" value="${escapeAttribute(profile.immigrantCategory || '')}">
+      </div>
+
+      <div class="field">
+        <label for="profile-chargeability">Chargeability area</label>
+        <input id="profile-chargeability" placeholder="Country of chargeability" value="${escapeAttribute(profile.chargeabilityArea || '')}">
+      </div>
+
       <div class="form-actions">
         <button class="btn" type="submit">Save profile</button>
       </div>
@@ -1510,7 +1526,9 @@ async function saveProfile(event){
     visaExpiryDate: value('profile-visa-expiry') || null,
     optStartDate: value('profile-opt-start') || null,
     i140FilingDate: value('profile-i140-date') || null,
-    priorityDate: value('profile-priority-date') || null
+    priorityDate: value('profile-priority-date') || null,
+    immigrantCategory: value('profile-immigrant-category') || null,
+    chargeabilityArea: value('profile-chargeability') || null
   };
 
   try{

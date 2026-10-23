@@ -22,6 +22,12 @@ public class UserProfile {
     @Column(name = "visa_type", nullable = false, length = 20)
     private String visaType;
 
+    @Column(name = "immigrant_category", length = 30)
+    private String immigrantCategory;
+
+    @Column(name = "chargeability_area", length = 100)
+    private String chargeabilityArea;
+
     @Column(name = "country_of_origin", length = 100)
     private String countryOfOrigin;
 
@@ -105,6 +111,22 @@ public class UserProfile {
 
     public void setVisaType(String visaType) {
         this.visaType = visaType;
+    }
+
+    public String getImmigrantCategory() {
+        return immigrantCategory;
+    }
+
+    public void setImmigrantCategory(String immigrantCategory) {
+        this.immigrantCategory = immigrantCategory;
+    }
+
+    public String getChargeabilityArea() {
+        return chargeabilityArea;
+    }
+
+    public void setChargeabilityArea(String chargeabilityArea) {
+        this.chargeabilityArea = chargeabilityArea;
     }
 
     public String getCountryOfOrigin() {
