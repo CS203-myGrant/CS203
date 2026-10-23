@@ -206,6 +206,12 @@
   table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--text);}
   th{text-align:left;font-size:15px;color:var(--text);font-weight:700;padding:10px 14px;border:1px solid var(--text);background:var(--base-lighter);}
   td{padding:12px 14px;font-size:16px;border:1px solid var(--text);vertical-align:middle;}
+  .bulletin-controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:18px 0;}
+  .bulletin-controls .field{min-width:190px;}
+  .bulletin-controls .field input,.bulletin-controls .field select{width:100%;}
+  .bulletin-table-wrap{max-height:500px;overflow:auto;border:1px solid var(--text);}
+  .bulletin-table-wrap table{border:0;min-width:820px;}
+  .bulletin-table-wrap th{position:sticky;top:0;z-index:1;}
   .status-dot{display:inline-flex;align-items:center;gap:7px;}
   .status-dot::before{content:'';width:9px;height:9px;border-radius:50%;background:var(--calm);}
   .status-dot.warn::before{background:var(--urgent);}
@@ -357,7 +363,7 @@
         <div class="wordmark">myGRANT<span class="dot">.</span></div>
         <p style="margin-top:18px;">One place for every rule that touches your case — read from the Federal Register, USCIS and DOL, and matched to your profile.</p>
       </div>
-      <div class="cite">Federal Register · USCIS · DOL · Visa Bulletin</div>
+      <div class="cite">Federal Register · USCIS · DOL</div>
     </div>
     <div class="login-right" id="legacy-role-login" style="display:none;">
       <h1><span class="step-num">1</span>Choose how you'd like to look around</h1>
@@ -451,6 +457,7 @@
     <div id="nav-admin" class="nav-group" style="display:none;">
       <div class="nav-label">System</div>
       <a class="nav-link" data-view="admin" onclick="goto('admin')">Monitored sources</a>
+      <a class="nav-link" data-view="visaBulletin" onclick="goto('visaBulletin')">Visa Bulletin</a>
       <a class="nav-link" data-view="rag" onclick="goto('rag')">RAG inspector</a>
       <a class="nav-link" data-view="feedbackInbox" onclick="goto('feedbackInbox')">Feedback inbox<span class="nav-badge nav-feedback-badge" style="display:none;">0</span></a>
     </div>
@@ -468,7 +475,7 @@
 <footer class="site-footer">
   <div class="site-footer-inner">
     <div><strong>myGRANT</strong> · Immigration policy tracker</div>
-    <div>Sources: Federal Register · USCIS · DOL · Visa Bulletin</div>
+    <div>Sources: Federal Register · USCIS · DOL</div>
   </div>
 </footer>
 
@@ -540,7 +547,6 @@ let sources = [
   {name:'USCIS processing-time data', status:'ok', last:'6 hours ago'},
   {name:'DOL wage rule RSS feed', status:'broken', last:'3 days ago — layout changed'},
   {name:'News API (secondary reporting)', status:'ok', last:'12 minutes ago'},
-  {name:'Visa Bulletin', status:'ok', last:'1 day ago'},
 ];
 
 const API_BASE = location.port === '8080' ? '' : 'http://localhost:8080';
@@ -608,7 +614,17 @@ const initialState = () => ({
   seenFeedbackMsgIds: [],
   adminUsers: [],
   adminUsersLoading: false,
-  adminUsersError: null
+  adminUsersError: null,
+  bulletinMonth: null,
+  bulletinHealth: null,
+  bulletinEntries: [],
+  bulletinLoading: false,
+  bulletinImporting: false,
+  bulletinError: null,
+  bulletinMessage: null,
+  bulletinPreference: 'ALL',
+  bulletinChart: 'ALL',
+  bulletinArea: 'ALL'
 });
 let state = initialState();
 let notificationStreamController = null;
@@ -1150,6 +1166,10 @@ function goto(view, param){
     showToast('The RAG inspector is available to administrators only.');
     view = homeView();
   }
+  if(view === 'visaBulletin' && state.role !== 'admin'){
+    showToast('The Visa Bulletin inspector is available to administrators only.');
+    view = homeView();
+  }
   if (view === 'profile') {
     loadProfile();
     loadImmigrationDocuments();
@@ -1162,6 +1182,7 @@ function goto(view, param){
   // Reload both on every visit so a policy imported since login shows up here.
   if(view==='dashboard'){ loadPolicies(); loadNotifications(); }
   if(view==='admin' && state.role==='admin'){ loadAdminUsers(); }
+  if(view==='visaBulletin' && state.role==='admin'){ loadVisaBulletin(); }
   if(view==='feedback') openHumanFeedback();
   if(view==='feedbackInbox'){ state.inboxLastSeen=Date.now(); updateInboxBadge(state.staffConversations); loadStaffConversations(); }
   window.scrollTo(0,0);
@@ -1196,7 +1217,7 @@ async function updateAdminUserRole(userId, role){
 }
 const VIEW_LABELS = {
   dashboard:'Your alerts', notifications:'Notifications', notificationDetail:'Alert detail', alertDetail:'Alert detail',
-  profile:'Your profile', manager:'Team impact', queue:'Review queue', admin:'Monitored sources',
+  profile:'Your profile', manager:'Team impact', queue:'Review queue', admin:'Monitored sources', visaBulletin:'Visa Bulletin',
   rag:'RAG inspector', feedback:'Get feedback', feedbackInbox:'Feedback inbox', profileCompletion:'Complete your profile'
 };
 const VIEW_PARENTS = {notificationDetail:'dashboard', alertDetail:'dashboard'};
@@ -1230,6 +1251,7 @@ function render(){
   else if(state.view==='manager') main.innerHTML = renderManager();
   else if(state.view==='queue') main.innerHTML = renderQueue();
   else if(state.view==='admin') main.innerHTML = renderAdmin();
+  else if(state.view==='visaBulletin') main.innerHTML = renderVisaBulletin();
   else if(state.view==='rag') main.innerHTML = renderRag();
   else if(state.view==='feedback') main.innerHTML = renderFeedback();
   else if(state.view==='feedbackInbox') main.innerHTML = renderFeedbackInbox();
@@ -1778,6 +1800,146 @@ function resolveQueue(id, action){
   queueItems = queueItems.filter(q=>q.id!==id);
   showToast(action==='approve' ? 'Approved and published to the user.' : 'Saved your edit and published.');
   goto('queue');
+}
+
+function bulletinCurrentMonth(){
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+}
+function bulletinOfficialUrl(month){
+  const [year, number] = month.split('-').map(Number);
+  const names = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+  const fiscalYear = number >= 10 ? year + 1 : year;
+  return `https://travel.state.gov/content/travel/en/legal/visa-law0/visa-bulletin/${fiscalYear}/visa-bulletin-for-${names[number-1]}-${year}.html`;
+}
+async function loadVisaBulletin(){
+  if(state.role !== 'admin') return;
+  state.bulletinLoading = true;
+  state.bulletinError = null;
+  if(state.view === 'visaBulletin') render();
+  try{
+    const healthResponse = await apiFetch('/api/v1/ingestion/visa-bulletin/health');
+    state.bulletinHealth = await parseApiResponse(healthResponse);
+    if(!state.bulletinMonth){
+      state.bulletinMonth = state.bulletinHealth?.publicationMonth || bulletinCurrentMonth();
+    }
+    const entriesResponse = await apiFetch(`/api/v1/ingestion/visa-bulletin/entries/${state.bulletinMonth}`);
+    state.bulletinEntries = await parseApiResponse(entriesResponse);
+  }catch(error){
+    state.bulletinEntries = [];
+    state.bulletinError = error.message;
+  }finally{
+    state.bulletinLoading = false;
+    if(state.view === 'visaBulletin') render();
+  }
+}
+function selectBulletinMonth(month){
+  state.bulletinMonth = month;
+  state.bulletinPreference = 'ALL';
+  state.bulletinChart = 'ALL';
+  state.bulletinArea = 'ALL';
+  if(month) loadVisaBulletin();
+}
+function setBulletinFilter(name, value){
+  state[name] = value;
+  render();
+}
+async function importVisaBulletin(saved){
+  if(state.role !== 'admin' || state.bulletinImporting) return;
+  const month = document.getElementById('bulletin-month')?.value;
+  if(!saved && !month){ state.bulletinMessage = 'Choose a publication month first.'; render(); return; }
+  let html;
+  if(saved){
+    const file = document.getElementById('bulletin-file')?.files?.[0];
+    if(!file){ state.bulletinMessage = 'Choose a saved official HTML page first.'; render(); return; }
+    html = await file.text();
+  }
+  state.bulletinImporting = true;
+  state.bulletinMessage = null;
+  render();
+  try{
+    const path = saved ? '/api/v1/ingestion/visa-bulletin/saved'
+      : `/api/v1/ingestion/visa-bulletin/${month}`;
+    const response = await apiFetch(path,{
+      method:'POST',
+      ...(saved ? {headers:{'Content-Type':'text/html'},body:html} : {})
+    });
+    const result = await parseApiResponse(response);
+    state.bulletinMonth = result.publicationMonth;
+    state.bulletinMessage = `Imported ${result.entriesProcessed} entries for ${result.publicationMonth}.`;
+  }catch(error){
+    state.bulletinMessage = `Import failed: ${error.message}`;
+  }finally{
+    state.bulletinImporting = false;
+    await loadVisaBulletin();
+  }
+}
+function bulletinCutoff(entry){
+  if(entry.cutoffKind === 'CURRENT') return 'Current (C)';
+  if(entry.cutoffKind === 'UNAVAILABLE') return 'Unavailable (U)';
+  return formatDate(entry.cutoffDate);
+}
+function renderVisaBulletin(){
+  const health = state.bulletinHealth;
+  const month = state.bulletinMonth || bulletinCurrentMonth();
+  const all = state.bulletinEntries || [];
+  const areas = [...new Set(all.map(entry=>entry.chargeabilityArea))].sort();
+  const visible = all.filter(entry=>
+    (state.bulletinPreference === 'ALL' || entry.preferenceType === state.bulletinPreference) &&
+    (state.bulletinChart === 'ALL' || entry.chartType === state.bulletinChart) &&
+    (state.bulletinArea === 'ALL' || entry.chargeabilityArea === state.bulletinArea));
+  const rows = visible.map(entry=>`<tr>
+    <td>${escapeHtml(entry.preferenceType === 'FAMILY' ? 'Family' : 'Employment')}</td>
+    <td>${escapeHtml(entry.chartType === 'FINAL_ACTION' ? 'Final action' : 'Dates for filing')}</td>
+    <td>${escapeHtml(entry.category)}</td>
+    <td>${escapeHtml(entry.chargeabilityArea)}</td>
+    <td>${escapeHtml(bulletinCutoff(entry))}</td>
+  </tr>`).join('');
+  const rawError = health?.errorMessage || '';
+  const healthError = rawError.includes('403 Forbidden')
+    ? 'The official website refused the automated download (HTTP 403). Save the official HTML page and import it below.'
+    : rawError.slice(0,240);
+  return `
+    <div class="page-head"><h1>Visa Bulletin</h1>
+      <p class="sub">Admin inspection of imported monthly cutoff charts. These values are not shown to applicants.</p></div>
+    <div class="stat-row">
+      <div class="stat-box"><div class="lbl">Import health</div><div class="num" style="font-size:25px;">${escapeHtml(health?.status || 'Loading')}</div></div>
+      <div class="stat-box"><div class="lbl">Last successful import</div><div style="margin-top:10px;">${health?.lastSuccessAt ? escapeHtml(formatTimestamp(health.lastSuccessAt)) : 'None yet'}</div></div>
+      <div class="stat-box"><div class="lbl">Stored rows for ${escapeHtml(month)}</div><div class="num">${all.length}</div></div>
+    </div>
+    ${healthError ? `<div class="rag-error">${escapeHtml(healthError)}</div>` : ''}
+    ${state.bulletinError ? `<div class="rag-error">${escapeHtml(state.bulletinError)}</div>` : ''}
+    ${state.bulletinMessage ? `<p role="status">${escapeHtml(state.bulletinMessage)}</p>` : ''}
+    <div class="bulletin-controls">
+      <div class="field"><label for="bulletin-month">Publication month</label>
+        <input id="bulletin-month" type="month" value="${escapeAttribute(month)}" onchange="selectBulletinMonth(this.value)" ${state.bulletinLoading || state.bulletinImporting ? 'disabled' : ''}></div>
+      <button class="btn ghost small" type="button" onclick="loadVisaBulletin()" ${state.bulletinLoading || state.bulletinImporting ? 'disabled' : ''}>Refresh</button>
+      <button class="btn small" type="button" onclick="importVisaBulletin(false)" ${state.bulletinLoading || state.bulletinImporting ? 'disabled' : ''}>Fetch official page</button>
+      <a class="btn ghost small" href="${escapeAttribute(bulletinOfficialUrl(month))}" target="_blank" rel="noopener noreferrer">Open official page</a>
+    </div>
+    <div class="bulletin-controls">
+      <div class="field"><label for="bulletin-file">Saved official HTML page</label>
+        <input id="bulletin-file" type="file" accept=".html,.htm,text/html" ${state.bulletinImporting ? 'disabled' : ''}></div>
+      <button class="btn ghost small" type="button" onclick="importVisaBulletin(true)" ${state.bulletinLoading || state.bulletinImporting ? 'disabled' : ''}>Import saved HTML</button>
+      <span>The saved page's publication month is detected automatically.</span>
+    </div>
+    ${state.bulletinImporting || state.bulletinLoading ? '<p class="rag-status">Loading bulletin data...</p>' : ''}
+    ${health?.sourceUrl ? `<p>Reference page for last imported month: <a href="${escapeAttribute(health.sourceUrl)}" target="_blank" rel="noopener noreferrer">Official Visa Bulletin</a> (${escapeHtml(health.publicationMonth || '')})</p>` : ''}
+    <div class="page-head" style="margin-top:32px;"><h2>Saved cutoff entries</h2>
+      <p class="sub">${visible.length} of ${all.length} entries for ${escapeHtml(month)}. Current and unavailable values stay explicit.</p></div>
+    <div class="bulletin-controls">
+      <div class="field"><label for="bulletin-preference">Preference</label><select id="bulletin-preference" onchange="setBulletinFilter('bulletinPreference',this.value)">
+        <option value="ALL">All</option><option value="FAMILY" ${state.bulletinPreference==='FAMILY'?'selected':''}>Family</option><option value="EMPLOYMENT" ${state.bulletinPreference==='EMPLOYMENT'?'selected':''}>Employment</option></select></div>
+      <div class="field"><label for="bulletin-chart">Chart</label><select id="bulletin-chart" onchange="setBulletinFilter('bulletinChart',this.value)">
+        <option value="ALL">All</option><option value="FINAL_ACTION" ${state.bulletinChart==='FINAL_ACTION'?'selected':''}>Final action</option><option value="DATES_FOR_FILING" ${state.bulletinChart==='DATES_FOR_FILING'?'selected':''}>Dates for filing</option></select></div>
+      <div class="field"><label for="bulletin-area">Chargeability area</label><select id="bulletin-area" onchange="setBulletinFilter('bulletinArea',this.value)">
+        <option value="ALL">All</option>${areas.map(area=>`<option value="${escapeAttribute(area)}" ${state.bulletinArea===area?'selected':''}>${escapeHtml(area)}</option>`).join('')}</select></div>
+    </div>
+    <div class="bulletin-table-wrap"><table>
+      <thead><tr><th>Preference</th><th>Chart</th><th>Category</th><th>Chargeability</th><th>Cutoff</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="5">${state.bulletinLoading ? 'Loading...' : 'No entries for this month and filter.'}</td></tr>`}</tbody>
+    </table></div>
+  `;
 }
 
 function renderAdmin(){
