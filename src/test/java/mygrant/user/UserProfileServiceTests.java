@@ -145,6 +145,25 @@ class UserProfileServiceTests {
         assertThat(profileCaptor.getValue().getUserId()).isEqualTo(user.getId());
     }
 
+    @Test
+    void requiresVisaBulletinFieldsTogether() {
+        User user = user();
+        UserProfile profile = profile(user);
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        when(userProfileRepository.findById(user.getId())).thenReturn(Optional.of(profile));
+
+        UpdateProfileRequest request = new UpdateProfileRequest(
+                null, null, null, null, null, null, null, null, null, null,
+                LocalDate.parse("2026-01-01"), null, null, null,
+                "EB-2", null);
+
+        assertThatThrownBy(() -> service().updateProfile(user.getEmail(), request))
+                .isInstanceOf(ProfileValidationException.class)
+                .extracting(error -> ((ProfileValidationException) error).getValidationErrors())
+                .isEqualTo(Map.of(
+                        "chargeabilityArea", "Required with immigrantCategory and priorityDate"));
+    }
+
     private UserProfileService service() {
         return new UserProfileService(userRepository, userProfileRepository);
     }

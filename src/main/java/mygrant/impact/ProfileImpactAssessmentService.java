@@ -145,6 +145,8 @@ public class ProfileImpactAssessmentService {
                 Assessment date: %s
                 USER PROFILE (identity omitted)
                 visaType: %s
+                immigrantCategory: %s
+                chargeabilityArea: %s
                 countryOfOrigin: %s
                 countryOfCitizenship: %s
                 currentLocation: %s
@@ -171,6 +173,7 @@ public class ProfileImpactAssessmentService {
                 contentExcerpt:
                 %s
                 """.formatted(LocalDate.now(), value(profile.getVisaType()),
+                value(profile.getImmigrantCategory()), value(profile.getChargeabilityArea()),
                 value(profile.getCountryOfOrigin()), value(profile.getCountryOfCitizenship()),
                 value(profile.getCurrentLocation()), value(profile.getEmploymentStatus()),
                 value(profile.getEmployer()), value(profile.getVisaStartDate()),

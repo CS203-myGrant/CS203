@@ -81,6 +81,14 @@ public class UserProfileService {
             profile.setVisaType(normalizeVisaType(request.visaType()));
         }
 
+        if (request.immigrantCategory() != null) {
+            profile.setImmigrantCategory(normalizeOptional(request.immigrantCategory()));
+        }
+
+        if (request.chargeabilityArea() != null) {
+            profile.setChargeabilityArea(normalizeOptional(request.chargeabilityArea()));
+        }
+
         if (request.countryOfOrigin() != null) {
             profile.setCountryOfOrigin(request.countryOfOrigin().trim());
         }
@@ -149,6 +157,21 @@ public class UserProfileService {
             );
         }
 
+        boolean hasImmigrantField = isPresent(profile.getImmigrantCategory())
+                || isPresent(profile.getChargeabilityArea())
+                || profile.getPriorityDate() != null;
+        if (hasImmigrantField) {
+            if (!isPresent(profile.getImmigrantCategory())) {
+                errors.put("immigrantCategory", "Required with chargeabilityArea and priorityDate");
+            }
+            if (!isPresent(profile.getChargeabilityArea())) {
+                errors.put("chargeabilityArea", "Required with immigrantCategory and priorityDate");
+            }
+            if (profile.getPriorityDate() == null) {
+                errors.put("priorityDate", "Required with immigrantCategory and chargeabilityArea");
+            }
+        }
+
         if (profile.getVisaStartDate() != null
                 && profile.getVisaExpiryDate() != null
                 && profile.getVisaExpiryDate()
@@ -166,5 +189,14 @@ public class UserProfileService {
 
     private String normalizeVisaType(String visaType) {
         return visaType.trim().toUpperCase();
+    }
+
+    private String normalizeOptional(String value) {
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private boolean isPresent(String value) {
+        return value != null && !value.isBlank();
     }
 }

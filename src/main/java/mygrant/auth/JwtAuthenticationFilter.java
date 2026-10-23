@@ -56,6 +56,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 if (!user.get().isProfileComplete()
                         && !request.getRequestURI().equals("/api/v1/profiles/me")
                         && !request.getRequestURI().equals("/api/v1/users/me")
+                        && !request.getRequestURI().equals("/api/v1/auth/logout")
                         && !request.getRequestURI().equals("/api/v1/account/deletion-request")
                         && !request.getRequestURI().equals("/api/v1/account/deletion-confirm")) {
                     response.sendError(HttpServletResponse.SC_FORBIDDEN,
