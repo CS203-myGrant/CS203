@@ -61,6 +61,12 @@ anthropic:
   judge-model: ${ANTHROPIC_JUDGE_MODEL:claude-haiku-5-5}
   base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
 
+mygrant:
+  email:
+    app-base-url: ${APP_BASE_URL:http://localhost:8080}
+    # Local demos only: also email password-registered accounts, whose address is unverified.
+    allow-unverified-recipients: ${EMAIL_ALLOW_UNVERIFIED_RECIPIENTS:false}
+
 springdoc:
   swagger-ui:
     path: /swagger-ui.html

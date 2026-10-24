@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -54,6 +55,9 @@ public class SecurityConfig {
                         "/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh",
                         "/api/v1/auth/workos/login", "/api/v1/auth/workos/callback",
                         "/api/v1/webhooks/workos").permitAll()
+                // Unsubscribe links in alert emails carry their own signed token.
+                .requestMatchers(HttpMethod.GET, "/api/v1/email/unsubscribe").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/email/unsubscribe").permitAll()
                 // API docs and the health probe are public; the endpoints they describe
                 // still require a JWT, which Swagger UI sends via its Authorize button.
                 .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**",

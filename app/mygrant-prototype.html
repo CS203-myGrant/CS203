@@ -550,6 +550,26 @@ let sources = [
 ];
 
 const API_BASE = location.port === '8080' ? '' : 'http://localhost:8080';
+/* Links in alert emails open #notification=<id> or #view=profile. The target waits in
+   sessionStorage until the user is in the app, because WorkOS sign-in leaves this page
+   and comes back with its own hash. */
+const DEEP_LINK_KEY = 'mygrantDeepLink';
+function captureDeepLink(){
+  const params = new URLSearchParams(location.hash.replace(/^#/,''));
+  const notification = params.get('notification');
+  let link = null;
+  if (/^[1-9][0-9]{0,15}$/.test(notification || '')) link = {notification: Number(notification)};
+  else if (params.get('view') === 'profile') link = {view: 'profile'};
+  if (!link) return false;
+  sessionStorage.setItem(DEEP_LINK_KEY, JSON.stringify(link));
+  history.replaceState(null, '', location.pathname + location.search);
+  return true;
+}
+function takeDeepLink(){
+  const saved = sessionStorage.getItem(DEEP_LINK_KEY);
+  sessionStorage.removeItem(DEEP_LINK_KEY);
+  try { return saved ? JSON.parse(saved) : null; } catch (error) { return null; }
+}
 function consumeWorkosRedirect(){
   const params = new URLSearchParams(
     location.hash.replace(/^#/,'').replace(/^\?/,'')
@@ -572,6 +592,7 @@ function consumeWorkosRedirect(){
   return error;
 }
 
+captureDeepLink();
 const workosRedirectError = consumeWorkosRedirect();
 
 const initialState = () => ({
@@ -598,6 +619,9 @@ const initialState = () => ({
   frDocNumber: '2026-14439',
   documents: null,
   documentsError: null,
+  emailPreferences: null,
+  emailPreferencesError: null,
+  openNotification: null,
   deletionChallenge: null,
   deletionExpiresAt: null,
   deletionError: null,
@@ -715,7 +739,32 @@ function enterApp(role){
   if(role==='student') loadNotifications();
   if(role==='student') connectNotificationStream();
   startFeedbackBadgePoll(role);
+  openDeepLink();
 }
+/* Runs once the user is in the app with a complete profile; alerts and email settings
+   exist only for applicants, so other roles just drop the link. */
+function openDeepLink(){
+  const link = takeDeepLink();
+  if(!link || state.role !== 'student') return;
+  if(link.view === 'profile') goto('profile');
+  else if(link.notification) openNotification(link.notification);
+}
+async function openNotification(id){
+  goto('notificationDetail', id);
+  if((state.notifications || []).some(item => item.id === id)) return;
+  // The inbox loads only the latest page, so an older alert is fetched on its own.
+  try{
+    const response = await apiFetch(`/api/v1/notifications/${id}`);
+    state.openNotification = await parseApiResponse(response);
+    if(state.view === 'notificationDetail' && state.openAlert === id) render();
+  }catch(error){
+    showToast('That alert is not available on this account.');
+    if(state.view === 'notificationDetail' && state.openAlert === id) goto('dashboard');
+  }
+}
+window.addEventListener('hashchange', () => {
+  if(captureDeepLink() && state.role && state.user?.profileComplete !== false) openDeepLink();
+});
 function startWorkosLogin(){
   window.location.href = `${API_BASE}/api/v1/auth/workos/login`;
 }
@@ -1071,9 +1120,11 @@ async function requestBrowserNotifications(){
 async function markNotificationRead(id){
   try{
     const response = await apiFetch(`/api/v1/notifications/${id}/read`,{method:'POST'});
-    await parseApiResponse(response);
+    const updated = await parseApiResponse(response);
+    if(state.openNotification?.id===id) state.openNotification = updated;
   }catch(error){ showToast(error.message); return; }
   await loadNotifications();
+  if(state.view==='notificationDetail' && state.openAlert===id) render();
 }
 async function uploadImmigrationDocument(event) {
   event.preventDefault();
@@ -1173,6 +1224,7 @@ function goto(view, param){
   if (view === 'profile') {
     loadProfile();
     loadImmigrationDocuments();
+    loadEmailPreferences();
   }
   state.view = view;
   if(param) state.openAlert = param;
@@ -1361,7 +1413,8 @@ function renderLiveDashboard(){
 }
 
 function renderNotificationDetail(id){
-  const notification=(state.notifications || []).find(item=>item.id===id);
+  const notification=(state.notifications || []).find(item=>item.id===id)
+    || (state.openNotification?.id===id ? state.openNotification : null);
   if(!notification) return '<button class="back-link" onclick="goto(\'notifications\')">&larr; Back to notifications</button><div class="empty">Loading this alert…</div>';
   return `<button class="back-link" onclick="goto('notifications')">&larr; Back to notifications</button>
     <div class="entry ${notification.actionRequired?'urgency-high':'urgency-low'}"><div class="flag"></div>
@@ -1673,6 +1726,55 @@ function finishDeletedAccount(){
   setAuthMessage('Your account has been permanently deleted.');
 }
 
+async function loadEmailPreferences(){
+  try{
+    const response = await apiFetch('/api/v1/profiles/me/email-preferences');
+    state.emailPreferences = await parseApiResponse(response);
+    state.emailPreferencesError = null;
+  }catch(error){ state.emailPreferencesError = error.message; }
+  if(state.view === 'profile') render();
+}
+async function saveEmailPreferences(event){
+  event.preventDefault();
+  try{
+    const response = await apiFetch('/api/v1/profiles/me/email-preferences',{
+      method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+        criticalDelivery:document.getElementById('email-critical').value,
+        otherDelivery:document.getElementById('email-other').value
+      })
+    });
+    state.emailPreferences = await parseApiResponse(response);
+    state.emailPreferencesError = null;
+    showToast('Email settings saved.');
+  }catch(error){ showToast(error.message); }
+  if(state.view === 'profile') render();
+}
+const EMAIL_INELIGIBLE_MESSAGES = {
+  EMAIL_NOT_VERIFIED:'We only email verified addresses, and this one is not verified yet. Sign out and use “Continue with Google” with this address once to verify it. Your choices below are saved either way.',
+  NO_EMAIL_ADDRESS:'This account has no email address, so no alert emails can be sent.',
+  ACCOUNT_INACTIVE:'This account is inactive, so no alert emails are sent.'
+};
+function renderEmailPreferences(){
+  const prefs = state.emailPreferences;
+  const heading = `<div class="page-head" style="margin-top:36px;" id="email-alerts">
+      <h2>Email alerts</h2>
+      <p class="sub">Critical alerts are the ones that ask you to act or are rated high urgency; everything else is for information. Alerts always appear in the app as well.</p>
+    </div>`;
+  if(state.emailPreferencesError && !prefs) return `${heading}<div class="rag-error">${escapeHtml(state.emailPreferencesError)}</div>`;
+  if(!prefs) return `${heading}<p class="sub">Loading email settings...</p>`;
+  const options = current => [['IMMEDIATE','Email me right away'],['DIGEST','Include in my daily digest'],['OFF','Do not email me']]
+    .map(([value,label]) => `<option value="${value}" ${value===current?'selected':''}>${label}</option>`).join('');
+  const notice = prefs.canReceiveEmail
+    ? `<p class="sub" style="margin-bottom:16px;">Emails go to ${escapeHtml(prefs.email || '')}.</p>`
+    : `<div class="rag-error">${escapeHtml(EMAIL_INELIGIBLE_MESSAGES[prefs.ineligibleReason] || 'Alert emails cannot be sent to this account.')}</div>`;
+  return `${heading}${notice}
+    <form class="form-grid" onsubmit="saveEmailPreferences(event)">
+      <div class="field"><label for="email-critical">Critical alerts</label><select id="email-critical">${options(prefs.criticalDelivery)}</select></div>
+      <div class="field"><label for="email-other">Other alerts</label><select id="email-other">${options(prefs.otherDelivery)}</select></div>
+      <div class="form-actions"><button class="btn" type="submit">Save email settings</button></div>
+    </form>`;
+}
+
 function renderAccountProfile(){
   const user = state.user || {};
 
@@ -1683,6 +1785,8 @@ function renderAccountProfile(){
     </div>
 
     ${renderProfileForm()}
+
+    ${renderEmailPreferences()}
 
     <div class="page-head" style="margin-top:36px;">
       <h2>Immigration documents</h2>

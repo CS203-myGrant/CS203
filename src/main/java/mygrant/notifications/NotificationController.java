@@ -52,6 +52,12 @@ public class NotificationController {
         return Map.of("unread", notificationService.unreadCount(authentication.getName()));
     }
 
+    /** Opens one alert, e.g. from an email link; another user's id is the same 404 as a missing one. */
+    @GetMapping("/{id}")
+    public NotificationResponse get(Authentication authentication, @PathVariable Long id) {
+        return notificationService.get(authentication.getName(), id);
+    }
+
     @PostMapping("/{id}/read")
     public NotificationResponse markRead(Authentication authentication, @PathVariable Long id) {
         return notificationService.markRead(authentication.getName(), id);

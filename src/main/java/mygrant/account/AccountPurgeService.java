@@ -5,6 +5,7 @@ import java.time.Instant;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import mygrant.email.EmailPreferenceRepository;
 import mygrant.feedback.FeedbackConversationRepository;
 import mygrant.feedback.FeedbackMessageRepository;
 import mygrant.notifications.NotificationRepository;
@@ -27,6 +28,7 @@ public class AccountPurgeService {
     private final NotificationStreamRegistry notificationStreamRegistry;
     private final FeedbackConversationRepository feedbackConversationRepository;
     private final FeedbackMessageRepository feedbackMessageRepository;
+    private final EmailPreferenceRepository emailPreferenceRepository;
 
     public AccountPurgeService(UserRepository userRepository,
             UserProfileRepository userProfileRepository,
@@ -36,7 +38,8 @@ public class AccountPurgeService {
             AccountDeletionAuditRepository auditRepository,
             NotificationStreamRegistry notificationStreamRegistry,
             FeedbackConversationRepository feedbackConversationRepository,
-            FeedbackMessageRepository feedbackMessageRepository) {
+            FeedbackMessageRepository feedbackMessageRepository,
+            EmailPreferenceRepository emailPreferenceRepository) {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
         this.immigrationDocumentRepository = immigrationDocumentRepository;
@@ -46,6 +49,7 @@ public class AccountPurgeService {
         this.notificationStreamRegistry = notificationStreamRegistry;
         this.feedbackConversationRepository = feedbackConversationRepository;
         this.feedbackMessageRepository = feedbackMessageRepository;
+        this.emailPreferenceRepository = emailPreferenceRepository;
     }
 
     /**
@@ -62,6 +66,7 @@ public class AccountPurgeService {
         Instant deletedAt = user.getDeletedAt() == null ? Instant.now() : user.getDeletedAt();
 
         notificationRepository.deleteAllByUserId(userId);
+        emailPreferenceRepository.deleteById(userId);
         userProfileRepository.deleteById(userId);
         immigrationDocumentRepository.deleteAllByUserId(userId);
         deletionRequestRepository.deleteAllByUserId(userId);

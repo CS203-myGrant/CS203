@@ -13,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import mygrant.email.EmailPreferenceRepository;
 import mygrant.feedback.FeedbackConversationRepository;
 import mygrant.feedback.FeedbackMessageRepository;
 import mygrant.notifications.NotificationRepository;
@@ -54,6 +55,9 @@ class AccountPurgeServiceTests {
     @Mock
     private FeedbackMessageRepository feedbackMessageRepository;
 
+    @Mock
+    private EmailPreferenceRepository emailPreferenceRepository;
+
     private User user;
     private AccountPurgeService purgeService;
 
@@ -76,7 +80,8 @@ class AccountPurgeServiceTests {
                 auditRepository,
                 notificationStreamRegistry,
                 feedbackConversationRepository,
-                feedbackMessageRepository);
+                feedbackMessageRepository,
+                emailPreferenceRepository);
     }
 
     @Test
@@ -87,6 +92,8 @@ class AccountPurgeServiceTests {
         purgeService.purge(USER_ID);
 
         verify(notificationRepository).deleteAllByUserId(USER_ID);
+        // The user row is kept as a tombstone, so ON DELETE CASCADE never removes these.
+        verify(emailPreferenceRepository).deleteById(USER_ID);
         verify(userProfileRepository).deleteById(USER_ID);
         verify(immigrationDocumentRepository).deleteAllByUserId(USER_ID);
         verify(deletionRequestRepository).deleteAllByUserId(USER_ID);
@@ -138,6 +145,7 @@ class AccountPurgeServiceTests {
 
         verify(userRepository).findById(USER_ID);
         verify(notificationRepository, org.mockito.Mockito.never()).deleteAllByUserId(USER_ID);
+        verify(emailPreferenceRepository, org.mockito.Mockito.never()).deleteById(USER_ID);
         verify(feedbackMessageRepository, org.mockito.Mockito.never()).deleteAllBySenderId(USER_ID);
         verify(feedbackConversationRepository, org.mockito.Mockito.never()).deleteAllByUserId(USER_ID);
         verify(notificationStreamRegistry, org.mockito.Mockito.never()).closeAll(USER_ID);
