@@ -10,6 +10,10 @@ public record TestClockRequest(
         @Schema(description = "Simulated current date", example = "2026-09-15",
                 requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull(message = "A date is required")
-        LocalDate date
+        LocalDate date,
+
+        @Schema(description = "Admin only: first import Federal Register policies published in the "
+                + "30 days up to the date. Ignored when an applicant sets their own date.")
+        boolean importRecentPolicies
 ) {
 }

@@ -44,17 +44,21 @@ public class TestClockController {
         return testClockService.setPersonalDate(authentication.getName(), null);
     }
 
-    /** Moves every applicant's clock, overriding their own dates, and re-matches every inbox. */
+    /**
+     * Moves every applicant's clock, overriding their own dates, and re-matches every inbox.
+     * Importing recent policies can take a minute: each document is downloaded and embedded.
+     */
     @PutMapping("/api/v1/admin/test-clock")
     @PreAuthorize("hasRole('ADMIN')")
     public TestClockResponse setGlobal(Authentication authentication,
             @Valid @RequestBody TestClockRequest request) {
-        return testClockService.setGlobalDate(authentication.getName(), request.date());
+        return testClockService.setGlobalDate(authentication.getName(), request.date(),
+                request.importRecentPolicies());
     }
 
     @DeleteMapping("/api/v1/admin/test-clock")
     @PreAuthorize("hasRole('ADMIN')")
     public TestClockResponse resetGlobal(Authentication authentication) {
-        return testClockService.setGlobalDate(authentication.getName(), null);
+        return testClockService.setGlobalDate(authentication.getName(), null, false);
     }
 }

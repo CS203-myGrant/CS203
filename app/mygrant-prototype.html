@@ -624,6 +624,8 @@ const initialState = () => ({
   testClock: null,
   testClockDisabled: false,
   testClockBusy: false,
+  testClockImporting: false,
+  testClockImportResult: null,
   openNotification: null,
   deletionChallenge: null,
   deletionExpiresAt: null,
@@ -1798,7 +1800,10 @@ async function loadTestClock(){
 }
 function setTestClock(scope, date){
   if(!date){ showToast('Choose a date first.'); return; }
-  changeTestClock(scope, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date})});
+  // Only the admin's own form offers the import; the per-policy jump buttons never import.
+  const importRecentPolicies = scope==='global' && !!document.getElementById('test-clock-import')?.checked;
+  state.testClockImporting = importRecentPolicies;
+  changeTestClock(scope, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date, importRecentPolicies})});
 }
 function resetTestClock(scope){ changeTestClock(scope, {method:'DELETE'}); }
 async function changeTestClock(scope, options){
@@ -1809,11 +1814,23 @@ async function changeTestClock(scope, options){
     const result = await parseApiResponse(response);
     state.testClock = result;
     const inboxes = scope==='global' ? ` across ${result.inboxesSynced} applicant inbox${result.inboxesSynced===1?'':'es'}` : '';
+    state.testClockImportResult = state.testClockImporting ? result : null;
     showToast(`Today is now ${formatDate(result.today)}: ${result.notificationsAdded} alert(s) added, ${result.notificationsRemoved} withdrawn${inboxes}.`);
     // New alerts also arrive on the live stream, but withdrawn ones only leave on a reload.
     if(state.role==='student') loadNotifications();
+    if(state.testClockImporting) loadPolicies();
   }catch(error){ showToast(error.message); }
-  finally{ state.testClockBusy = false; render(); }
+  finally{ state.testClockBusy = false; state.testClockImporting = false; render(); }
+}
+function renderTestClockImportResult(){
+  const result = state.testClockImportResult;
+  if(!result) return '';
+  const failures = (result.importFailures || []).map(failure => `<li>${escapeHtml(failure)}</li>`).join('');
+  return `<div class="detail-card" style="margin-top:12px;">
+    <p style="margin:0;">Federal Register import up to ${escapeHtml(formatDate(result.today))}: found ${result.policiesFound},
+      imported ${result.policiesImported}, skipped ${result.policiesSkipped} (already imported or not about F-1, J-1 or H-1B)${failures ? `, failed ${result.importFailures.length}` : ''}.</p>
+    ${failures ? `<ul style="margin:8px 0 0;">${failures}</ul><p class="sub" style="margin:6px 0 0;">Details are in the server log.</p>` : ''}
+  </div>`;
 }
 function shiftIsoDate(isoDate, days){
   const date = new Date(`${isoDate}T00:00:00Z`);
@@ -1857,11 +1874,17 @@ function renderTestClock(scope){
     <p style="margin-bottom:16px;">Today in the app: <strong>${escapeHtml(formatDate(clock.today))}</strong> (${setBy}${clock.today!==clock.realToday ? `; real date ${escapeHtml(formatDate(clock.realToday))}` : ''}).</p>
     <form class="form-grid" onsubmit="event.preventDefault();setTestClock('${scope}', document.getElementById('test-clock-${scope}').value)">
       <div class="field"><label for="test-clock-${scope}">Pretend today is</label><input id="test-clock-${scope}" type="date" value="${escapeAttribute(clock.today)}"></div>
+      ${global ? `<div class="field" style="grid-column:1/-1;"><label style="display:flex;gap:8px;align-items:center;font-weight:normal;">
+        <input id="test-clock-import" type="checkbox" checked style="width:auto;">
+        Also import Federal Register policies on F-1, J-1 or H-1B published in the 30 days up to this date (up to 20 documents; can take a minute)
+      </label></div>` : ''}
       <div class="form-actions">
         <button class="btn" type="submit" ${busy}>Set date</button>
         <button class="btn ghost" type="button" ${busy} onclick="resetTestClock('${scope}')">Back to the real date</button>
       </div>
     </form>
+    ${state.testClockBusy && state.testClockImporting ? '<p class="rag-status" style="margin-top:12px;">Searching the Federal Register and importing policies. This can take a minute...</p>' : ''}
+    ${renderTestClockImportResult()}
     <p class="sub" style="margin-top:18px;">To watch an alert arrive, set the clock to the day before a policy, then to its publish day.</p>
     ${policyRows
       ? `<table><tr><th>Published</th><th>Policy</th><th>Visa types</th><th>Status</th><th></th></tr>${policyRows}</table>`

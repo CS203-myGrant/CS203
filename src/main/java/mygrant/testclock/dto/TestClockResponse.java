@@ -1,6 +1,7 @@
 package mygrant.testclock.dto;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * The caller's test clock and, after a change, what it did to the inboxes it moved.
@@ -12,6 +13,10 @@ import java.time.LocalDate;
  * @param inboxesSynced how many inboxes the change re-matched
  * @param notificationsAdded alerts created for policies the new date has reached
  * @param notificationsRemoved alerts withdrawn for policies the new date has not reached
+ * @param policiesFound Federal Register documents the admin's import found for the window
+ * @param policiesImported documents imported as new policies
+ * @param policiesSkipped documents already imported or not about a supported visa type
+ * @param importFailures documents that could not be imported, with the error type
  */
 public record TestClockResponse(
         LocalDate today,
@@ -20,6 +25,10 @@ public record TestClockResponse(
         LocalDate globalDate,
         int inboxesSynced,
         int notificationsAdded,
-        int notificationsRemoved
+        int notificationsRemoved,
+        int policiesFound,
+        int policiesImported,
+        int policiesSkipped,
+        List<String> importFailures
 ) {
 }

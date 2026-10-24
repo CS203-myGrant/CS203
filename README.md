@@ -666,6 +666,15 @@ to a policy, then **Publish day**. After you change your visa category, setting 
 alerts you about the policies for the new category. **Back to the real date** returns to
 normal and restores alerts withdrawn earlier.
 
+The clock only replays policies that are in the database. To test a date nobody has
+imported for, leave **Also import Federal Register policies** ticked when the admin sets
+the date. It searches the Federal Register for rules, proposed rules and notices from
+DHS, State and Labor that mention F-1, J-1 or H-1B and were published in the 30 days up
+to the date. It imports up to 20 of them before updating inboxes. Documents the classifier
+finds are not about a supported visa type are skipped. These imports skip the AI impact
+assessment, but each still downloads the full text and embeds it with Ollama, so
+expect it to take a minute. Imported policies stay in the database after the clock moves.
+
 Dates are kept in memory, so a restart returns everyone to the real date. Alerts created
 this way are real rows, so they are also emailed when email alerts are configured. Turn
 the feature off with `TEST_CLOCK_ENABLED=false`, which removes the
