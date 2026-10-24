@@ -108,6 +108,30 @@ class PolicyIngestionServiceTests {
                 && indexed.content().equals(request.content())));
     }
 
+    @Test
+    void secondaryEvidenceIsIndexedWithoutOfficialPolicyAlert() {
+        IngestPolicyRequest primary = request();
+        IngestPolicyRequest secondary = new IngestPolicyRequest(
+                "rss:example", "F-1 student visa report", "The Guardian", "F-1",
+                mygrant.policies.PolicyStatus.UNKNOWN, SourceType.SECONDARY,
+                primary.publicationDate(), null,
+                "https://www.theguardian.com/us-news/example", "F-1 student visa report summary");
+        when(repository.findByExternalId(secondary.externalId())).thenReturn(Optional.empty());
+        when(repository.save(any(PolicyDocument.class))).thenAnswer(invocation -> {
+            PolicyDocument policy = invocation.getArgument(0);
+            if (policy.getId() == null) {
+                ReflectionTestUtils.setField(policy, "id", 2L);
+            }
+            return policy;
+        });
+
+        new PolicyIngestionService(repository, vectorStore, eventPublisher).ingest(secondary);
+
+        verify(vectorStore).add(argThat(chunks -> chunks.stream()
+                .allMatch(chunk -> "SECONDARY".equals(chunk.getMetadata().get("sourceType")))));
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
+    }
+
     private IngestPolicyRequest request() {
         return new IngestPolicyRequest(
                 "2026-14439",

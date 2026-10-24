@@ -19,6 +19,7 @@ import mygrant.ingestion.connector.ContentHash;
 import mygrant.policies.PolicyDocument;
 import mygrant.policies.PolicyDocumentRepository;
 import mygrant.policies.PolicyIndexedEvent;
+import mygrant.policies.SourceType;
 
 /** Stores complete policy records and their searchable, visa-tagged vector chunks. */
 @Service
@@ -80,8 +81,12 @@ public class PolicyIngestionService {
         saved.markIndexed(indexedAt);
         policyRepository.save(saved);
 
-        eventPublisher.publishEvent(new PolicyIndexedEvent(saved.getId(), saved.getTitle(),
-                Arrays.asList(saved.getVisaType().split(",")), saved.getEffectiveDate(), saved.getContent()));
+        // Profile impact alerts describe official policy changes. News is searchable
+        // as secondary evidence but must not create a policy-change notification.
+        if (saved.getSourceType() == SourceType.PRIMARY) {
+            eventPublisher.publishEvent(new PolicyIndexedEvent(saved.getId(), saved.getTitle(),
+                    Arrays.asList(saved.getVisaType().split(",")), saved.getEffectiveDate(), saved.getContent()));
+        }
 
         return new IngestionResponse(saved.getId(), saved.getExternalId(), chunks.size(), indexedAt, false);
     }

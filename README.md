@@ -351,8 +351,7 @@ and content-hash deduplication. Visa Bulletin reuses its parser and upsert store
 and tracks the SHA-256 hash of each month's imported HTML so an unchanged page
 does not rewrite its entries. Its persisted health record includes the failure stage.
 Their HTTP endpoints and source-specific responses remain unchanged. The USCIS
-saved-result connector uses the same stages; a future news connector should report
-`SECONDARY`.
+saved-result and news RSS connectors use the same stages; news reports `SECONDARY`.
 Admins can inspect Federal Register's in-memory import health at
 `GET /api/v1/ingestion/federal-register/health`; it resets when the app restarts.
 `GET /api/v1/ingestion/status` returns health for every installed connector to admins.
@@ -388,6 +387,28 @@ this connector does not schedule live downloads or claim its saved observations
 were fetched automatically. An admin must verify the copied result and category
 against USCIS before importing it. The shared health endpoint describes imports,
 not the freshness of a live feed; scheduling and health UI belong to CS203-78.
+
+### Secondary news RSS
+
+Admins can pull the selected [Guardian US immigration RSS feed](https://www.theguardian.com/us-news/usimmigration/rss)
+with `POST /api/v1/ingestion/news-rss/pull`, or import saved RSS XML with
+`POST /api/v1/ingestion/news-rss/saved` (`Content-Type: application/xml`).
+`GET /api/v1/ingestion/news-rss/health` and the shared `/status` route show its
+last success or fetch, parse, or persistence failure. The pull has five-second
+connection and ten-second response timeouts; HTTP 429 fails only this import.
+There is no scheduled pull in this story.
+
+The connector accepts only Guardian article URLs and selects articles whose
+title or summary matches the existing F-1, J-1, or H-1B classifier. It stores
+the RSS **summary**, URL, publisher, and publication date in `policy_documents`
+with `source_type=SECONDARY` and status `UNKNOWN`; the summary is not the full
+article or an official policy statement. Canonical article URLs give repeat
+imports a stable ID, and the shared content-hash path prevents reindexing.
+Changed summaries at an existing URL are left as duplicates rather than
+rewriting previously indexed evidence. Secondary documents remain searchable,
+but do not send official policy-change notifications, and the evidence ranker
+keeps primary sources above secondary ones. The saved XML fixture is a
+representative RSS sample for offline tests; it contains synthetic article text.
 
 ## Import and classify a Federal Register document
 
