@@ -9,12 +9,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.List;
 
 import mygrant.auth.JwtAuthenticationFilter;
 import mygrant.auth.JwtService;
 import mygrant.auth.SecurityConfig;
 import mygrant.ingestion.dto.IngestionResponse;
 import mygrant.ingestion.connector.ConnectorHealth;
+import mygrant.ingestion.connector.ConnectorStatusService;
 import mygrant.ingestion.connector.SourceIdentity;
 import mygrant.ingestion.federalregister.FederalRegisterIngestionService;
 import mygrant.policies.SourceType;
@@ -42,6 +44,9 @@ class IngestionControllerSecurityTest {
 
     @MockBean
     private FederalRegisterIngestionService federalRegisterIngestionService;
+
+    @MockBean
+    private ConnectorStatusService connectorStatusService;
 
     @MockBean
     private JwtService jwtService;
@@ -86,6 +91,24 @@ class IngestionControllerSecurityTest {
 
         stubToken(UserRole.APPLICANT);
         mockMvc.perform(get("/api/v1/ingestion/federal-register/health")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminCanSeeAllConnectorHealthButApplicantCannot() throws Exception {
+        stubToken(UserRole.ADMIN);
+        when(connectorStatusService.status()).thenReturn(List.of(
+                ConnectorHealth.notChecked(new SourceIdentity("FEDERAL_REGISTER", SourceType.PRIMARY)),
+                ConnectorHealth.notChecked(new SourceIdentity("VISA_BULLETIN", SourceType.PRIMARY))));
+        mockMvc.perform(get("/api/v1/ingestion/status")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].source.id").value("FEDERAL_REGISTER"))
+                .andExpect(jsonPath("$[1].source.id").value("VISA_BULLETIN"));
+
+        stubToken(UserRole.APPLICANT);
+        mockMvc.perform(get("/api/v1/ingestion/status")
                         .header("Authorization", "Bearer token"))
                 .andExpect(status().isForbidden());
     }

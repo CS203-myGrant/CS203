@@ -14,7 +14,7 @@ import mygrant.policies.SourceType;
 
 @Service
 public class VisaBulletinImporter implements DataConnector<YearMonth, String,
-        VisaBulletinParser.Bulletin, VisaBulletinImporter.Result> {
+        VisaBulletinImporter.PreparedBulletin, VisaBulletinImporter.Result> {
     private static final SourceIdentity SOURCE = new SourceIdentity("VISA_BULLETIN", SourceType.PRIMARY);
     private final VisaBulletinClient client;
     private final VisaBulletinParser parser;
@@ -44,59 +44,73 @@ public class VisaBulletinImporter implements DataConnector<YearMonth, String,
     }
 
     @Override
-    public VisaBulletinParser.Bulletin transform(ConnectorFetch<String> fetched, YearMonth month) {
-        return parser.parse(fetched.payload(), month, fetched.sourceUrl());
+    public PreparedBulletin transform(ConnectorFetch<String> fetched, YearMonth month) {
+        return new PreparedBulletin(parser.parse(fetched.payload(), month, fetched.sourceUrl()),
+                fetched.contentHash());
     }
 
     @Override
-    public Result persistDeduplicated(VisaBulletinParser.Bulletin bulletin, YearMonth month) {
-        return new Result(bulletin.publicationMonth(), store.save(bulletin), bulletin.sourceUrl());
+    public Result persistDeduplicated(PreparedBulletin prepared, YearMonth month) {
+        VisaBulletinParser.Bulletin bulletin = prepared.bulletin();
+        return new Result(bulletin.publicationMonth(),
+                store.save(bulletin, prepared.contentHash()), bulletin.sourceUrl());
     }
 
     @Override
     public ConnectorHealth health() {
         VisaBulletinStore.Health saved = store.health();
         return new ConnectorHealth(source(), ConnectorHealth.Status.valueOf(saved.status()),
-                saved.lastAttemptAt(), saved.lastSuccessAt(), null, saved.errorMessage());
+                saved.lastAttemptAt(), saved.lastSuccessAt(), saved.errorStage(), saved.errorMessage());
     }
 
     @Override
     public Result ingest(YearMonth month) {
+        ConnectorHealth.Stage stage = ConnectorHealth.Stage.FETCH;
         try {
             ConnectorFetch<String> fetched = fetch(month);
-            return persistDeduplicated(transform(fetched, month), month);
+            stage = ConnectorHealth.Stage.TRANSFORM;
+            PreparedBulletin prepared = transform(fetched, month);
+            stage = ConnectorHealth.Stage.PERSIST;
+            return persistDeduplicated(prepared, month);
         } catch (RuntimeException exception) {
-            store.fail(exception.getMessage());
+            store.fail(stage, exception.getMessage());
             throw exception;
         }
     }
 
     /** Detects the month in a saved page and records the corresponding official source URL. */
     public Result importSaved(String html) {
+        ConnectorHealth.Stage stage = ConnectorHealth.Stage.TRANSFORM;
         try {
             VisaBulletinParser.Bulletin parsed = parser.parse(html, "");
             YearMonth month = parsed.publicationMonth();
             String sourceUrl = client.url(month);
             VisaBulletinParser.Bulletin bulletin = new VisaBulletinParser.Bulletin(
                     month, sourceUrl, parsed.entries());
-            return persistDeduplicated(bulletin, month);
+            stage = ConnectorHealth.Stage.PERSIST;
+            return persistDeduplicated(new PreparedBulletin(bulletin, ContentHash.sha256(html)), month);
         } catch (RuntimeException exception) {
-            store.fail(exception.getMessage());
+            store.fail(stage, exception.getMessage());
             throw exception;
         }
     }
 
     /** Checks the requested month when the page came from the live month-specific URL. */
     public Result importSaved(String html, YearMonth month, String sourceUrl) {
+        ConnectorHealth.Stage stage = ConnectorHealth.Stage.TRANSFORM;
         try {
             ConnectorFetch<String> fetched = new ConnectorFetch<>(html, sourceUrl, Instant.now(),
                     ContentHash.sha256(html));
-            return persistDeduplicated(transform(fetched, month), month);
+            PreparedBulletin prepared = transform(fetched, month);
+            stage = ConnectorHealth.Stage.PERSIST;
+            return persistDeduplicated(prepared, month);
         } catch (RuntimeException exception) {
-            store.fail(exception.getMessage());
+            store.fail(stage, exception.getMessage());
             throw exception;
         }
     }
 
     public record Result(YearMonth publicationMonth, int entriesProcessed, String sourceUrl) {}
+
+    public record PreparedBulletin(VisaBulletinParser.Bulletin bulletin, String contentHash) {}
 }

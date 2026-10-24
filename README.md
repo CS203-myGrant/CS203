@@ -337,7 +337,7 @@ Read stored policy records with `GET /api/v1/policies` or `GET /api/v1/policies/
 
 ## Source connector contract
 
-Official and news collectors implement `DataConnector<Request, Fetched, Transformed, Result>`
+Source collectors implement `DataConnector<Request, Fetched, Transformed, Result>`
 in `mygrant.ingestion.connector`. The contract separates fetching, transforming,
 deduplicated persistence, and health. `SourceIdentity` gives every connector a
 stable source ID and `PRIMARY` or `SECONDARY` type. `ConnectorFetch` records the
@@ -347,12 +347,15 @@ success, and error. A failed import throws rather than silently storing data.
 `FederalRegisterClient` remains the HTTP adapter; `FederalRegisterIngestionService`
 implements `DataConnector` because it owns classification and persistence. It
 reuses the existing visa classifier and `PolicyIngestionService` for filtering
-and content-hash deduplication. Visa Bulletin reuses its parser, upsert store,
-and persisted health record. Their HTTP endpoints and source-specific responses
+and content-hash deduplication. Visa Bulletin reuses its parser and upsert store,
+and tracks the SHA-256 hash of each month's imported HTML so an unchanged page
+does not rewrite its entries. Its persisted health record includes the failure stage.
+Their HTTP endpoints and source-specific responses
 remain unchanged. USCIS and news collectors can implement the same stages with
 their own request and result types; a news collector should report `SECONDARY`.
 Admins can inspect Federal Register's in-memory import health at
 `GET /api/v1/ingestion/federal-register/health`; it resets when the app restarts.
+`GET /api/v1/ingestion/status` returns health for every installed connector to admins.
 
 ## Import and classify a Federal Register document
 
