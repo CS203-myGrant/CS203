@@ -84,8 +84,7 @@ public class PolicyIngestionService {
         // Profile impact alerts describe official policy changes. News is searchable
         // as secondary evidence but must not create a policy-change notification.
         if (saved.getSourceType() == SourceType.PRIMARY) {
-            eventPublisher.publishEvent(new PolicyIndexedEvent(saved.getId(), saved.getTitle(),
-                    Arrays.asList(saved.getVisaType().split(",")), saved.getEffectiveDate(), saved.getContent()));
+            eventPublisher.publishEvent(PolicyIndexedEvent.from(saved));
         }
 
         return new IngestionResponse(saved.getId(), saved.getExternalId(), chunks.size(), indexedAt, false);

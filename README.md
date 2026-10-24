@@ -648,6 +648,38 @@ DELETE FROM policy_documents WHERE external_id = '2025-16554';
 SQL
 ```
 
+### Test clock (temporary)
+
+The test clock replays alerts without deleting anything by hand. It changes the date the
+app treats as today, and a policy counts as published only once that date reaches its
+publication date:
+
+- **Profile → Test clock** moves only your own date and re-matches only your inbox.
+- **Admin → Monitored sources → Test clock** moves every applicant's date, replacing any
+  date they set themselves, and re-matches every applicant's inbox.
+
+When the date moves, each affected inbox is brought in line with it. Alerts for policies
+published after the new date are withdrawn. Every official policy published by then for
+the applicant's **current** visa category (F-1, J-1 or H-1B) that they have no alert for
+is alerted now and pushed to the live inbox. To watch one arrive, click **Day before** next
+to a policy, then **Publish day**. After you change your visa category, setting the clock
+alerts you about the policies for the new category. **Back to the real date** returns to
+normal and restores alerts withdrawn earlier.
+
+The clock only replays policies that are in the database. To test a date nobody has
+imported for, leave **Also import Federal Register policies** ticked when the admin sets
+the date. It searches the Federal Register for rules, proposed rules and notices from
+DHS, State and Labor that mention F-1, J-1 or H-1B and were published in the 30 days up
+to the date. It imports up to 20 of them before updating inboxes. Documents the classifier
+finds are not about a supported visa type are skipped. These imports skip the AI impact
+assessment, but each still downloads the full text and embeds it with Ollama, so
+expect it to take a minute. Imported policies stay in the database after the clock moves.
+
+Dates are kept in memory, so a restart returns everyone to the real date. Alerts created
+this way are real rows, so they are also emailed when email alerts are configured. Turn
+the feature off with `TEST_CLOCK_ENABLED=false`, which removes the
+`/api/v1/test-clock/me` and `/api/v1/admin/test-clock` endpoints and hides both panels.
+
 ## Email alerts
 
 Alerts can also arrive by email. Each applicant sets two modes under **Email alerts** on

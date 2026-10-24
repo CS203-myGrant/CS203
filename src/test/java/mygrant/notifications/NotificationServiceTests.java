@@ -21,7 +21,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import mygrant.policies.PolicyDocument;
+import mygrant.policies.PolicyDocumentRepository;
 import mygrant.policies.PolicyIndexedEvent;
+import mygrant.policies.PolicyStatus;
+import mygrant.policies.SourceType;
+import mygrant.testclock.TestClock;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
 import mygrant.user.UserRole;
@@ -43,6 +48,11 @@ class NotificationServiceTests {
 
     @Mock
     private NotificationStreamRegistry streamRegistry;
+
+    @Mock
+    private PolicyDocumentRepository policyRepository;
+
+    private final TestClock testClock = new TestClock(true);
 
     @Captor
     private ArgumentCaptor<List<Notification>> saved;
@@ -289,6 +299,47 @@ class NotificationServiceTests {
     }
 
     @Test
+    void holdsBackAlertsFromReadersWhoseTestClockIsBeforePublication() {
+        User early = user(7L, "early@example.com");
+        User current = user(8L, "current@example.com");
+        when(userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("F-1")))
+                .thenReturn(List.of(early, current));
+        testClock.setUserDate(7L, LocalDate.parse("2026-08-31"));
+
+        service().onPolicyIndexed(new PolicyIndexedEvent(3L, "Fee update", List.of("F-1"), null,
+                "Fees change.", LocalDate.parse("2026-09-01")));
+
+        verify(notificationRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).singleElement()
+                .satisfies(notification -> assertThat(notification.getUserId()).isEqualTo(8L));
+    }
+
+    @Test
+    void testClockSyncAlertsOnlyPoliciesForTheUsersCurrentCategory() {
+        User worker = user(7L, "worker@example.com");
+        worker.setVisaType("H-1B");
+        testClock.setUserDate(7L, LocalDate.parse("2026-09-30"));
+        LocalDate today = LocalDate.parse("2026-09-30");
+        when(notificationRepository.deleteForPoliciesPublishedAfter(7L, today)).thenReturn(2);
+        when(notificationRepository.findPolicyIdsByUserId(7L)).thenReturn(java.util.Set.of(1L));
+        when(policyRepository.findBySourceTypeAndPublicationDateLessThanEqualOrderByPublicationDateAscIdAsc(
+                SourceType.PRIMARY, today)).thenReturn(List.of(
+                        policy(1L, "Already alerted", "H-1B"),
+                        policy(2L, "Student rule", "F-1,J-1"),
+                        policy(3L, "Worker fee rule", "F-1,H-1B")));
+
+        var sync = service().syncToTestClock(worker);
+
+        verify(notificationRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).singleElement().satisfies(notification -> {
+            assertThat(notification.getPolicyId()).isEqualTo(3L);
+            assertThat(notification.getMessage()).contains("Worker fee rule");
+        });
+        verify(streamRegistry).publish(org.mockito.ArgumentMatchers.eq(7L), org.mockito.ArgumentMatchers.any());
+        assertThat(sync).isEqualTo(new NotificationService.InboxSync(1, 2));
+    }
+
+    @Test
     void markReadOnlyFindsTheCallersOwnNotification() {
         when(userRepository.findByEmail("student@example.com"))
                 .thenReturn(Optional.of(user(7L, "student@example.com")));
@@ -370,8 +421,17 @@ class NotificationServiceTests {
                 userRepository,
                 userProfileRepository,
                 new PolicyImpactRules(),
-                streamRegistry
+                streamRegistry,
+                policyRepository,
+                testClock
         );
+    }
+
+    private PolicyDocument policy(Long id, String title, String visaTypes) {
+        PolicyDocument policy = new PolicyDocument("FR-" + id, title, "DHS", visaTypes, PolicyStatus.FINAL,
+                SourceType.PRIMARY, LocalDate.parse("2026-09-01"), null, "https://example.gov", "Text.", "hash");
+        ReflectionTestUtils.setField(policy, "id", id);
+        return policy;
     }
 
     private User user(Long id, String email) {
