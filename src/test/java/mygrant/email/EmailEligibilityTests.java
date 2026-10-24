@@ -10,7 +10,7 @@ import mygrant.user.User;
 
 class EmailEligibilityTests {
 
-    private final EmailEligibility eligibility = new EmailEligibility(new EmailProperties("http://localhost:8080", false));
+    private final EmailEligibility eligibility = new EmailEligibility(EmailTestData.properties(false));
 
     @Test
     void workosAccountWithAnAddressCanReceiveEmail() {
@@ -28,7 +28,7 @@ class EmailEligibilityTests {
 
     @Test
     void demoFlagLetsUnverifiedAccountsReceiveEmail() {
-        EmailEligibility demo = new EmailEligibility(new EmailProperties("http://localhost:8080", true));
+        EmailEligibility demo = new EmailEligibility(EmailTestData.properties(true));
         User user = verifiedUser();
         user.setWorkosUserId(null);
 
@@ -37,7 +37,7 @@ class EmailEligibilityTests {
 
     @Test
     void demoFlagStillExcludesInactiveAndAddresslessAccounts() {
-        EmailEligibility demo = new EmailEligibility(new EmailProperties("http://localhost:8080", true));
+        EmailEligibility demo = new EmailEligibility(EmailTestData.properties(true));
         User inactive = verifiedUser();
         inactive.setActive(false);
         User noEmail = verifiedUser();

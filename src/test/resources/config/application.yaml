@@ -1,0 +1,5 @@
+# Loaded on top of src/main/resources/application.yaml for every test, including IDE runs.
+# Scheduled email jobs never run in tests; tests call the email services directly.
+mygrant:
+  email:
+    jobs-enabled: false

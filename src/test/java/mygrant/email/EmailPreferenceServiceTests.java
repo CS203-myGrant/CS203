@@ -140,7 +140,7 @@ class EmailPreferenceServiceTests {
 
     private EmailPreferenceService service() {
         return new EmailPreferenceService(preferenceRepository, userRepository,
-                new EmailEligibility(new EmailProperties("http://localhost:8080", false)));
+                new EmailEligibility(EmailTestData.properties(false)));
     }
 
     private User user(Long id, String workosUserId) {

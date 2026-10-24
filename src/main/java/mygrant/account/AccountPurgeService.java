@@ -5,6 +5,7 @@ import java.time.Instant;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import mygrant.email.EmailDeliveryRepository;
 import mygrant.email.EmailPreferenceRepository;
 import mygrant.feedback.FeedbackConversationRepository;
 import mygrant.feedback.FeedbackMessageRepository;
@@ -29,6 +30,7 @@ public class AccountPurgeService {
     private final FeedbackConversationRepository feedbackConversationRepository;
     private final FeedbackMessageRepository feedbackMessageRepository;
     private final EmailPreferenceRepository emailPreferenceRepository;
+    private final EmailDeliveryRepository emailDeliveryRepository;
 
     public AccountPurgeService(UserRepository userRepository,
             UserProfileRepository userProfileRepository,
@@ -39,7 +41,8 @@ public class AccountPurgeService {
             NotificationStreamRegistry notificationStreamRegistry,
             FeedbackConversationRepository feedbackConversationRepository,
             FeedbackMessageRepository feedbackMessageRepository,
-            EmailPreferenceRepository emailPreferenceRepository) {
+            EmailPreferenceRepository emailPreferenceRepository,
+            EmailDeliveryRepository emailDeliveryRepository) {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
         this.immigrationDocumentRepository = immigrationDocumentRepository;
@@ -50,6 +53,7 @@ public class AccountPurgeService {
         this.feedbackConversationRepository = feedbackConversationRepository;
         this.feedbackMessageRepository = feedbackMessageRepository;
         this.emailPreferenceRepository = emailPreferenceRepository;
+        this.emailDeliveryRepository = emailDeliveryRepository;
     }
 
     /**
@@ -66,6 +70,8 @@ public class AccountPurgeService {
         Instant deletedAt = user.getDeletedAt() == null ? Instant.now() : user.getDeletedAt();
 
         notificationRepository.deleteAllByUserId(userId);
+        // After the notifications, which reference their email.
+        emailDeliveryRepository.deleteAllByUserId(userId);
         emailPreferenceRepository.deleteById(userId);
         userProfileRepository.deleteById(userId);
         immigrationDocumentRepository.deleteAllByUserId(userId);

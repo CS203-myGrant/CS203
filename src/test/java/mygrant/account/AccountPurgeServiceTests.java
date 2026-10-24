@@ -13,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import mygrant.email.EmailDeliveryRepository;
 import mygrant.email.EmailPreferenceRepository;
 import mygrant.feedback.FeedbackConversationRepository;
 import mygrant.feedback.FeedbackMessageRepository;
@@ -58,6 +59,9 @@ class AccountPurgeServiceTests {
     @Mock
     private EmailPreferenceRepository emailPreferenceRepository;
 
+    @Mock
+    private EmailDeliveryRepository emailDeliveryRepository;
+
     private User user;
     private AccountPurgeService purgeService;
 
@@ -81,7 +85,8 @@ class AccountPurgeServiceTests {
                 notificationStreamRegistry,
                 feedbackConversationRepository,
                 feedbackMessageRepository,
-                emailPreferenceRepository);
+                emailPreferenceRepository,
+                emailDeliveryRepository);
     }
 
     @Test
@@ -94,6 +99,10 @@ class AccountPurgeServiceTests {
         verify(notificationRepository).deleteAllByUserId(USER_ID);
         // The user row is kept as a tombstone, so ON DELETE CASCADE never removes these.
         verify(emailPreferenceRepository).deleteById(USER_ID);
+        org.mockito.InOrder notificationsBeforeEmails = org.mockito.Mockito.inOrder(
+                notificationRepository, emailDeliveryRepository);
+        notificationsBeforeEmails.verify(notificationRepository).deleteAllByUserId(USER_ID);
+        notificationsBeforeEmails.verify(emailDeliveryRepository).deleteAllByUserId(USER_ID);
         verify(userProfileRepository).deleteById(USER_ID);
         verify(immigrationDocumentRepository).deleteAllByUserId(USER_ID);
         verify(deletionRequestRepository).deleteAllByUserId(USER_ID);
@@ -146,6 +155,7 @@ class AccountPurgeServiceTests {
         verify(userRepository).findById(USER_ID);
         verify(notificationRepository, org.mockito.Mockito.never()).deleteAllByUserId(USER_ID);
         verify(emailPreferenceRepository, org.mockito.Mockito.never()).deleteById(USER_ID);
+        verify(emailDeliveryRepository, org.mockito.Mockito.never()).deleteAllByUserId(USER_ID);
         verify(feedbackMessageRepository, org.mockito.Mockito.never()).deleteAllBySenderId(USER_ID);
         verify(feedbackConversationRepository, org.mockito.Mockito.never()).deleteAllByUserId(USER_ID);
         verify(notificationStreamRegistry, org.mockito.Mockito.never()).closeAll(USER_ID);
