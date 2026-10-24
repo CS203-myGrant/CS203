@@ -1,6 +1,7 @@
 package mygrant.notifications;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -19,7 +20,10 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import mygrant.notifications.dto.NotificationResponse;
+import mygrant.policies.PolicyDocumentRepository;
 import mygrant.policies.PolicyIndexedEvent;
+import mygrant.policies.SourceType;
+import mygrant.testclock.TestClock;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
 import mygrant.user.UserRole;
@@ -35,15 +39,20 @@ public class NotificationService {
     private final PolicyImpactRules impactRules;
     private final UserProfileRepository userProfileRepository;
     private final NotificationStreamRegistry streamRegistry;
+    private final PolicyDocumentRepository policyRepository;
+    private final TestClock testClock;
 
     public NotificationService(NotificationRepository notificationRepository,
             UserRepository userRepository, UserProfileRepository userProfileRepository,
-            PolicyImpactRules impactRules, NotificationStreamRegistry streamRegistry) {
+            PolicyImpactRules impactRules, NotificationStreamRegistry streamRegistry,
+            PolicyDocumentRepository policyRepository, TestClock testClock) {
         this.notificationRepository = notificationRepository;
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
         this.impactRules = impactRules;
         this.streamRegistry = streamRegistry;
+        this.policyRepository = policyRepository;
+        this.testClock = testClock;
     }
 
     /**
@@ -58,7 +67,11 @@ public class NotificationService {
                 .map(PolicyImpactRules::normalizeVisaType)
                 .distinct()
                 .toList();
-        List<User> affected = userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, visaTypes);
+        // A reader whose test clock is set before the publication date is alerted once their
+        // clock reaches it, by syncToTestClock.
+        List<User> affected = userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, visaTypes).stream()
+                .filter(user -> testClock.isPublished(event.publicationDate(), user.getId()))
+                .toList();
         String message = buildMessage(event);
         // The rules are visa-specific, so a policy covering several categories affects
         // different fields per reader. Read the policy text once for all of them.
@@ -80,7 +93,52 @@ public class NotificationService {
                         message,
                         fieldsByVisaType))
                 .toList());
-        // Publish only after these rows commit. A disconnected stream cannot undo persistence.
+        publishAfterCommit(saved);
+    }
+
+    /**
+     * TEMPORARY, for the test clock: makes the user's inbox match the date their clock
+     * shows. Alerts for policies published after that date are removed, and every policy
+     * published by then for the user's current visa category that they were never alerted
+     * about is alerted now, oldest first so the newest tops the inbox.
+     *
+     * @return how many alerts were added and removed
+     */
+    @Transactional
+    public InboxSync syncToTestClock(User user) {
+        LocalDate today = testClock.today(user.getId());
+        int removed = notificationRepository.deleteForPoliciesPublishedAfter(user.getId(), today);
+        String visaType = PolicyImpactRules.normalizeVisaType(user.getVisaType());
+        if (user.getRole() != UserRole.APPLICANT || visaType.isEmpty()) {
+            return new InboxSync(0, removed);
+        }
+
+        UserProfile profile = userProfileRepository.findById(user.getId())
+                .orElseGet(() -> UserProfile.fromUser(user));
+        Set<Long> alreadyNotified = notificationRepository.findPolicyIdsByUserId(user.getId());
+        // Only official policies raise alerts, as at ingestion.
+        List<Notification> missing = policyRepository
+                .findBySourceTypeAndPublicationDateLessThanEqualOrderByPublicationDateAscIdAsc(SourceType.PRIMARY, today)
+                .stream()
+                .filter(policy -> !alreadyNotified.contains(policy.getId()))
+                .map(PolicyIndexedEvent::from)
+                .filter(event -> event.visaTypes().stream()
+                        .map(PolicyImpactRules::normalizeVisaType)
+                        .anyMatch(visaType::equals))
+                .map(event -> toNotification(user, profile, event, buildMessage(event),
+                        impactRules.affectedFieldsByVisaType(event.visaTypes(), event.title(), event.content())))
+                .toList();
+        List<Notification> saved = notificationRepository.saveAll(missing);
+        publishAfterCommit(saved);
+        return new InboxSync(saved.size(), removed);
+    }
+
+    /** Alerts added and removed when an inbox was matched to a test clock date. */
+    public record InboxSync(int added, int removed) {
+    }
+
+    // Publish only after these rows commit. A disconnected stream cannot undo persistence.
+    private void publishAfterCommit(List<Notification> saved) {
         Runnable publishSaved = () -> {
             for (Notification notification : saved) {
                 try {

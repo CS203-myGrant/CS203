@@ -1,9 +1,11 @@
 package mygrant.notifications;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -23,6 +25,17 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     long countByUserIdAndReadAtIsNull(Long userId);
 
     void deleteAllByUserId(Long userId);
+
+    @Query("select n.policyId from Notification n where n.userId = :userId")
+    Set<Long> findPolicyIdsByUserId(@Param("userId") Long userId);
+
+    /** Removes the user's alerts for policies published after the date; returns how many went. */
+    @Modifying
+    @Query(value = """
+            DELETE FROM notifications n USING policy_documents p
+            WHERE n.policy_id = p.id AND n.user_id = :userId AND p.publication_date > :date""",
+            nativeQuery = true)
+    int deleteForPoliciesPublishedAfter(@Param("userId") Long userId, @Param("date") LocalDate date);
 
     /** Unread alerts created since the cutoff that no email has claimed yet, oldest first. */
     @Query("""

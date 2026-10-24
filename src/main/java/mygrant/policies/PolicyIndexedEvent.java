@@ -13,6 +13,18 @@ public record PolicyIndexedEvent(
         String title,
         List<String> visaTypes,
         LocalDate effectiveDate,
-        String content
+        String content,
+        LocalDate publicationDate
 ) {
+    /** An event without a publication date, which counts as already published. */
+    public PolicyIndexedEvent(Long policyId, String title, List<String> visaTypes,
+            LocalDate effectiveDate, String content) {
+        this(policyId, title, visaTypes, effectiveDate, content, null);
+    }
+
+    public static PolicyIndexedEvent from(PolicyDocument policy) {
+        return new PolicyIndexedEvent(policy.getId(), policy.getTitle(),
+                List.of(policy.getVisaType().split(",")), policy.getEffectiveDate(),
+                policy.getContent(), policy.getPublicationDate());
+    }
 }

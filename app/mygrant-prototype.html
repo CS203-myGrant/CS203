@@ -621,6 +621,9 @@ const initialState = () => ({
   documentsError: null,
   emailPreferences: null,
   emailPreferencesError: null,
+  testClock: null,
+  testClockDisabled: false,
+  testClockBusy: false,
   openNotification: null,
   deletionChallenge: null,
   deletionExpiresAt: null,
@@ -1037,7 +1040,8 @@ async function loadPolicies(){
     state.policyRecords=await parseApiResponse(response);
     state.policyError=null;
   }catch(error){ state.policyError=error.message; }
-  if(state.view==='dashboard') render();
+  // The profile and admin pages list policy dates for the test clock.
+  if(['dashboard','profile','admin'].includes(state.view)) render();
 }
 /* Loads the inbox and the unread count together; the count comes from the server
    because the list is paginated and may not hold every unread notification. */
@@ -1225,6 +1229,8 @@ function goto(view, param){
     loadProfile();
     loadImmigrationDocuments();
     loadEmailPreferences();
+    loadTestClock();
+    loadPolicies();
   }
   state.view = view;
   if(param) state.openAlert = param;
@@ -1232,8 +1238,8 @@ function goto(view, param){
   updateBreadcrumb(view);
   render();
   // Reload both on every visit so a policy imported since login shows up here.
-  if(view==='dashboard'){ loadPolicies(); loadNotifications(); }
-  if(view==='admin' && state.role==='admin'){ loadAdminUsers(); }
+  if(view==='dashboard'){ loadPolicies(); loadNotifications(); loadTestClock(); }
+  if(view==='admin' && state.role==='admin'){ loadAdminUsers(); loadTestClock(); loadPolicies(); }
   if(view==='visaBulletin' && state.role==='admin'){ loadVisaBulletin(); }
   if(view==='feedback') openHumanFeedback();
   if(view==='feedbackInbox'){ state.inboxLastSeen=Date.now(); updateInboxBadge(state.staffConversations); loadStaffConversations(); }
@@ -1379,7 +1385,10 @@ function renderLiveDashboard(){
     </div>`;
   }).join('');
 
-  const records=(state.policyRecords || []).filter(policy=>String(policy.visaType || '').includes(visaType));
+  // Under the test clock, a policy published after the simulated date has not happened yet.
+  const clockToday=state.testClock?.today;
+  const records=(state.policyRecords || []).filter(policy=>String(policy.visaType || '').includes(visaType)
+    && (!clockToday || String(policy.publicationDate) <= clockToday));
   const policyRows=records.map(policy=>`
     <div class="entry urgency-low">
       <div class="flag"></div>
@@ -1396,6 +1405,7 @@ function renderLiveDashboard(){
     <div class="page-head">
       <h1>Notifications</h1>
       <p class="sub">Policy changes matched to your visa category${visaType ? ` (${escapeHtml(visaType)})` : ''}. Flagged items touch information you have already entered in your profile.</p>
+      ${clockToday && clockToday!==state.testClock.realToday ? `<span class="tag action">Test clock: today is ${escapeHtml(formatDate(clockToday))}</span>` : ''}
       ${'Notification' in window && Notification.permission==='granted' ? '<span class="tag">Browser notifications enabled</span>' : ('Notification' in window && Notification.permission==='denied' ? '<span class="tag">Browser notifications blocked</span>' : (permissionPromptedThisSession ? '<span class="tag">Permission request sent</span>' : '<button class="btn ghost small" onclick="requestBrowserNotifications()">Enable browser notifications</button>'))}
     </div>
 
@@ -1775,6 +1785,89 @@ function renderEmailPreferences(){
     </form>`;
 }
 
+/* TEMPORARY test clock: moves the app's "today" so a policy counts as published and its
+   alert arrives. Admins move every applicant; applicants move only themselves. The server
+   answers 404 when the clock is switched off, and the panel then stays hidden. */
+async function loadTestClock(){
+  try{
+    const response = await apiFetch('/api/v1/test-clock/me');
+    if(response.status === 404){ state.testClockDisabled = true; state.testClock = null; }
+    else state.testClock = await parseApiResponse(response);
+  }catch(error){ state.testClock = null; }
+  if(['dashboard','profile','admin'].includes(state.view)) render();
+}
+function setTestClock(scope, date){
+  if(!date){ showToast('Choose a date first.'); return; }
+  changeTestClock(scope, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date})});
+}
+function resetTestClock(scope){ changeTestClock(scope, {method:'DELETE'}); }
+async function changeTestClock(scope, options){
+  state.testClockBusy = true;
+  render();
+  try{
+    const response = await apiFetch(scope==='global' ? '/api/v1/admin/test-clock' : '/api/v1/test-clock/me', options);
+    const result = await parseApiResponse(response);
+    state.testClock = result;
+    const inboxes = scope==='global' ? ` across ${result.inboxesSynced} applicant inbox${result.inboxesSynced===1?'':'es'}` : '';
+    showToast(`Today is now ${formatDate(result.today)}: ${result.notificationsAdded} alert(s) added, ${result.notificationsRemoved} withdrawn${inboxes}.`);
+    // New alerts also arrive on the live stream, but withdrawn ones only leave on a reload.
+    if(state.role==='student') loadNotifications();
+  }catch(error){ showToast(error.message); }
+  finally{ state.testClockBusy = false; render(); }
+}
+function shiftIsoDate(isoDate, days){
+  const date = new Date(`${isoDate}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+function renderTestClock(scope){
+  if(state.testClockDisabled) return '';
+  const global = scope==='global';
+  const heading = `<div class="page-head" style="margin-top:36px;">
+      <h2>Test clock <span class="tag">Temporary</span></h2>
+      <p class="sub">${global
+        ? 'Sets the date every applicant\'s alerts are matched against, replacing dates they set themselves. Moving it forward alerts each applicant about policies published by then for their visa category; moving it back withdraws alerts for policies published after it.'
+        : 'For testing only, and only your account is affected. Moving the date forward alerts you about policies published by then for your visa category; moving it back withdraws alerts for policies published after it.'}</p>
+    </div>`;
+  const clock = state.testClock;
+  if(!clock) return `${heading}<p class="sub">Loading test clock...</p>`;
+
+  const busy = state.testClockBusy ? 'disabled' : '';
+  const setBy = clock.personalDate ? 'set by you' : clock.globalDate ? 'set by an admin for all applicants' : 'the real date';
+  const visaType = state.user?.visaType || '';
+  // Only official policies raise alerts, so only their dates are worth jumping to.
+  const policyRows = (state.policyRecords || [])
+    .filter(policy => policy.sourceType === 'PRIMARY' && (global || String(policy.visaType || '').includes(visaType)))
+    .sort((a, b) => String(b.publicationDate).localeCompare(String(a.publicationDate)))
+    .map(policy => {
+      const published = String(policy.publicationDate) <= clock.today;
+      return `<tr>
+        <td style="font-family:var(--mono);font-size:12px;white-space:nowrap;">${escapeHtml(policy.publicationDate)}</td>
+        <td>${escapeHtml(policy.title)}</td>
+        <td>${escapeHtml(policy.visaType)}</td>
+        <td>${published ? 'Published' : 'Not yet'}</td>
+        <td style="white-space:nowrap;">
+          <button class="btn ghost small" ${busy} onclick="setTestClock('${scope}','${shiftIsoDate(policy.publicationDate, -1)}')">Day before</button>
+          <button class="btn ghost small" ${busy} onclick="setTestClock('${scope}','${escapeAttribute(policy.publicationDate)}')">Publish day</button>
+        </td>
+      </tr>`;
+    }).join('');
+
+  return `${heading}
+    <p style="margin-bottom:16px;">Today in the app: <strong>${escapeHtml(formatDate(clock.today))}</strong> (${setBy}${clock.today!==clock.realToday ? `; real date ${escapeHtml(formatDate(clock.realToday))}` : ''}).</p>
+    <form class="form-grid" onsubmit="event.preventDefault();setTestClock('${scope}', document.getElementById('test-clock-${scope}').value)">
+      <div class="field"><label for="test-clock-${scope}">Pretend today is</label><input id="test-clock-${scope}" type="date" value="${escapeAttribute(clock.today)}"></div>
+      <div class="form-actions">
+        <button class="btn" type="submit" ${busy}>Set date</button>
+        <button class="btn ghost" type="button" ${busy} onclick="resetTestClock('${scope}')">Back to the real date</button>
+      </div>
+    </form>
+    <p class="sub" style="margin-top:18px;">To watch an alert arrive, set the clock to the day before a policy, then to its publish day.</p>
+    ${policyRows
+      ? `<table><tr><th>Published</th><th>Policy</th><th>Visa types</th><th>Status</th><th></th></tr>${policyRows}</table>`
+      : `<p class="sub">No official policies${global ? '' : ` for ${escapeHtml(visaType || 'your visa category')}`} have been imported yet.</p>`}`;
+}
+
 function renderAccountProfile(){
   const user = state.user || {};
 
@@ -1787,6 +1880,8 @@ function renderAccountProfile(){
     ${renderProfileForm()}
 
     ${renderEmailPreferences()}
+
+    ${renderTestClock('personal')}
 
     <div class="page-head" style="margin-top:36px;">
       <h2>Immigration documents</h2>
@@ -2079,6 +2174,7 @@ function renderAdmin(){
     <button class="btn ghost small" onclick="openModal()">Add a source</button>
     <div class="page-head" style="margin-top:42px;"><h2>User access</h2><p class="sub">Assign applicant, manager, or administrator access.</p></div>
     ${usersContent}
+    ${renderTestClock('global')}
   `;
 }
 function toggleSource(i){
