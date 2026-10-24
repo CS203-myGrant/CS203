@@ -109,8 +109,8 @@ curl -s http://localhost:8080/api/v1/profiles/me \
 New email/password and WorkOS accounts start with `profileComplete = false`.
 Until onboarding is saved, the account can access only profile/onboarding,
 current-user, and account-deletion endpoints. F-1, J-1, and H-1B profiles do not
-need Visa Bulletin fields. Immigrant profiles must provide an immigrant category,
-chargeability area, and priority date together.
+need Visa Bulletin fields. Visa Bulletin fields are optional, but if one is supplied,
+immigrant category, chargeability area, and priority date must all be supplied.
 
 Wait for `Started MyGrantApplication` before testing. Keep this terminal open while
 using the API or browser interface. After code changes, stop Spring with `Ctrl+C`
@@ -118,6 +118,45 @@ and run `./mvnw spring-boot:run` again; a running JVM does not reload Java chang
 
 The health endpoint is available at `http://localhost:8080/actuator/health`.
 Swagger UI is available at `http://localhost:8080/swagger-ui.html`.
+
+### Import a Visa Bulletin
+
+Sign in as an admin, then open **Admin → Visa Bulletin**. The panel shows
+import health and saved cutoff entries for a publication month. It can attempt to
+fetch the official page or import a saved official HTML page. Applicants and managers cannot
+access the panel or its API. Use an admin JWT for the equivalent API requests
+(`YYYY-MM` is the bulletin publication month):
+
+```bash
+curl -X POST http://localhost:8080/api/v1/ingestion/visa-bulletin/2026-10 \
+  -H "Authorization: Bearer $TOKEN"
+curl http://localhost:8080/api/v1/ingestion/visa-bulletin/health \
+  -H "Authorization: Bearer $TOKEN"
+curl http://localhost:8080/api/v1/ingestion/visa-bulletin/entries/2026-10 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+If the Department of State blocks the server download (HTTP 403), use the
+**Open official page** link in the admin panel, save that page as HTML in a
+normal browser, and import the saved copy. The import detects the publication
+month from the page heading and rejects unrelated or incomplete HTML. This
+checks content and layout; it cannot prove where an uploaded file originated.
+The equivalent API request is:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/ingestion/visa-bulletin/saved \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: text/html" \
+  --data-binary @saved-bulletin.html
+```
+
+The importer saves the four family/employment cutoff charts in
+`visa_bulletin_entries`. A repeated import updates the same monthly keys. If
+the page is missing a chart or its layout changes, no partial chart is saved
+and health becomes `FAILED`; the last successful import time remains visible.
+This is immigrant preference data. The bulletin's family `F1` category is
+different from an `F-1` student visa, so it is not automatically matched to
+student profiles.
+
 The myGRANT application is available at `http://localhost:8080/`. Create an account
 there or sign in with an existing account. The browser stores the JWT in session storage
 (it is cleared when that browser tab is closed), loads the signed-in profile and matching
