@@ -1,6 +1,7 @@
 package mygrant.ingestion;
 
 import java.security.Principal;
+import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,6 +17,7 @@ import jakarta.validation.Valid;
 import mygrant.ingestion.dto.IngestPolicyRequest;
 import mygrant.ingestion.dto.IngestionResponse;
 import mygrant.ingestion.connector.ConnectorHealth;
+import mygrant.ingestion.connector.ConnectorStatusService;
 import mygrant.ingestion.federalregister.FederalRegisterIngestionResponse;
 import mygrant.ingestion.federalregister.FederalRegisterIngestionService;
 
@@ -26,11 +28,14 @@ public class IngestionController {
 
     private final PolicyIngestionService ingestionService;
     private final FederalRegisterIngestionService federalRegisterIngestionService;
+    private final ConnectorStatusService connectorStatusService;
 
     public IngestionController(PolicyIngestionService ingestionService,
-            FederalRegisterIngestionService federalRegisterIngestionService) {
+            FederalRegisterIngestionService federalRegisterIngestionService,
+            ConnectorStatusService connectorStatusService) {
         this.ingestionService = ingestionService;
         this.federalRegisterIngestionService = federalRegisterIngestionService;
+        this.connectorStatusService = connectorStatusService;
     }
 
     /** Indexes a policy supplied in the request body. */
@@ -55,5 +60,12 @@ public class IngestionController {
     @PreAuthorize("hasRole('ADMIN')")
     public ConnectorHealth federalRegisterHealth() {
         return federalRegisterIngestionService.health();
+    }
+
+    /** Admin health view for all configured connectors. */
+    @GetMapping("/status")
+    @PreAuthorize("hasRole('ADMIN')")
+    public List<ConnectorHealth> status() {
+        return connectorStatusService.status();
     }
 }

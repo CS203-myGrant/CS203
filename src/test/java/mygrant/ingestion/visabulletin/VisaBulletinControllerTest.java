@@ -71,7 +71,7 @@ class VisaBulletinControllerTest {
         YearMonth month = YearMonth.of(2026, 10);
         String url = "https://travel.state.gov/bulletin";
         when(store.health()).thenReturn(new VisaBulletinStore.Health("OK", null, null,
-                month, url, null));
+                month, url, null, null));
         when(store.entries(month)).thenReturn(List.of(new VisaBulletinStore.EntryView(
                 "FAMILY", "FINAL_ACTION", "F1", "INDIA", "CURRENT", null, url)));
         when(importer.importSaved("<html></html>"))

@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -21,6 +23,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import mygrant.ingestion.connector.DataConnector;
+import mygrant.ingestion.connector.ConnectorHealth;
 import mygrant.policies.SourceType;
 
 @ExtendWith(MockitoExtension.class)
@@ -100,8 +103,8 @@ class VisaBulletinParserTest {
         VisaBulletinImporter importer = new VisaBulletinImporter(client, parser, store);
         assertThrows(IllegalArgumentException.class, () -> importer.importSaved(
                 "<h1>Visa Bulletin For October 2026</h1>"));
-        verify(store, never()).save(any());
-        verify(store).fail(any());
+        verify(store, never()).save(any(), anyString());
+        verify(store).fail(eq(ConnectorHealth.Stage.TRANSFORM), any());
     }
 
     @Test
@@ -110,16 +113,16 @@ class VisaBulletinParserTest {
         when(client.download(MONTH)).thenThrow(new IllegalStateException("HTTP 403"));
         VisaBulletinImporter importer = new VisaBulletinImporter(client, parser, store);
         assertThrows(IllegalStateException.class, () -> importer.importMonth(MONTH));
-        verify(store).fail("HTTP 403");
-        verify(store, never()).save(any());
+        verify(store).fail(ConnectorHealth.Stage.FETCH, "HTTP 403");
+        verify(store, never()).save(any(), anyString());
     }
 
     @Test
     void liveImportUsesSharedConnectorContract() {
         when(client.url(MONTH)).thenReturn(URL);
         when(client.download(MONTH)).thenReturn(sample);
-        when(store.save(any())).thenReturn(150);
-        DataConnector<YearMonth, String, VisaBulletinParser.Bulletin, VisaBulletinImporter.Result> connector =
+        when(store.save(any(), anyString())).thenReturn(150);
+        DataConnector<YearMonth, String, VisaBulletinImporter.PreparedBulletin, VisaBulletinImporter.Result> connector =
                 new VisaBulletinImporter(client, parser, store);
 
         var result = connector.ingest(MONTH);
@@ -128,6 +131,6 @@ class VisaBulletinParserTest {
         assertEquals(SourceType.PRIMARY, connector.source().type());
         assertEquals(MONTH, result.publicationMonth());
         assertEquals(150, result.entriesProcessed());
-        verify(store).save(any());
+        verify(store).save(any(), anyString());
     }
 }
