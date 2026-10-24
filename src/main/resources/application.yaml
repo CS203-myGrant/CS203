@@ -61,6 +61,24 @@ anthropic:
   judge-model: ${ANTHROPIC_JUDGE_MODEL:claude-haiku-5-5}
   base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
 
+mygrant:
+  email:
+    app-base-url: ${APP_BASE_URL:http://localhost:8080}
+    # Local demos only: also email password-registered accounts, whose address is unverified.
+    allow-unverified-recipients: ${EMAIL_ALLOW_UNVERIFIED_RECIPIENTS:false}
+    # Set to false to run no email jobs at all. Sending also needs RESEND_API_KEY and RESEND_FROM_EMAIL.
+    jobs-enabled: ${EMAIL_JOBS_ENABLED:true}
+    dispatch-interval: ${EMAIL_DISPATCH_INTERVAL:30s}
+    max-attempts: ${EMAIL_MAX_ATTEMPTS:4}
+    retry-backoff: ${EMAIL_RETRY_BACKOFF:1m,5m,15m}
+    immediate-lookback: ${EMAIL_IMMEDIATE_LOOKBACK:24h}
+    stuck-after: ${EMAIL_STUCK_AFTER:10m}
+    batch-size: ${EMAIL_BATCH_SIZE:50}
+    # Spring cron (second minute hour day month weekday), run in digest-zone.
+    digest-cron: ${EMAIL_DIGEST_CRON:0 0 8 * * *}
+    digest-zone: ${EMAIL_DIGEST_ZONE:America/New_York}
+    digest-lookback: ${EMAIL_DIGEST_LOOKBACK:48h}
+
 springdoc:
   swagger-ui:
     path: /swagger-ui.html

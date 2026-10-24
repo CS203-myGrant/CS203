@@ -31,6 +31,14 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <!-- Spring AI's Ollama starter brings in 2.2.30, which wins over the version
+                 springdoc's swagger-core 2.2.36 needs; with it, any @Schema annotation
+                 breaks /v3/api-docs with NoSuchMethodError. Keep in step with springdoc. -->
+            <dependency>
+                <groupId>io.swagger.core.v3</groupId>
+                <artifactId>swagger-annotations-jakarta</artifactId>
+                <version>2.2.36</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 

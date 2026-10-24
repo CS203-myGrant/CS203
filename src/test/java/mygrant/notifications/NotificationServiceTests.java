@@ -300,6 +300,26 @@ class NotificationServiceTests {
     }
 
     @Test
+    void getOnlyReturnsTheCallersOwnNotification() {
+        Notification own = new Notification(7L, 1, 3L, "Own alert", List.of());
+        when(userRepository.findByEmail("student@example.com"))
+                .thenReturn(Optional.of(user(7L, "student@example.com")));
+        when(notificationRepository.findByIdAndUserId(1L, 7L)).thenReturn(Optional.of(own));
+        // Notification 2 belongs to someone else, so the owner-scoped lookup finds nothing.
+        when(notificationRepository.findByIdAndUserId(2L, 7L)).thenReturn(Optional.empty());
+        when(notificationRepository.findByIdAndUserId(99L, 7L)).thenReturn(Optional.empty());
+
+        assertThat(service().get("student@example.com", 1L).message()).isEqualTo("Own alert");
+        Throwable otherUsers = org.assertj.core.api.Assertions.catchThrowable(
+                () -> service().get("student@example.com", 2L));
+        Throwable missing = org.assertj.core.api.Assertions.catchThrowable(
+                () -> service().get("student@example.com", 99L));
+        assertThat(otherUsers).isInstanceOf(NotificationNotFoundException.class);
+        assertThat(missing).isInstanceOf(NotificationNotFoundException.class);
+        assertThat(otherUsers.getMessage()).isEqualTo(missing.getMessage().replace("99", "2"));
+    }
+
+    @Test
     void markReadSetsReadTimestamp() {
         Notification notification = new Notification(7L, 1, 3L, "msg", List.of());
         when(userRepository.findByEmail("student@example.com"))

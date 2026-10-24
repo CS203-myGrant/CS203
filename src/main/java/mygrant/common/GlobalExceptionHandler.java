@@ -10,7 +10,9 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import mygrant.email.EmailNotConfiguredException;
 import mygrant.ingestion.PolicyAlreadyExistsException;
 import mygrant.feedback.FeedbackAccessDeniedException;
 import mygrant.feedback.FeedbackNotFoundException;
@@ -93,6 +95,16 @@ public class GlobalExceptionHandler {
         exception.getBindingResult().getFieldErrors()
                 .forEach(error -> errors.putIfAbsent(error.getField(), error.getDefaultMessage()));
         return response(HttpStatus.BAD_REQUEST, "Request validation failed", errors);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiError> handleTypeMismatch(MethodArgumentTypeMismatchException exception) {
+        return response(HttpStatus.BAD_REQUEST, "Invalid value for " + exception.getName(), Map.of());
+    }
+
+    @ExceptionHandler(EmailNotConfiguredException.class)
+    public ResponseEntity<ApiError> handleEmailNotConfigured(EmailNotConfiguredException exception) {
+        return response(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), Map.of());
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

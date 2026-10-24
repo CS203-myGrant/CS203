@@ -138,6 +138,13 @@ public class NotificationService {
         return notificationRepository.countByUserIdAndReadAtIsNull(userId(email));
     }
 
+    @Transactional(readOnly = true)
+    public NotificationResponse get(String email, Long notificationId) {
+        return notificationRepository.findByIdAndUserId(notificationId, userId(email))
+                .map(NotificationResponse::from)
+                .orElseThrow(() -> new NotificationNotFoundException(notificationId));
+    }
+
     @Transactional
     public NotificationResponse markRead(String email, Long notificationId) {
         Notification notification = notificationRepository.findByIdAndUserId(notificationId, userId(email))
