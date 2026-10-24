@@ -3,7 +3,9 @@ package mygrant.ingestion;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -12,7 +14,10 @@ import mygrant.auth.JwtAuthenticationFilter;
 import mygrant.auth.JwtService;
 import mygrant.auth.SecurityConfig;
 import mygrant.ingestion.dto.IngestionResponse;
+import mygrant.ingestion.connector.ConnectorHealth;
+import mygrant.ingestion.connector.SourceIdentity;
 import mygrant.ingestion.federalregister.FederalRegisterIngestionService;
+import mygrant.policies.SourceType;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
 import mygrant.user.UserRole;
@@ -66,6 +71,23 @@ class IngestionControllerSecurityTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequest()))
                 .andExpect(status().isCreated());
+    }
+
+    @Test
+    void onlyAdminCanSeeFederalRegisterConnectorHealth() throws Exception {
+        stubToken(UserRole.ADMIN);
+        when(federalRegisterIngestionService.health()).thenReturn(ConnectorHealth.notChecked(
+                new SourceIdentity("FEDERAL_REGISTER", SourceType.PRIMARY)));
+        mockMvc.perform(get("/api/v1/ingestion/federal-register/health")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.source.id").value("FEDERAL_REGISTER"))
+                .andExpect(jsonPath("$.status").value("NOT_CHECKED"));
+
+        stubToken(UserRole.APPLICANT);
+        mockMvc.perform(get("/api/v1/ingestion/federal-register/health")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isForbidden());
     }
 
     private void stubToken(UserRole role) {
