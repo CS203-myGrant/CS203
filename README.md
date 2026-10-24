@@ -350,12 +350,65 @@ reuses the existing visa classifier and `PolicyIngestionService` for filtering
 and content-hash deduplication. Visa Bulletin reuses its parser and upsert store,
 and tracks the SHA-256 hash of each month's imported HTML so an unchanged page
 does not rewrite its entries. Its persisted health record includes the failure stage.
-Their HTTP endpoints and source-specific responses
-remain unchanged. USCIS and news collectors can implement the same stages with
-their own request and result types; a news collector should report `SECONDARY`.
+Their HTTP endpoints and source-specific responses remain unchanged. The USCIS
+saved-result and news RSS connectors use the same stages; news reports `SECONDARY`.
 Admins can inspect Federal Register's in-memory import health at
 `GET /api/v1/ingestion/federal-register/health`; it resets when the app restarts.
 `GET /api/v1/ingestion/status` returns health for every installed connector to admins.
+
+### USCIS processing-time observations
+
+The admin's existing “USCIS processing-time data” row in the prototype is a fixed
+demo value. The actual connector accepts a saved, admin-reviewed result at
+`POST /api/v1/ingestion/uscis-processing-times/saved` and reports persisted health
+at `GET /api/v1/ingestion/uscis-processing-times/health` and the shared status route.
+Use the JSON shape in `src/test/resources/uscis/saved-i765-result.json`: provide the
+official `https://egov.uscis.gov/processing-times/` URL, the date the result was
+observed, the selected form category, and copied result-card text containing the
+form, office, and “80% of cases are completed within …” figure. The form and office
+are extracted from that text; the category is supplied by the reviewing admin.
+The checked-in fixture is a representative transcription for offline tests, not a
+downloaded official response.
+
+The public current figure is an **80th percentile over completed cases in the
+previous six months**, not a median or a prediction for an individual case.
+`processing_time_snapshots` stores its number and original `DAYS` or `MONTHS` unit;
+`median_value` remains `NULL`. Its observation date, official URL, copied excerpt,
+content hash, and import time preserve provenance. A repeat capture returns the existing row;
+a different saved result on the same date adds a new row instead of changing
+history. For CS203-89/105, treat missing median as missing,
+do not turn months into exact days without an explicit conversion rule, and do not
+combine this office-specific 80th percentile with USCIS's separate national,
+fiscal-year median series as if they were the same measure.
+
+The official processing-time page returned HTTP 403 during implementation and
+USCIS's public developer catalog did not list a processing-time API. Therefore
+this connector does not schedule live downloads or claim its saved observations
+were fetched automatically. An admin must verify the copied result and category
+against USCIS before importing it. The shared health endpoint describes imports,
+not the freshness of a live feed; scheduling and health UI belong to CS203-78.
+
+### Secondary news RSS
+
+Admins can pull the selected [Guardian US immigration RSS feed](https://www.theguardian.com/us-news/usimmigration/rss)
+with `POST /api/v1/ingestion/news-rss/pull`, or import saved RSS XML with
+`POST /api/v1/ingestion/news-rss/saved` (`Content-Type: application/xml`).
+`GET /api/v1/ingestion/news-rss/health` and the shared `/status` route show its
+last success or fetch, parse, or persistence failure. The pull has five-second
+connection and ten-second response timeouts; HTTP 429 fails only this import.
+There is no scheduled pull in this story.
+
+The connector accepts only Guardian article URLs and selects articles whose
+title or summary matches the existing F-1, J-1, or H-1B classifier. It stores
+the RSS **summary**, URL, publisher, and publication date in `policy_documents`
+with `source_type=SECONDARY` and status `UNKNOWN`; the summary is not the full
+article or an official policy statement. Canonical article URLs give repeat
+imports a stable ID, and the shared content-hash path prevents reindexing.
+Changed summaries at an existing URL are left as duplicates rather than
+rewriting previously indexed evidence. Secondary documents remain searchable,
+but do not send official policy-change notifications, and the evidence ranker
+keeps primary sources above secondary ones. The saved XML fixture is a
+representative RSS sample for offline tests; it contains synthetic article text.
 
 ## Import and classify a Federal Register document
 

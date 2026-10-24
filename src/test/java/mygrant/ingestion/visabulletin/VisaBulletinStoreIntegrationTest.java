@@ -40,7 +40,8 @@ class VisaBulletinStoreIntegrationTest {
         assertEquals(september, importer.importSaved(realPage).publicationMonth());
         assertEquals(150, store.entries(september).size());
         assertEquals("OK", store.health().status());
-        assertEquals(java.util.List.of("FEDERAL_REGISTER", "VISA_BULLETIN"),
+        assertEquals(java.util.List.of("FEDERAL_REGISTER", "NEWS_RSS",
+                "USCIS_PROCESSING_TIMES", "VISA_BULLETIN"),
                 connectorStatusService.status().stream().map(health -> health.source().id()).toList());
         assertEquals(september, store.health().publicationMonth());
         assertEquals(150, importer.importSaved(realPage).entriesProcessed());
