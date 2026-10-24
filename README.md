@@ -350,12 +350,44 @@ reuses the existing visa classifier and `PolicyIngestionService` for filtering
 and content-hash deduplication. Visa Bulletin reuses its parser and upsert store,
 and tracks the SHA-256 hash of each month's imported HTML so an unchanged page
 does not rewrite its entries. Its persisted health record includes the failure stage.
-Their HTTP endpoints and source-specific responses
-remain unchanged. USCIS and news collectors can implement the same stages with
-their own request and result types; a news collector should report `SECONDARY`.
+Their HTTP endpoints and source-specific responses remain unchanged. The USCIS
+saved-result connector uses the same stages; a future news connector should report
+`SECONDARY`.
 Admins can inspect Federal Register's in-memory import health at
 `GET /api/v1/ingestion/federal-register/health`; it resets when the app restarts.
 `GET /api/v1/ingestion/status` returns health for every installed connector to admins.
+
+### USCIS processing-time observations
+
+The admin's existing “USCIS processing-time data” row in the prototype is a fixed
+demo value. The actual connector accepts a saved, admin-reviewed result at
+`POST /api/v1/ingestion/uscis-processing-times/saved` and reports persisted health
+at `GET /api/v1/ingestion/uscis-processing-times/health` and the shared status route.
+Use the JSON shape in `src/test/resources/uscis/saved-i765-result.json`: provide the
+official `https://egov.uscis.gov/processing-times/` URL, the date the result was
+observed, the selected form category, and copied result-card text containing the
+form, office, and “80% of cases are completed within …” figure. The form and office
+are extracted from that text; the category is supplied by the reviewing admin.
+The checked-in fixture is a representative transcription for offline tests, not a
+downloaded official response.
+
+The public current figure is an **80th percentile over completed cases in the
+previous six months**, not a median or a prediction for an individual case.
+`processing_time_snapshots` stores its number and original `DAYS` or `MONTHS` unit;
+`median_value` remains `NULL`. Its observation date, official URL, copied excerpt,
+content hash, and import time preserve provenance. A repeat capture returns the existing row;
+a different saved result on the same date adds a new row instead of changing
+history. For CS203-89/105, treat missing median as missing,
+do not turn months into exact days without an explicit conversion rule, and do not
+combine this office-specific 80th percentile with USCIS's separate national,
+fiscal-year median series as if they were the same measure.
+
+The official processing-time page returned HTTP 403 during implementation and
+USCIS's public developer catalog did not list a processing-time API. Therefore
+this connector does not schedule live downloads or claim its saved observations
+were fetched automatically. An admin must verify the copied result and category
+against USCIS before importing it. The shared health endpoint describes imports,
+not the freshness of a live feed; scheduling and health UI belong to CS203-78.
 
 ## Import and classify a Federal Register document
 
