@@ -1,11 +1,20 @@
 package mygrant.ingestion.visabulletin;
 
 import java.time.YearMonth;
+import java.time.Instant;
 
 import org.springframework.stereotype.Service;
 
+import mygrant.ingestion.connector.ConnectorFetch;
+import mygrant.ingestion.connector.ConnectorHealth;
+import mygrant.ingestion.connector.IngestionConnector;
+import mygrant.ingestion.connector.SourceIdentity;
+import mygrant.policies.SourceType;
+
 @Service
-public class VisaBulletinImporter {
+public class VisaBulletinImporter implements IngestionConnector<YearMonth, String,
+        VisaBulletinParser.Bulletin, VisaBulletinImporter.Result> {
+    private static final SourceIdentity SOURCE = new SourceIdentity("VISA_BULLETIN", SourceType.PRIMARY);
     private final VisaBulletinClient client;
     private final VisaBulletinParser parser;
     private final VisaBulletinStore store;
@@ -18,15 +27,46 @@ public class VisaBulletinImporter {
     }
 
     public Result importMonth(YearMonth month) {
+        return ingest(month);
+    }
+
+    @Override
+    public SourceIdentity source() {
+        return SOURCE;
+    }
+
+    @Override
+    public ConnectorFetch<String> fetch(YearMonth month) {
         String url = client.url(month);
-        String html;
+        return new ConnectorFetch<>(client.download(month), url, Instant.now());
+    }
+
+    @Override
+    public VisaBulletinParser.Bulletin transform(ConnectorFetch<String> fetched, YearMonth month) {
+        return parser.parse(fetched.payload(), month, fetched.sourceUrl());
+    }
+
+    @Override
+    public Result persistDeduplicated(VisaBulletinParser.Bulletin bulletin, YearMonth month) {
+        return new Result(bulletin.publicationMonth(), store.save(bulletin), bulletin.sourceUrl());
+    }
+
+    @Override
+    public ConnectorHealth health() {
+        VisaBulletinStore.Health saved = store.health();
+        return new ConnectorHealth(source(), ConnectorHealth.Status.valueOf(saved.status()),
+                saved.lastAttemptAt(), saved.lastSuccessAt(), null, saved.errorMessage());
+    }
+
+    @Override
+    public Result ingest(YearMonth month) {
         try {
-            html = client.download(month);
+            ConnectorFetch<String> fetched = fetch(month);
+            return persistDeduplicated(transform(fetched, month), month);
         } catch (RuntimeException exception) {
             store.fail(exception.getMessage());
             throw exception;
         }
-        return importSaved(html, month, url);
     }
 
     /** Detects the month in a saved page and records the corresponding official source URL. */
@@ -37,7 +77,7 @@ public class VisaBulletinImporter {
             String sourceUrl = client.url(month);
             VisaBulletinParser.Bulletin bulletin = new VisaBulletinParser.Bulletin(
                     month, sourceUrl, parsed.entries());
-            return new Result(month, store.save(bulletin), sourceUrl);
+            return persistDeduplicated(bulletin, month);
         } catch (RuntimeException exception) {
             store.fail(exception.getMessage());
             throw exception;
@@ -47,8 +87,8 @@ public class VisaBulletinImporter {
     /** Checks the requested month when the page came from the live month-specific URL. */
     public Result importSaved(String html, YearMonth month, String sourceUrl) {
         try {
-            VisaBulletinParser.Bulletin bulletin = parser.parse(html, month, sourceUrl);
-            return new Result(month, store.save(bulletin), sourceUrl);
+            ConnectorFetch<String> fetched = new ConnectorFetch<>(html, sourceUrl, Instant.now());
+            return persistDeduplicated(transform(fetched, month), month);
         } catch (RuntimeException exception) {
             store.fail(exception.getMessage());
             throw exception;

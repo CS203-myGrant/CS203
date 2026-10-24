@@ -4,6 +4,7 @@ import java.security.Principal;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import jakarta.validation.Valid;
 import mygrant.ingestion.dto.IngestPolicyRequest;
 import mygrant.ingestion.dto.IngestionResponse;
+import mygrant.ingestion.connector.ConnectorHealth;
 import mygrant.ingestion.federalregister.FederalRegisterIngestionResponse;
 import mygrant.ingestion.federalregister.FederalRegisterIngestionService;
 
@@ -46,5 +48,12 @@ public class IngestionController {
     public FederalRegisterIngestionResponse ingestFederalRegister(
             @PathVariable String documentNumber, Principal principal) {
         return federalRegisterIngestionService.ingest(documentNumber, principal.getName());
+    }
+
+    /** Admin health view for the Federal Register connector. */
+    @GetMapping("/federal-register/health")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ConnectorHealth federalRegisterHealth() {
+        return federalRegisterIngestionService.health();
     }
 }

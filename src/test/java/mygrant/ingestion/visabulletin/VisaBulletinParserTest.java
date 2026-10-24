@@ -20,6 +20,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import mygrant.ingestion.connector.IngestionConnector;
+import mygrant.policies.SourceType;
+
 @ExtendWith(MockitoExtension.class)
 class VisaBulletinParserTest {
     private static final YearMonth MONTH = YearMonth.of(2026, 10);
@@ -109,5 +112,22 @@ class VisaBulletinParserTest {
         assertThrows(IllegalStateException.class, () -> importer.importMonth(MONTH));
         verify(store).fail("HTTP 403");
         verify(store, never()).save(any());
+    }
+
+    @Test
+    void liveImportUsesSharedConnectorContract() {
+        when(client.url(MONTH)).thenReturn(URL);
+        when(client.download(MONTH)).thenReturn(sample);
+        when(store.save(any())).thenReturn(150);
+        IngestionConnector<YearMonth, String, VisaBulletinParser.Bulletin, VisaBulletinImporter.Result> connector =
+                new VisaBulletinImporter(client, parser, store);
+
+        var result = connector.ingest(MONTH);
+
+        assertEquals("VISA_BULLETIN", connector.source().id());
+        assertEquals(SourceType.PRIMARY, connector.source().type());
+        assertEquals(MONTH, result.publicationMonth());
+        assertEquals(150, result.entriesProcessed());
+        verify(store).save(any());
     }
 }
