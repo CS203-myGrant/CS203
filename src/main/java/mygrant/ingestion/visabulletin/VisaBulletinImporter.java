@@ -7,12 +7,13 @@ import org.springframework.stereotype.Service;
 
 import mygrant.ingestion.connector.ConnectorFetch;
 import mygrant.ingestion.connector.ConnectorHealth;
-import mygrant.ingestion.connector.IngestionConnector;
+import mygrant.ingestion.connector.ContentHash;
+import mygrant.ingestion.connector.DataConnector;
 import mygrant.ingestion.connector.SourceIdentity;
 import mygrant.policies.SourceType;
 
 @Service
-public class VisaBulletinImporter implements IngestionConnector<YearMonth, String,
+public class VisaBulletinImporter implements DataConnector<YearMonth, String,
         VisaBulletinParser.Bulletin, VisaBulletinImporter.Result> {
     private static final SourceIdentity SOURCE = new SourceIdentity("VISA_BULLETIN", SourceType.PRIMARY);
     private final VisaBulletinClient client;
@@ -38,7 +39,8 @@ public class VisaBulletinImporter implements IngestionConnector<YearMonth, Strin
     @Override
     public ConnectorFetch<String> fetch(YearMonth month) {
         String url = client.url(month);
-        return new ConnectorFetch<>(client.download(month), url, Instant.now());
+        String html = client.download(month);
+        return new ConnectorFetch<>(html, url, Instant.now(), ContentHash.sha256(html));
     }
 
     @Override
@@ -87,7 +89,8 @@ public class VisaBulletinImporter implements IngestionConnector<YearMonth, Strin
     /** Checks the requested month when the page came from the live month-specific URL. */
     public Result importSaved(String html, YearMonth month, String sourceUrl) {
         try {
-            ConnectorFetch<String> fetched = new ConnectorFetch<>(html, sourceUrl, Instant.now());
+            ConnectorFetch<String> fetched = new ConnectorFetch<>(html, sourceUrl, Instant.now(),
+                    ContentHash.sha256(html));
             return persistDeduplicated(transform(fetched, month), month);
         } catch (RuntimeException exception) {
             store.fail(exception.getMessage());

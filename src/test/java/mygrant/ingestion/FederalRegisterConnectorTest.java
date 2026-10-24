@@ -22,7 +22,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import mygrant.impact.ProfileImpactAssessmentService;
 import mygrant.ingestion.classification.VisaClassification;
 import mygrant.ingestion.classification.VisaTypeClassifier;
-import mygrant.ingestion.connector.IngestionConnector;
+import mygrant.ingestion.connector.DataConnector;
+import mygrant.ingestion.connector.ContentHash;
 import mygrant.ingestion.connector.ConnectorHealth;
 import mygrant.ingestion.dto.IngestPolicyRequest;
 import mygrant.ingestion.dto.IngestionResponse;
@@ -53,7 +54,7 @@ class FederalRegisterConnectorTest {
         when(policyIngestion.ingest(any(IngestPolicyRequest.class), eq("F-1 student policy")))
                 .thenReturn(new IngestionResponse(42L, document.documentNumber(), 0, Instant.now(), true));
 
-        IngestionConnector<FederalRegisterImportRequest,
+        DataConnector<FederalRegisterImportRequest,
                 FederalRegisterIngestionService.FetchedDocument,
                 FederalRegisterIngestionService.PreparedDocument,
                 FederalRegisterIngestionResponse> connector = service();
@@ -131,6 +132,7 @@ class FederalRegisterConnectorTest {
 
         assertThat(fetched.sourceUrl()).isEqualTo(document.htmlUrl());
         assertThat(fetched.fetchedAt()).isNotNull();
+        assertThat(fetched.contentHash()).isEqualTo(ContentHash.sha256(content));
         assertThat(prepared.classification().visaTypes()).containsExactly("H-1B");
         verify(policyIngestion, never()).ingest(any(), any());
     }

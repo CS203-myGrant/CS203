@@ -9,7 +9,8 @@ import org.springframework.stereotype.Service;
 import mygrant.ingestion.PolicyIngestionService;
 import mygrant.ingestion.connector.ConnectorFetch;
 import mygrant.ingestion.connector.ConnectorHealth;
-import mygrant.ingestion.connector.IngestionConnector;
+import mygrant.ingestion.connector.ContentHash;
+import mygrant.ingestion.connector.DataConnector;
 import mygrant.ingestion.connector.SourceIdentity;
 import mygrant.ingestion.classification.VisaClassification;
 import mygrant.ingestion.classification.VisaTypeClassifier;
@@ -23,7 +24,7 @@ import mygrant.policies.SourceType;
 /** Orchestrates Federal Register download, classification, and policy indexing. */
 @Service
 public class FederalRegisterIngestionService
-        implements IngestionConnector<FederalRegisterImportRequest,
+        implements DataConnector<FederalRegisterImportRequest,
                 FederalRegisterIngestionService.FetchedDocument,
                 FederalRegisterIngestionService.PreparedDocument,
                 FederalRegisterIngestionResponse> {
@@ -68,7 +69,8 @@ public class FederalRegisterIngestionService
         }
 
         String content = client.downloadFullText(document.rawTextUrl());
-        return new ConnectorFetch<>(new FetchedDocument(document, content), document.htmlUrl(), Instant.now());
+        return new ConnectorFetch<>(new FetchedDocument(document, content), document.htmlUrl(),
+                Instant.now(), ContentHash.sha256(content));
     }
 
     @Override

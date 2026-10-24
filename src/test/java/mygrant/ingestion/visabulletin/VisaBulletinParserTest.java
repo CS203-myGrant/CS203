@@ -20,7 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import mygrant.ingestion.connector.IngestionConnector;
+import mygrant.ingestion.connector.DataConnector;
 import mygrant.policies.SourceType;
 
 @ExtendWith(MockitoExtension.class)
@@ -119,7 +119,7 @@ class VisaBulletinParserTest {
         when(client.url(MONTH)).thenReturn(URL);
         when(client.download(MONTH)).thenReturn(sample);
         when(store.save(any())).thenReturn(150);
-        IngestionConnector<YearMonth, String, VisaBulletinParser.Bulletin, VisaBulletinImporter.Result> connector =
+        DataConnector<YearMonth, String, VisaBulletinParser.Bulletin, VisaBulletinImporter.Result> connector =
                 new VisaBulletinImporter(client, parser, store);
 
         var result = connector.ingest(MONTH);

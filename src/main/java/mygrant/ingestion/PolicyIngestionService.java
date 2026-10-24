@@ -1,11 +1,7 @@
 package mygrant.ingestion;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HashMap;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Arrays;
@@ -19,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import mygrant.ingestion.dto.IngestPolicyRequest;
 import mygrant.ingestion.dto.IngestionResponse;
+import mygrant.ingestion.connector.ContentHash;
 import mygrant.policies.PolicyDocument;
 import mygrant.policies.PolicyDocumentRepository;
 import mygrant.policies.PolicyIndexedEvent;
@@ -52,7 +49,7 @@ public class PolicyIngestionService {
         if (indexedContent == null || indexedContent.isBlank()) {
             throw new IllegalArgumentException("Indexed policy content must not be blank");
         }
-        String contentHash = calculateHash(request.content());
+        String contentHash = ContentHash.sha256(request.content());
         var existing = policyRepository.findByExternalId(request.externalId());
 
         if (existing.isPresent()) {
@@ -114,12 +111,4 @@ public class PolicyIngestionService {
                 .collect(java.util.stream.Collectors.joining(","));
     }
 
-    private String calculateHash(String content) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(content.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is not available", exception);
-        }
-    }
 }
