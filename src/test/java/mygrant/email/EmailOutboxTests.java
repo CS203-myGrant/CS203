@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,6 +25,7 @@ import mygrant.notifications.NotificationRepository;
 class EmailOutboxTests {
 
     private static final Instant NOW = Instant.parse("2026-10-24T12:00:00Z");
+    private static final LocalDate DAY = LocalDate.parse("2026-10-24");
 
     @Mock
     private EmailDeliveryRepository deliveryRepository;
@@ -54,5 +56,41 @@ class EmailOutboxTests {
         verify(deliveryRepository).insertImmediate(inserted.capture(), eq(7L), eq(NOW));
         verify(deliveryRepository).deleteById(inserted.getValue());
         assertThat(queued).isEmpty();
+    }
+
+    @Test
+    void queuesADigestHoldingTheFreeAlerts() {
+        when(deliveryRepository.insertDigest(any(), eq(7L), eq(DAY), eq(NOW))).thenReturn(1);
+        when(notificationRepository.claimForDelivery(any(), eq(List.of(41L, 42L)))).thenReturn(2);
+
+        Optional<UUID> queued = outbox().queueDigest(7L, DAY, List.of(41L, 42L), NOW);
+
+        ArgumentCaptor<UUID> inserted = ArgumentCaptor.forClass(UUID.class);
+        verify(deliveryRepository).insertDigest(inserted.capture(), eq(7L), eq(DAY), eq(NOW));
+        verify(notificationRepository).claimForDelivery(inserted.getValue(), List.of(41L, 42L));
+        assertThat(queued).contains(inserted.getValue());
+    }
+
+    @Test
+    void aSecondDigestForTheSameDateIsNotCreated() {
+        when(deliveryRepository.insertDigest(any(), eq(7L), eq(DAY), eq(NOW))).thenReturn(0);
+
+        assertThat(outbox().queueDigest(7L, DAY, List.of(42L), NOW)).isEmpty();
+
+        verify(notificationRepository, never()).claimForDelivery(any(), any());
+    }
+
+    @Test
+    void aDigestWhoseAlertsWereAllTakenIsDropped() {
+        when(deliveryRepository.insertDigest(any(), eq(7L), eq(DAY), eq(NOW))).thenReturn(1);
+        when(notificationRepository.claimForDelivery(any(), eq(List.of(42L)))).thenReturn(0);
+
+        assertThat(outbox().queueDigest(7L, DAY, List.of(42L), NOW)).isEmpty();
+
+        verify(deliveryRepository).deleteById(any());
+    }
+
+    private EmailOutbox outbox() {
+        return new EmailOutbox(deliveryRepository, notificationRepository);
     }
 }

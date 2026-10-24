@@ -10,6 +10,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -40,6 +41,7 @@ import mygrant.user.UserRole;
  * and drives the email services for its own rows only, never the whole-table job loops.
  */
 @SpringBootTest
+@AutoConfigureMockMvc
 @Import(EmailIntegrationTestBase.FakeSenderConfig.class)
 abstract class EmailIntegrationTestBase {
 

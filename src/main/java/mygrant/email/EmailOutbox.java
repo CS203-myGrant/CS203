@@ -1,6 +1,8 @@
 package mygrant.email;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -31,6 +33,25 @@ public class EmailOutbox {
         UUID id = UUID.randomUUID();
         deliveryRepository.insertImmediate(id, userId, now);
         if (notificationRepository.claimForDelivery(id, List.of(notificationId)) == 0) {
+            deliveryRepository.deleteById(id);
+            return Optional.empty();
+        }
+        return Optional.of(id);
+    }
+
+    /**
+     * Queues the user's digest for that date with whichever of the alerts no other email has
+     * claimed. Empty when the user already has a digest for the date or none of the alerts
+     * were still free.
+     */
+    @Transactional
+    public Optional<UUID> queueDigest(Long userId, LocalDate digestDate, Collection<Long> notificationIds,
+            Instant now) {
+        UUID id = UUID.randomUUID();
+        if (deliveryRepository.insertDigest(id, userId, digestDate, now) == 0) {
+            return Optional.empty();
+        }
+        if (notificationRepository.claimForDelivery(id, notificationIds) == 0) {
             deliveryRepository.deleteById(id);
             return Optional.empty();
         }

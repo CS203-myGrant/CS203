@@ -74,7 +74,10 @@ mygrant:
     immediate-lookback: ${EMAIL_IMMEDIATE_LOOKBACK:24h}
     stuck-after: ${EMAIL_STUCK_AFTER:10m}
     batch-size: ${EMAIL_BATCH_SIZE:50}
+    # Spring cron (second minute hour day month weekday), run in digest-zone.
+    digest-cron: ${EMAIL_DIGEST_CRON:0 0 8 * * *}
     digest-zone: ${EMAIL_DIGEST_ZONE:America/New_York}
+    digest-lookback: ${EMAIL_DIGEST_LOOKBACK:48h}
 
 springdoc:
   swagger-ui:

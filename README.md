@@ -592,6 +592,144 @@ DELETE FROM policy_documents WHERE external_id = '2025-16554';
 SQL
 ```
 
+## Email alerts
+
+Alerts can also arrive by email. Each applicant sets two modes under **Email alerts** on
+**Your profile**: one for critical alerts and one for everything else. Each mode is
+**Email me right away**, **Include in my daily digest** or **Do not email me**. The
+defaults are right away for critical alerts and the digest for the rest. In-app alerts are
+never affected.
+
+- **Critical** means the alert asks the reader to act (`actionRequired`), or impact
+  assessment rated it `HIGH`. Nothing rates individual recipients yet, so today this is
+  just `actionRequired`. The rule lives in `AlertBucket.of`.
+- **Right away**: within about 30 seconds, one email per alert. It holds the alert's
+  message, its date and a **View in myGRANT** link that opens the alert after sign-in,
+  WorkOS included.
+- **Daily digest**: at 08:00 America/New_York, one email listing every new alert from the
+  buckets set to the digest. A user with nothing new gets no email.
+- Emails never contain the impact analysis, only the alert's own message.
+- Every email has **Manage email settings** and **Unsubscribe** links, plus
+  `List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click` headers.
+  Unsubscribing turns both modes off. Opening the link only shows a confirm button,
+  because mail scanners open links; the button (or a mail client's one-click POST) does
+  the change.
+- Only unread alerts are emailed, and each alert goes out in at most one email.
+- Only recent alerts are emailed: the last 24 hours for immediate emails and the last 48
+  hours for the digest. So the first deploy, or turning emails on, does not mail anyone
+  their old inbox, and a digest missed while the app was down rolls into the next one.
+
+Endpoints: `GET`/`PUT /api/v1/profiles/me/email-preferences`, the public
+`GET`/`POST /api/v1/email/unsubscribe?token=...` page, `GET /api/v1/notifications/{id}`,
+and the ADMIN-only `POST /api/v1/admin/email/digest/run`.
+
+### Configuration
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | none | Shared with the welcome email. Without both, the email jobs log one warning and do nothing (this is the case in CI). |
+| `APP_BASE_URL` | `http://localhost:8080` | Base of every link in an email. Use the public HTTPS address in a deployment; mail clients only offer one-click unsubscribe for HTTPS links. |
+| `EMAIL_JOBS_ENABLED` | `true` | `false` runs no email jobs at all. The test suite sets this. |
+| `EMAIL_DISPATCH_INTERVAL` | `30s` | How often immediate alerts are queued and due emails sent. |
+| `EMAIL_DIGEST_CRON` | `0 0 8 * * *` | Spring cron for the digest: second, minute, hour, day, month, weekday. |
+| `EMAIL_DIGEST_ZONE` | `America/New_York` | Zone for the cron, the digest date and the times shown in emails. |
+| `EMAIL_MAX_ATTEMPTS` | `4` | Attempts per email, counting the first. |
+| `EMAIL_RETRY_BACKOFF` | `1m,5m,15m` | Wait before each retry; the last value repeats. |
+| `EMAIL_IMMEDIATE_LOOKBACK` | `24h` | Oldest alert emailed right away. |
+| `EMAIL_DIGEST_LOOKBACK` | `48h` | Oldest alert a digest collects. |
+| `EMAIL_STUCK_AFTER` | `10m` | A send claimed this long ago is treated as interrupted and retried. |
+| `EMAIL_BATCH_SIZE` | `50` | Most emails one dispatch run sends. |
+| `EMAIL_ALLOW_UNVERIFIED_RECIPIENTS` | `false` | Local demos only; see below. |
+
+### Who receives email
+
+Only verified addresses receive alerts, but there is no email-verified flag yet
+(CS203-25). Until there is, an account counts as verified once it has signed in with
+WorkOS (**Continue with Google**), because WorkOS rejects unverified addresses. Accounts
+registered with a password are unverified, and their settings page says so. Signing in
+once with **Continue with Google** using the same address links the account and verifies
+it. Inactive and deleted accounts never receive email.
+
+`EMAIL_ALLOW_UNVERIFIED_RECIPIENTS=true` also emails password accounts, for local demos.
+Never enable it on a shared deployment: anyone can register with someone else's address.
+
+### Try it locally
+
+1. Add `RESEND_API_KEY` and `RESEND_FROM_EMAIL` to `.env`. With Resend's shared test sender
+   (`onboarding@resend.dev`) and no verified domain, Resend only delivers to your own
+   account's address and rejects anything else with HTTP 403. The address
+   `delivered@resend.dev` always reports delivery, so it is the safest recipient for
+   demos. Accounts at `@example.com` addresses would bounce.
+2. Register an applicant with `delivered@resend.dev` (or your own address). Then either
+   sign in with **Continue with Google**, or set `EMAIL_ALLOW_UNVERIFIED_RECIPIENTS=true`
+   to use a password account.
+3. Start Spring Boot and import a document as in
+   [Test policy change notifications](#test-policy-change-notifications). Critical alerts
+   are emailed within `EMAIL_DISPATCH_INTERVAL`; check **Emails** in the Resend dashboard.
+4. Build the digest without waiting for 08:00, signed in as the
+   [admin account](#admin-account-setup):
+
+   ```bash
+   ADMIN_TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+     -H "Content-Type: application/json" \
+     -d "{\"userEmail\": \"$ADMIN_EMAIL\", \"userPassword\": \"$ADMIN_PASSWORD\"}" \
+     | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
+   curl -s -X POST http://localhost:8080/api/v1/admin/email/digest/run \
+     -H "Authorization: Bearer $ADMIN_TOKEN" | jq
+   ```
+
+   ```json
+   {"digestDate": "2026-10-24", "digestsCreated": 1, "emailsSent": 1,
+    "emailsRetrying": 0, "emailsFailed": 0, "emailsSkipped": 0}
+   ```
+
+   Each user gets at most one digest per date, so a second run on the same day only
+   reaches users who had none yet. To run the demo again, pass an earlier date with
+   `?date=YYYY-MM-DD`. Future dates are rejected, because they would take that day's slot
+   and suppress the real digest.
+5. Inspect the outbox:
+
+   ```bash
+   docker exec -i policy-impact-postgres psql -U policy_user -d policy_impact -c \
+     "SELECT kind, digest_date, status, attempts, last_error, sent_at FROM email_deliveries ORDER BY created_at DESC LIMIT 10;"
+   ```
+
+The automated tests use a fake provider and never call Resend. The `mygrant.email`
+integration tests run against the local PostgreSQL and delete the rows they create.
+
+### Retries and failures
+
+- Creating an alert never calls email code. A Resend outage cannot delay or fail an
+  alert, its live update in open pages, or an import.
+- Each email is claimed with a conditional update that also counts the attempt. It is
+  sent with no database transaction or lock held, and its outcome is recorded afterwards.
+  An overlapping run finds nothing to claim.
+- Rate limits (429), server errors, timeouts and `409 concurrent_idempotent_requests` are
+  retried after 1, 5 and 15 minutes; after 4 attempts the email is `FAILED`. Other 4xx
+  errors, such as a bad key or an unverified sender, are not retried.
+  `409 invalid_idempotent_request` is logged at error level.
+- The delivery's UUID is sent as Resend's `Idempotency-Key`, so a retry after a timeout
+  cannot deliver twice. Resend keeps keys for 24 hours, so keep the whole retry schedule
+  well inside that.
+- Before its first attempt, an email may still drop alerts the user has since switched
+  off. After any attempt its contents are frozen: a retry sends exactly the same alerts,
+  or the whole email is skipped if the user opted out or can no longer receive email.
+- A `FAILED` immediate email keeps its alert, which is then never emailed again. It does
+  not fall back into the digest, because Resend may have delivered it.
+- An email left `SENDING` for `EMAIL_STUCK_AFTER`, for example after a crash, is retried
+  with the same key, or marked `FAILED` if it has no attempts left.
+- `last_error` stores only the HTTP status and Resend's error name, never the recipient,
+  the body or the key.
+
+### Single-instance assumption
+
+The jobs are built for one running instance. Spring's single scheduler thread runs them
+one at a time. A second instance would not double-send, because claims are conditional,
+digests are unique per user and date, and Resend drops repeated idempotency keys. It would
+still scan the same tables on every run and log its own warnings, so add a scheduler lock
+(for example ShedLock) before running several instances. All users share one digest time
+and zone; there is no per-user time zone.
+
 ## Test RAG from the terminal
 
 Open a second WSL terminal while Spring Boot is still running. `jq` formats the JSON;

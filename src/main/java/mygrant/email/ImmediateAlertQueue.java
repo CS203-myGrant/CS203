@@ -66,22 +66,36 @@ public class ImmediateAlertQueue {
         int queued = 0;
         for (Map.Entry<Long, List<Notification>> entry : byUser.entrySet()) {
             Long userId = entry.getKey();
-            // The recipient query behind notifications does not filter inactive users.
-            if (!eligibility.canReceive(users.get(userId))) {
+            queued += queue(users.get(userId), preferences.getOrDefault(userId, EmailPreference.defaults(userId)),
+                    entry.getValue(), now);
+        }
+        return queued;
+    }
+
+    /** The same for one account only. */
+    public int queueDueFor(Long userId, Instant now) {
+        return queue(userRepository.findById(userId).orElse(null),
+                preferenceRepository.findById(userId).orElseGet(() -> EmailPreference.defaults(userId)),
+                notificationRepository.findNotEmailedSinceForUser(userId, now.minus(properties.immediateLookback())),
+                now);
+    }
+
+    private int queue(User user, EmailPreference preference, List<Notification> candidates, Instant now) {
+        // The recipient query behind notifications does not filter inactive users.
+        if (!eligibility.canReceive(user)) {
+            return 0;
+        }
+        int queued = 0;
+        for (Notification notification : candidates) {
+            if (AlertBucket.of(notification).modeIn(preference) != DeliveryMode.IMMEDIATE) {
                 continue;
             }
-            EmailPreference preference = preferences.getOrDefault(userId, EmailPreference.defaults(userId));
-            for (Notification notification : entry.getValue()) {
-                if (AlertBucket.of(notification).modeIn(preference) != DeliveryMode.IMMEDIATE) {
-                    continue;
+            try {
+                if (outbox.queueImmediate(user.getId(), notification.getId(), now).isPresent()) {
+                    queued++;
                 }
-                try {
-                    if (outbox.queueImmediate(userId, notification.getId(), now).isPresent()) {
-                        queued++;
-                    }
-                } catch (RuntimeException failure) {
-                    LOGGER.warn("Could not queue the alert email for notification {}", notification.getId(), failure);
-                }
+            } catch (RuntimeException failure) {
+                LOGGER.warn("Could not queue the alert email for notification {}", notification.getId(), failure);
             }
         }
         return queued;

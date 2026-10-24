@@ -235,6 +235,68 @@ class EmailDispatcherTests {
         assertThat(dispatcher().dispatchDue(NOW).sent()).isEqualTo(1);
     }
 
+    @Test
+    void firstDigestAttemptDropsAlertsTheUserNoLongerWantsInTheDigest() {
+        Notification info = EmailTestData.informational(41L, 7L, NOW);
+        digestClaimed(1, info, alert);
+        // The critical alert was digest-bound when queued; the user has since moved critical to OFF.
+        when(preferenceRepository.findById(7L))
+                .thenReturn(Optional.of(new EmailPreference(7L, DeliveryMode.OFF, DeliveryMode.DIGEST)));
+
+        assertThat(dispatcher().dispatch(ID, NOW)).isEqualTo(Outcome.SENT);
+
+        verify(notificationRepository).releaseFromDelivery(ID, List.of(42L));
+        assertThat(sender.delivered).singleElement().satisfies(message -> {
+            assertThat(message.text()).contains("Alert 41").doesNotContain("Alert 42");
+            assertThat(message.subject()).endsWith("1 new alert");
+        });
+    }
+
+    @Test
+    void digestIsSkippedWhenTheUserUnsubscribedBeforeItWasSent() {
+        digestClaimed(1, EmailTestData.informational(41L, 7L, NOW));
+        when(preferenceRepository.findById(7L))
+                .thenReturn(Optional.of(new EmailPreference(7L, DeliveryMode.OFF, DeliveryMode.OFF)));
+
+        assertThat(dispatcher().dispatch(ID, NOW)).isEqualTo(Outcome.SKIPPED);
+
+        assertThat(sender.requests).isEmpty();
+        verify(notificationRepository).releaseFromDelivery(ID, List.of(41L));
+    }
+
+    @Test
+    void aDigestRetryIsNeverTrimmed() {
+        // Trimming would change the request under the same idempotency key, so a partial
+        // opt-out after a failed attempt skips the whole digest and keeps its alerts claimed.
+        digestClaimed(2, EmailTestData.informational(41L, 7L, NOW), alert);
+        when(preferenceRepository.findById(7L))
+                .thenReturn(Optional.of(new EmailPreference(7L, DeliveryMode.OFF, DeliveryMode.DIGEST)));
+
+        assertThat(dispatcher().dispatch(ID, NOW)).isEqualTo(Outcome.SKIPPED);
+
+        assertThat(sender.requests).isEmpty();
+        verify(notificationRepository, never()).releaseFromDelivery(any(), any());
+    }
+
+    @Test
+    void aDigestRetryWithUnchangedSettingsResendsEveryAlert() {
+        digestClaimed(3, EmailTestData.informational(41L, 7L, NOW), EmailTestData.informational(43L, 7L, NOW));
+
+        assertThat(dispatcher().dispatch(ID, NOW)).isEqualTo(Outcome.SENT);
+
+        assertThat(sender.delivered).singleElement()
+                .satisfies(message -> assertThat(message.text()).contains("Alert 41", "Alert 43"));
+        verify(notificationRepository, never()).releaseFromDelivery(any(), any());
+    }
+
+    private void digestClaimed(int attempts, Notification... items) {
+        when(deliveryRepository.claim(ID, NOW)).thenReturn(1);
+        when(deliveryRepository.findById(ID)).thenReturn(Optional.of(
+                claimed(ID, 7L, DeliveryKind.DIGEST, java.time.LocalDate.parse("2026-10-24"), attempts)));
+        when(userRepository.findById(7L)).thenReturn(Optional.of(verifiedUser(7L)));
+        when(notificationRepository.findByEmailDeliveryIdOrderByCreatedAtAscIdAsc(ID)).thenReturn(List.of(items));
+    }
+
     /** Each dispatch call sees the row as claimed with the next attempt count. */
     private void claimedAtAttempts(Integer first, Integer... more) {
         when(deliveryRepository.claim(eq(ID), any())).thenReturn(1);

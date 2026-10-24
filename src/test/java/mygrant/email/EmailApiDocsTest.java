@@ -44,6 +44,14 @@ class EmailApiDocsTest {
         assertThat(schemas.path("EmailPreferencesResponse").path("properties").path("ineligibleReason")
                 .path("enum")).extracting(JsonNode::asText).contains("EMAIL_NOT_VERIFIED");
 
+        JsonNode digestRun = docs.path("paths").path("/api/v1/admin/email/digest/run").path("post");
+        assertThat(digestRun.path("responses").path("200").path("content").path("*/*").path("schema")
+                .path("$ref").asText()).endsWith("/DigestRunResponse");
+        assertThat(digestRun.path("parameters")).extracting(parameter -> parameter.path("name").asText())
+                .containsExactly("date");
+        assertThat(digestRun.path("responses").has("503")).isTrue();
+        assertThat(schemas.path("DigestRunResponse").path("properties").has("digestsCreated")).isTrue();
+
         assertThat(docs.path("paths").has("/api/v1/notifications/{id}")).isTrue();
         assertThat(docs.path("paths").has("/api/v1/email/unsubscribe")).isFalse();
     }

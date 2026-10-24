@@ -24,7 +24,7 @@ class EmailPropertiesTests {
     @Test
     void linksIgnoreATrailingSlashOnTheBaseUrl() {
         EmailProperties properties = new EmailProperties("https://mygrant.example/", false, 4,
-                List.of(Duration.ofMinutes(1)), Duration.ofHours(24), Duration.ofMinutes(10), 50, ZoneId.of("UTC"));
+                List.of(Duration.ofMinutes(1)), Duration.ofHours(24), Duration.ofMinutes(10), 50, ZoneId.of("UTC"), Duration.ofHours(48));
 
         assertThat(properties.notificationUrl(42L)).isEqualTo("https://mygrant.example/mygrant-prototype.html#notification=42");
         assertThat(properties.settingsUrl()).isEqualTo("https://mygrant.example/mygrant-prototype.html#view=profile");
@@ -34,14 +34,14 @@ class EmailPropertiesTests {
     @Test
     void rejectsSettingsThatWouldBreakRetries() {
         assertThatThrownBy(() -> new EmailProperties("http://localhost:8080", false, 0,
-                List.of(Duration.ofMinutes(1)), Duration.ofHours(24), Duration.ofMinutes(10), 50, ZoneId.of("UTC")))
+                List.of(Duration.ofMinutes(1)), Duration.ofHours(24), Duration.ofMinutes(10), 50, ZoneId.of("UTC"), Duration.ofHours(48)))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new EmailProperties("http://localhost:8080", false, 4,
-                List.of(), Duration.ofHours(24), Duration.ofMinutes(10), 50, ZoneId.of("UTC")))
+                List.of(), Duration.ofHours(24), Duration.ofMinutes(10), 50, ZoneId.of("UTC"), Duration.ofHours(48)))
                 .isInstanceOf(IllegalArgumentException.class);
         // A live send must never look stuck, or recovery would start a second one.
         assertThatThrownBy(() -> new EmailProperties("http://localhost:8080", false, 4,
-                List.of(Duration.ofMinutes(1)), Duration.ofHours(24), Duration.ofSeconds(20), 50, ZoneId.of("UTC")))
+                List.of(Duration.ofMinutes(1)), Duration.ofHours(24), Duration.ofSeconds(20), 50, ZoneId.of("UTC"), Duration.ofHours(48)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

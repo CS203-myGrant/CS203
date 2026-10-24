@@ -1,10 +1,14 @@
 package mygrant.email;
 
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
 import org.springframework.web.util.HtmlUtils;
@@ -22,6 +26,7 @@ import mygrant.user.User;
 public class AlertEmailRenderer {
 
     private static final int SUBJECT_LENGTH = 90;
+    private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH);
 
     private final EmailProperties properties;
     private final UnsubscribeTokens unsubscribeTokens;
@@ -37,8 +42,45 @@ public class AlertEmailRenderer {
     public EmailMessage render(EmailDelivery delivery, User user, List<Notification> notifications) {
         return switch (delivery.getKind()) {
             case IMMEDIATE -> immediate(delivery.getId(), user, notifications.get(0));
-            case DIGEST -> throw new UnsupportedOperationException("Digest emails are not rendered yet");
+            case DIGEST -> digest(delivery.getId(), user, delivery.getDigestDate(), notifications);
         };
+    }
+
+    EmailMessage digest(UUID deliveryId, User user, LocalDate digestDate, List<Notification> notifications) {
+        String unsubscribeUrl = properties.unsubscribeUrl(unsubscribeTokens.issue(user.getId()));
+        String day = DAY.format(digestDate);
+        String count = notifications.size() == 1 ? "1 new alert" : notifications.size() + " new alerts";
+        Set<AlertBucket> buckets = notifications.stream().map(AlertBucket::of)
+                .collect(Collectors.toCollection(() -> EnumSet.noneOf(AlertBucket.class)));
+        String reason = (buckets.size() == 2 ? "critical and other alerts are"
+                : buckets.contains(AlertBucket.CRITICAL) ? "critical alerts are" : "other alerts are")
+                + " set to the daily digest";
+
+        StringBuilder html = new StringBuilder("""
+                <p style="margin:0 0 4px;font-size:13px;color:#6b7280;">myGRANT daily digest &middot; %s</p>
+                <p style="margin:0 0 20px;font-size:16px;">%s for you.</p>
+                """.formatted(escape(day), escape(count)));
+        StringBuilder text = new StringBuilder("myGRANT daily digest - %s\n\n%s for you.\n"
+                .formatted(day, count));
+        for (Notification notification : notifications) {
+            String label = notification.isActionRequired() ? "Action needed" : "For information";
+            String when = timestamp.format(notification.getCreatedAt());
+            String link = properties.notificationUrl(notification.getId());
+            html.append("""
+                    <div style="margin:0 0 20px;padding:0 0 0 12px;border-left:3px solid %s;">
+                    <p style="margin:0 0 4px;font-size:13px;color:#6b7280;">%s &middot; %s</p>
+                    <p style="margin:0 0 6px;font-size:15px;">%s</p>
+                    <p style="margin:0;font-size:14px;"><a href="%s" style="color:#1f2937;">View in myGRANT</a></p>
+                    </div>
+                    """.formatted(AlertBucket.of(notification) == AlertBucket.CRITICAL ? "#b91c1c" : "#9ca3af",
+                    escape(label), escape(when), escape(notification.getMessage()), escape(link)));
+            text.append("\n%s - %s\n%s\nView in myGRANT: %s\n".formatted(label, when, notification.getMessage(), link));
+        }
+        text.append(textFooter(reason, unsubscribeUrl));
+
+        return new EmailMessage(user.getEmail(), "Your myGRANT digest for " + day + ": " + count,
+                page(html.toString(), reason, unsubscribeUrl), text.toString(), headers(unsubscribeUrl),
+                deliveryId.toString());
     }
 
     EmailMessage immediate(UUID deliveryId, User user, Notification notification) {

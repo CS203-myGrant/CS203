@@ -25,7 +25,9 @@ public record EmailProperties(
         /** Most emails one dispatcher run sends. */
         @DefaultValue("50") int batchSize,
         /** Zone for the times shown in emails and for the digest's local date. */
-        @DefaultValue("America/New_York") ZoneId digestZone
+        @DefaultValue("America/New_York") ZoneId digestZone,
+        /** A digest collects unemailed alerts this recent, so a missed day rolls into the next. */
+        @DefaultValue("48h") Duration digestLookback
 ) {
     public EmailProperties {
         appBaseUrl = appBaseUrl.endsWith("/") ? appBaseUrl.substring(0, appBaseUrl.length() - 1) : appBaseUrl;

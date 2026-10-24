@@ -28,7 +28,7 @@ final class EmailTestData {
     static EmailProperties properties(boolean allowUnverifiedRecipients) {
         return new EmailProperties("http://localhost:8080", allowUnverifiedRecipients, 4,
                 List.of(Duration.ofMinutes(1), Duration.ofMinutes(5), Duration.ofMinutes(15)),
-                Duration.ofHours(24), Duration.ofMinutes(10), 50, ZoneId.of("America/New_York"));
+                Duration.ofHours(24), Duration.ofMinutes(10), 50, ZoneId.of("America/New_York"), Duration.ofHours(48));
     }
 
     static User verifiedUser(Long id) {

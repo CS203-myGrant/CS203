@@ -91,6 +91,54 @@ class AlertEmailRendererTests {
         assertThat(render(notification)).isEqualTo(render(notification));
     }
 
+    @Test
+    void digestListsEachAlertWithItsDateAndLink() {
+        List<Notification> items = List.of(informational(41L, 7L, CREATED), informational(43L, 7L, CREATED.plusSeconds(3600)));
+
+        EmailMessage message = renderDigest(items);
+
+        assertThat(message.subject()).isEqualTo("Your myGRANT digest for 24 Oct 2026: 2 new alerts");
+        assertThat(message.idempotencyKey()).isEqualTo(DELIVERY.toString());
+        assertThat(message.html())
+                .contains("2 new alerts for you.")
+                .contains("New policy affecting F-1: Alert 41", "New policy affecting F-1: Alert 43")
+                .contains("href=\"http://localhost:8080/mygrant-prototype.html#notification=41\"")
+                .contains("href=\"http://localhost:8080/mygrant-prototype.html#notification=43\"")
+                .contains("24 Oct 2026, 10:05 AM EDT", "24 Oct 2026, 11:05 AM EDT")
+                .contains("other alerts are set to the daily digest");
+        assertThat(message.text())
+                .contains("For information - 24 Oct 2026, 10:05 AM EDT\nNew policy affecting F-1: Alert 41")
+                .contains("View in myGRANT: http://localhost:8080/mygrant-prototype.html#notification=43");
+        assertThat(message.headers()).containsKeys("List-Unsubscribe", "List-Unsubscribe-Post");
+        assertThat(message.html().indexOf("Alert 41")).isLessThan(message.html().indexOf("Alert 43"));
+    }
+
+    @Test
+    void digestWithACriticalAlertSaysBothSettingsSentIt() {
+        EmailMessage message = renderDigest(List.of(critical(42L, 7L, CREATED)));
+
+        assertThat(message.subject()).endsWith(": 1 new alert");
+        assertThat(message.html()).contains("Action needed").contains("critical alerts are set to the daily digest");
+        assertThat(renderDigest(List.of(critical(42L, 7L, CREATED), informational(43L, 7L, CREATED))).text())
+                .contains("critical and other alerts are set to the daily digest");
+    }
+
+    @Test
+    void digestEscapesPolicyTextAndRendersTheSameEachTime() {
+        Notification notification = informational(41L, 7L, CREATED);
+        ReflectionTestUtils.setField(notification, "message", "<b>Fee</b> & more");
+
+        EmailMessage message = renderDigest(List.of(notification));
+
+        assertThat(message.html()).contains("&lt;b&gt;Fee&lt;/b&gt; &amp; more").doesNotContain("<b>Fee</b>");
+        assertThat(renderDigest(List.of(notification))).isEqualTo(message);
+    }
+
+    private EmailMessage renderDigest(List<Notification> items) {
+        return renderer.render(EmailTestData.claimed(DELIVERY, 7L, DeliveryKind.DIGEST,
+                java.time.LocalDate.parse("2026-10-24"), 1), user, items);
+    }
+
     private EmailMessage render(Notification notification) {
         return renderer.render(EmailTestData.claimed(DELIVERY, 7L, DeliveryKind.IMMEDIATE, null, 1), user,
                 List.of(notification));
