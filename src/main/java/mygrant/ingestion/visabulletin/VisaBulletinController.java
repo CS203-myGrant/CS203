@@ -2,8 +2,10 @@ package mygrant.ingestion.visabulletin;
 
 import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
-import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -14,6 +16,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+
+import mygrant.common.Pages;
 
 /** Admin-only import and inspection of Visa Bulletin cutoff charts. */
 @RestController
@@ -51,8 +55,9 @@ public class VisaBulletinController {
     }
 
     @GetMapping("/entries/{month}")
-    public List<VisaBulletinStore.EntryView> entries(@PathVariable String month) {
-        return store.entries(parseMonth(month));
+    public Page<VisaBulletinStore.EntryView> entries(@PathVariable String month,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return Pages.of(store.entries(parseMonth(month)), pageable);
     }
 
     private YearMonth parseMonth(String month) {

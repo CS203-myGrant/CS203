@@ -3,6 +3,9 @@ package mygrant.user;
 import jakarta.validation.Valid;
 import mygrant.user.dto.LoginResponse;
 import mygrant.user.dto.RoleUpdateRequest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -11,8 +14,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/admin")
@@ -26,8 +27,8 @@ public class AdminController {
     }
 
     @GetMapping("/users")
-    public List<LoginResponse> users() {
-        return userService.listUsers();
+    public Page<LoginResponse> users(@PageableDefault(size = 20) Pageable pageable) {
+        return userService.listUsers(pageable);
     }
 
     @PatchMapping("/users/{id}/role")

@@ -1,8 +1,10 @@
 package mygrant.ingestion;
 
 import java.security.Principal;
-import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,6 +16,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
 
 import jakarta.validation.Valid;
+import mygrant.common.Pages;
 import mygrant.ingestion.dto.IngestPolicyRequest;
 import mygrant.ingestion.dto.IngestionResponse;
 import mygrant.ingestion.connector.ConnectorHealth;
@@ -65,7 +68,7 @@ public class IngestionController {
     /** Admin health view for all configured connectors. */
     @GetMapping("/status")
     @PreAuthorize("hasRole('ADMIN')")
-    public List<ConnectorHealth> status() {
-        return connectorStatusService.status();
+    public Page<ConnectorHealth> status(@PageableDefault(size = 20) Pageable pageable) {
+        return Pages.of(connectorStatusService.status(), pageable);
     }
 }

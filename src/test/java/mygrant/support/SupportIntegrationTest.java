@@ -47,11 +47,11 @@ class SupportIntegrationTest {
                 .header("Authorization", admin)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         long conversationId = -1;
-        for (var conversation : json.readTree(inbox)) {
+        for (var conversation : json.readTree(inbox).get("content")) {
             String messages = mvc.perform(get("/api/v1/feedback/admin/conversations/" + conversation.get("id").asLong() + "/messages")
                     .header("Authorization", manager)).andExpect(status().isOk())
                     .andReturn().getResponse().getContentAsString();
-            for (var message : json.readTree(messages)) {
+            for (var message : json.readTree(messages).get("content")) {
                 if (message.get("id").asLong() == messageId) {
                     assertThat(message.get("message").asText()).isEqualTo("Support delivery test");
                     conversationId = conversation.get("id").asLong();
@@ -65,8 +65,8 @@ class SupportIntegrationTest {
                 .andExpect(status().isOk());
         mvc.perform(get("/api/v1/feedback/messages").header("Authorization", applicant))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[1].message").value("We received your message"))
-                .andExpect(jsonPath("$[1].senderType").value("STAFF"));
+                .andExpect(jsonPath("$.content[1].message").value("We received your message"))
+                .andExpect(jsonPath("$.content[1].senderType").value("STAFF"));
         mvc.perform(get("/api/v1/feedback/admin/conversations/" + conversationId + "/messages")
                 .header("Authorization", stranger)).andExpect(status().isForbidden());
     }

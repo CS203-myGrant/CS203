@@ -2,8 +2,10 @@ package mygrant.user;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -48,9 +50,10 @@ public class ImmigrationDocumentController {
     }
 
     @GetMapping("/api/v1/profiles/me/documents")
-    public List<ImmigrationDocumentResponse> list(
-            Authentication authentication) {
-        return documentService.list(authentication.getName());
+    public Page<ImmigrationDocumentResponse> list(
+            Authentication authentication,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return documentService.list(authentication.getName(), pageable);
     }
 
     @GetMapping("/api/v1/profiles/me/documents/{documentId}/download")

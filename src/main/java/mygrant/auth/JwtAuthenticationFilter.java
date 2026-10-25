@@ -4,13 +4,16 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import mygrant.common.ProfileIncompleteException;
 import mygrant.user.UserRepository;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.servlet.HandlerExceptionResolver;
 
 import java.io.IOException;
 
@@ -19,10 +22,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UserRepository userRepository;
+    private final SecurityErrorHandler securityErrors;
 
-    public JwtAuthenticationFilter(JwtService jwtService, UserRepository userRepository) {
+    public JwtAuthenticationFilter(JwtService jwtService, UserRepository userRepository,
+            @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver) {
         this.jwtService = jwtService;
         this.userRepository = userRepository;
+        this.securityErrors = new SecurityErrorHandler(exceptionResolver);
     }
 
     @Override
@@ -59,8 +65,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         && !request.getRequestURI().equals("/api/v1/auth/logout")
                         && !request.getRequestURI().equals("/api/v1/account/deletion-request")
                         && !request.getRequestURI().equals("/api/v1/account/deletion-confirm")) {
-                    response.sendError(HttpServletResponse.SC_FORBIDDEN,
-                            "Complete your profile before using this feature");
+                    securityErrors.handle(request, response, new ProfileIncompleteException());
                     return;
                 }
 

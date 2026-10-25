@@ -1,7 +1,8 @@
 package mygrant.feedback;
 
-import java.util.List;
-
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,8 +32,9 @@ public class FeedbackController {
     }
 
     @GetMapping("/messages")
-    public List<FeedbackMessageResponse> messages(Authentication authentication) {
-        return feedbackService.applicantMessages(authentication.getName());
+    public Page<FeedbackMessageResponse> messages(Authentication authentication,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return feedbackService.applicantMessages(authentication.getName(), pageable);
     }
 
     @PostMapping("/messages")
@@ -43,15 +45,16 @@ public class FeedbackController {
 
     @GetMapping("/admin/conversations")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-    public List<FeedbackConversationResponse> conversations(Authentication authentication) {
-        return feedbackService.staffConversations(authentication.getName());
+    public Page<FeedbackConversationResponse> conversations(Authentication authentication,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return feedbackService.staffConversations(authentication.getName(), pageable);
     }
 
     @GetMapping("/admin/conversations/{id}/messages")
     @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-    public List<FeedbackMessageResponse> staffMessages(Authentication authentication,
-            @PathVariable Long id) {
-        return feedbackService.staffMessages(authentication.getName(), id);
+    public Page<FeedbackMessageResponse> staffMessages(Authentication authentication,
+            @PathVariable Long id, @PageableDefault(size = 20) Pageable pageable) {
+        return feedbackService.staffMessages(authentication.getName(), id, pageable);
     }
 
     @PostMapping("/admin/conversations/{id}/messages")

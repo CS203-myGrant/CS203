@@ -891,8 +891,7 @@ async function parseApiResponse(response){
 }
 async function loadImmigrationDocuments() {
   try {
-    const response = await apiFetch('/api/v1/profiles/me/documents');
-    state.documents = await parseApiResponse(response);
+    state.documents = await fetchAllPages('/api/v1/profiles/me/documents');
     state.documentsError = null;
   } catch (error) {
     state.documents = [];
@@ -931,6 +930,16 @@ async function apiFetch(path, options = {}) {
     ...options,
     headers
   });
+}
+/* List endpoints return a Spring Page; this follows every page so a view still shows the whole list. */
+async function fetchAllPages(path){
+  const items=[];
+  const separator=path.includes('?')?'&':'?';
+  for(let page=0;;page++){
+    const body=await parseApiResponse(await apiFetch(`${path}${separator}page=${page}&size=100`));
+    items.push(...body.content);
+    if(body.last || !body.content.length) return items;
+  }
 }
 async function refreshCurrentSession() {
   if (!refreshPromise) {
@@ -1038,8 +1047,7 @@ async function loadProfile(){
 }
 async function loadPolicies(){
   try{
-    const response=await apiFetch('/api/v1/policies');
-    state.policyRecords=await parseApiResponse(response);
+    state.policyRecords=await fetchAllPages('/api/v1/policies');
     state.policyError=null;
   }catch(error){ state.policyError=error.message; }
   // The profile and admin pages list policy dates for the test clock.
@@ -1209,8 +1217,7 @@ function startFeedbackBadgePoll(role){
     feedbackBadgeTimer = setInterval(async () => {
       if(!state.token || state.view === 'feedbackInbox') return;
       try{
-        const response = await apiFetch('/api/v1/feedback/admin/conversations');
-        const convos = await parseApiResponse(response);
+        const convos = await fetchAllPages('/api/v1/feedback/admin/conversations');
         updateInboxBadge(convos);
       }catch(e){}
     }, 10000);
@@ -1252,8 +1259,7 @@ async function loadAdminUsers(){
   state.adminUsersError = null;
   render();
   try{
-    const response = await apiFetch('/api/v1/admin/users');
-    state.adminUsers = await parseApiResponse(response);
+    state.adminUsers = await fetchAllPages('/api/v1/admin/users');
   }catch(error){
     state.adminUsers = [];
     state.adminUsersError = error.message;
@@ -2045,8 +2051,7 @@ async function loadVisaBulletin(){
     if(!state.bulletinMonth){
       state.bulletinMonth = state.bulletinHealth?.publicationMonth || bulletinCurrentMonth();
     }
-    const entriesResponse = await apiFetch(`/api/v1/ingestion/visa-bulletin/entries/${state.bulletinMonth}`);
-    state.bulletinEntries = await parseApiResponse(entriesResponse);
+    state.bulletinEntries = await fetchAllPages(`/api/v1/ingestion/visa-bulletin/entries/${state.bulletinMonth}`);
   }catch(error){
     state.bulletinEntries = [];
     state.bulletinError = error.message;
@@ -2514,8 +2519,7 @@ async function openHumanFeedback(){
 
 async function loadHumanMessages(forceRender){
   try{
-    const response=await apiFetch('/api/v1/feedback/messages');
-    const messages=await parseApiResponse(response);
+    const messages=await fetchAllPages('/api/v1/feedback/messages');
     const changed=messages.map(item=>item.id).join(',')!==state.feedbackMessages.map(item=>item.id).join(',');
     state.feedbackMessages=messages;
     if(state.view==='feedback'){
@@ -2556,8 +2560,7 @@ function renderFeedbackInbox(){
 
 async function loadStaffConversations(){
   try{
-    const response=await apiFetch('/api/v1/feedback/admin/conversations');
-    state.staffConversations=await parseApiResponse(response);
+    state.staffConversations=await fetchAllPages('/api/v1/feedback/admin/conversations');
     if(!state.selectedConversationId && state.staffConversations.length) state.selectedConversationId=state.staffConversations[0].id;
     if(state.view==='feedbackInbox') render();
     if(state.selectedConversationId) await loadStaffMessages(true);
@@ -2566,8 +2569,7 @@ async function loadStaffConversations(){
 }
 
 async function loadStaffConversationsOnce(){
-  const response=await apiFetch('/api/v1/feedback/admin/conversations');
-  state.staffConversations=await parseApiResponse(response);
+  state.staffConversations=await fetchAllPages('/api/v1/feedback/admin/conversations');
   if(state.view!=='feedbackInbox') updateInboxBadge(state.staffConversations);
 }
 
@@ -2579,8 +2581,7 @@ async function selectStaffConversation(id){
 async function loadStaffMessages(forceRender){
   if(!state.selectedConversationId) return;
   try{
-    const response=await apiFetch(`/api/v1/feedback/admin/conversations/${state.selectedConversationId}/messages`);
-    const messages=await parseApiResponse(response);
+    const messages=await fetchAllPages(`/api/v1/feedback/admin/conversations/${state.selectedConversationId}/messages`);
     const changed=messages.map(item=>item.id).join(',')!==state.feedbackMessages.map(item=>item.id).join(',');
     state.feedbackMessages=messages;
     if(state.view==='feedbackInbox' && (forceRender || changed)) render();

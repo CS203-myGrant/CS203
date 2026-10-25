@@ -1,7 +1,6 @@
 package mygrant.user;
 
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -9,6 +8,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import jakarta.validation.Valid;
 import mygrant.user.dto.LoginResponse;
@@ -17,7 +17,6 @@ import mygrant.user.dto.UserLogin;
 import mygrant.user.dto.RefreshTokenRequest;
 
 
-@CrossOrigin(origins = "*")
 @RestController
 public class UserController {
 
@@ -61,7 +60,7 @@ public class UserController {
             Authentication authentication) {
         return userRepository.findByEmail(authentication.getName())
                 .map(user -> ResponseEntity.ok(new LoginResponse(user)))
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
     }
 
 }

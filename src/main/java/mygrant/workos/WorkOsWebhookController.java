@@ -2,6 +2,7 @@ package mygrant.workos;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -13,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import mygrant.account.AccountPurgeService;
+import mygrant.common.ApiError;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
 
@@ -42,12 +44,13 @@ public class WorkOsWebhookController {
     }
 
     @PostMapping
-    public ResponseEntity<Void> receive(
+    public ResponseEntity<ApiError> receive(
             @RequestHeader(value = "WorkOS-Signature", required = false) String signature,
             HttpServletRequest request) throws IOException {
         String payload = new String(request.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         if (!verifier.isValid(payload, signature)) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest()
+                    .body(ApiError.of(HttpStatus.BAD_REQUEST, "Webhook signature is missing or invalid"));
         }
 
         try {
@@ -82,7 +85,8 @@ public class WorkOsWebhookController {
             return ResponseEntity.ok().build();
         } catch (Exception exception) {
             // A non-2xx response tells WorkOS to retry delivery.
-            return ResponseEntity.internalServerError().build();
+            return ResponseEntity.internalServerError()
+                    .body(ApiError.of(HttpStatus.INTERNAL_SERVER_ERROR, "Webhook could not be processed"));
         }
     }
 }

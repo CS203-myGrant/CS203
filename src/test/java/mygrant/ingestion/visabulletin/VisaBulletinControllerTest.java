@@ -82,7 +82,7 @@ class VisaBulletinControllerTest {
         mockMvc.perform(get(BASE + "/entries/2026-10")
                         .header("Authorization", "Bearer token"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].cutoffKind").value("CURRENT"));
+                .andExpect(jsonPath("$.content[0].cutoffKind").value("CURRENT"));
         mockMvc.perform(post(BASE + "/saved")
                         .header("Authorization", "Bearer token")
                         .contentType(MediaType.TEXT_HTML).content("<html></html>"))

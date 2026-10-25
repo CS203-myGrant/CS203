@@ -132,9 +132,12 @@ curl -X POST http://localhost:8080/api/v1/ingestion/visa-bulletin/2026-10 \
   -H "Authorization: Bearer $TOKEN"
 curl http://localhost:8080/api/v1/ingestion/visa-bulletin/health \
   -H "Authorization: Bearer $TOKEN"
-curl http://localhost:8080/api/v1/ingestion/visa-bulletin/entries/2026-10 \
+curl "http://localhost:8080/api/v1/ingestion/visa-bulletin/entries/2026-10?size=200" \
   -H "Authorization: Bearer $TOKEN"
 ```
+
+The entries come back as a [page](#pagination), 20 at a time unless you pass `size`; a
+month has about 150.
 
 If the Department of State blocks the server download (HTTP 403), use the
 **Open official page** link in the admin panel, save that page as HTML in a
@@ -311,6 +314,62 @@ outside it.
   `/api/v1/policies`, `/api/v1/ingestion/**` and `/api/v1/rag/**`. There are no aliases: the old
   paths return 404, like any unknown route. Authentication and roles did not change; every
   ingestion endpoint is still ADMIN only.
+- **List endpoints return a page, not an array.** Read the items from `content`; see
+  [Pagination](#pagination). This affects `GET /api/v1/policies`,
+  `/api/v1/profiles/me/documents`, `/api/v1/feedback/messages`,
+  `/api/v1/feedback/admin/conversations`, `/api/v1/feedback/admin/conversations/{id}/messages`,
+  `/api/v1/admin/users`, `/api/v1/ingestion/status` and
+  `/api/v1/ingestion/visa-bulletin/entries/{month}`. `/api/v1/notifications` was already a page.
+- **Every error has the same body.** See [Errors](#errors). Responses that used to differ: 401
+  (empty body), 403 and every Spring error such as an unknown route, wrong method or missing
+  parameter (Spring Boot's `{timestamp, status, error, path}` with no message), the RAG 503
+  (`{message}` only), and the WorkOS webhook's 400 and 500 (empty body).
+- **CORS is configured only in `SecurityConfig`.** Browsers may call the API from
+  `http://localhost:*` and `http://127.0.0.1:*`; other origins get 403. The
+  `@CrossOrigin("*")` on the auth endpoints is gone. It never took effect, because the security
+  filter refused other origins first, so no working caller changes.
+
+### Errors
+
+Every error from `/api/v1` is JSON with this shape, whatever the request's `Accept` header:
+
+```json
+{
+  "timestamp": "2026-10-25T14:03:12.481Z",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "Request validation failed",
+  "validationErrors": {"question": "must not be blank"}
+}
+```
+
+`validationErrors` maps field names to problems for request validation and is empty
+otherwise. `message` is safe to show to users. An unexpected server error answers 500 with a
+generic message and is logged in full on the server; responses never contain stack traces.
+The unsubscribe page behind alert emails is the one exception: it is an HTML page for people.
+
+### Pagination
+
+Every endpoint that returns a list returns a Spring Data page:
+
+```json
+{
+  "content": [ ... ],
+  "totalElements": 42,
+  "totalPages": 3,
+  "number": 0,
+  "size": 20,
+  "first": true,
+  "last": false,
+  ...
+}
+```
+
+Pass `page` (from 0) and `size` (default 20, at most 2000). Each list keeps the order it always
+had. `sort=property,asc|desc` reorders `/api/v1/policies` (by `id` otherwise); the other lists
+have a fixed order, such as newest first, and `sort` only orders items that tie on it.
+`ingestion/status` and `visa-bulletin/entries` are built in memory and ignore `sort`. An
+unknown sort property is a 400.
 
 Ingest a recent policy document:
 
@@ -529,7 +588,8 @@ reused, not that no vectors exist.
 Confirm the metadata was stored:
 
 ```bash
-curl -s http://localhost:8080/api/v1/policies | jq
+curl -s http://localhost:8080/api/v1/policies \
+  -H "Authorization: Bearer $TOKEN" | jq '.content[] | {id, externalId, title}'
 ```
 
 Then confirm that its vector chunks are retrievable for F-1:
@@ -609,7 +669,7 @@ Click **Notifications** in the sidebar, or read the same data from the terminal:
 
 ```bash
 curl -s http://localhost:8080/api/v1/notifications \
-  -H "Authorization: Bearer $TOKEN" | jq
+  -H "Authorization: Bearer $TOKEN" | jq '.content'
 ```
 
 Each entry reports whether it needs attention and which profile fields it refers to:

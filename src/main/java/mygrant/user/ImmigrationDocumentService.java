@@ -2,11 +2,12 @@ package mygrant.user;
 
 import java.io.IOException;
 import java.nio.file.Paths;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -67,13 +68,11 @@ public class ImmigrationDocumentService {
     }
 
     @Transactional(readOnly = true)
-    public List<ImmigrationDocumentResponse> list(String email) {
+    public Page<ImmigrationDocumentResponse> list(String email, Pageable pageable) {
         User user = currentUser(email);
 
-        return documentRepository.findByUserIdOrderByUploadedAtDesc(user.getId())
-                .stream()
-                .map(ImmigrationDocumentResponse::from)
-                .toList();
+        return documentRepository.findByUserIdOrderByUploadedAtDesc(user.getId(), pageable)
+                .map(ImmigrationDocumentResponse::from);
     }
 
     @Transactional(readOnly = true)
