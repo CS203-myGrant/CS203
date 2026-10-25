@@ -17,9 +17,16 @@ import mygrant.account.AccountPurgeService;
 import mygrant.common.ApiError;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
 @RequestMapping("/api/v1/webhooks/workos")
+@Tag(name = "Webhooks")
 public class WorkOsWebhookController {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(WorkOsWebhookController.class);
@@ -44,7 +51,18 @@ public class WorkOsWebhookController {
     }
 
     @PostMapping
+    @SecurityRequirements
+    @Operation(summary = "Receive a WorkOS event",
+            description = "`user.created` sends the welcome email and `user.deleted` deletes the local "
+                    + "account; other events are acknowledged and ignored.",
+            requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "The WorkOS event, exactly as signed", required = true,
+                    content = @Content(mediaType = "application/json")))
+    @ApiResponse(responseCode = "200", description = "Accepted", content = @Content)
+    @ApiResponse(responseCode = "400", description = "The WorkOS-Signature header is missing or invalid")
+    @ApiResponse(responseCode = "500", description = "The event could not be processed; WorkOS retries it")
     public ResponseEntity<ApiError> receive(
+            @Parameter(description = "WorkOS's signature of the raw body")
             @RequestHeader(value = "WorkOS-Signature", required = false) String signature,
             HttpServletRequest request) throws IOException {
         String payload = new String(request.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
