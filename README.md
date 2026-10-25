@@ -301,6 +301,17 @@ POST /api/v1/rag/query
 
 ## API
 
+Every API endpoint is under `/api/v1`. Only the browser UI (`/`, `/mygrant-prototype.html`),
+Swagger UI (`/swagger-ui.html`, `/v3/api-docs`) and the health probe (`/actuator/health`) are
+outside it.
+
+### Breaking changes in v1
+
+- **Unversioned routes removed.** `/policies`, `/ingestion/**` and `/rag/**` moved to
+  `/api/v1/policies`, `/api/v1/ingestion/**` and `/api/v1/rag/**`. There are no aliases: the old
+  paths return 404, like any unknown route. Authentication and roles did not change; every
+  ingestion endpoint is still ADMIN only.
+
 Ingest a recent policy document:
 
 ```http
