@@ -104,8 +104,9 @@ public class FederalRegisterIngestionService
                 document.htmlUrl(),
                 content), content.substring(0, Math.min(content.length(), MAX_INDEX_CHARACTERS)));
 
-        ProfileImpactAssessment impactAssessment = impactAssessmentService.assess(
-                request.userEmail(), document, prepared.agency(), content, classification);
+        ProfileImpactAssessment impactAssessment = request.assessImpact()
+                ? impactAssessmentService.assess(request.userEmail(), document, prepared.agency(), content, classification)
+                : null;
 
         return new FederalRegisterIngestionResponse(
                 document.documentNumber(), document.title(), document.type(), prepared.agency(),
