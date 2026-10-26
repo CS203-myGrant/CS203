@@ -31,7 +31,7 @@ class EmailApiDocsTest {
         JsonNode preferences = docs.path("paths").path("/api/v1/profiles/me/email-preferences");
 
         assertThat(preferences.path("get").path("responses").path("200").path("content")
-                .path("*/*").path("schema").path("$ref").asText()).endsWith("/EmailPreferencesResponse");
+                .path("application/json").path("schema").path("$ref").asText()).endsWith("/EmailPreferencesResponse");
         assertThat(preferences.path("put").path("requestBody").path("content")
                 .path("application/json").path("schema").path("$ref").asText()).endsWith("/EmailPreferencesRequest");
         assertThat(preferences.path("put").path("responses").has("400")).isTrue();
@@ -45,7 +45,7 @@ class EmailApiDocsTest {
                 .path("enum")).extracting(JsonNode::asText).contains("EMAIL_NOT_VERIFIED");
 
         JsonNode digestRun = docs.path("paths").path("/api/v1/admin/email/digest/run").path("post");
-        assertThat(digestRun.path("responses").path("200").path("content").path("*/*").path("schema")
+        assertThat(digestRun.path("responses").path("200").path("content").path("application/json").path("schema")
                 .path("$ref").asText()).endsWith("/DigestRunResponse");
         assertThat(digestRun.path("parameters")).extracting(parameter -> parameter.path("name").asText())
                 .containsExactly("date");

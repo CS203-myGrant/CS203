@@ -1,7 +1,7 @@
 package mygrant.policies;
 
-import java.util.List;
-
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -13,8 +13,8 @@ public class PolicyService {
         this.repository = repository;
     }
 
-    public List<PolicyDocument> findAll() {
-        return repository.findAll();
+    public Page<PolicyDocument> findAll(Pageable pageable) {
+        return repository.findAll(pageable);
     }
 
     public PolicyDocument findById(Long id) {

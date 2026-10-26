@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.util.Optional;
 
 import mygrant.account.AccountPurgeService;
+import mygrant.common.ApiError;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
 
@@ -56,7 +57,7 @@ class WorkOsWebhookControllerTest {
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setContent(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        ResponseEntity<Void> response = controller.receive("signature", request);
+        ResponseEntity<ApiError> response = controller.receive("signature", request);
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
         verify(accountPurgeService).purge(42L);

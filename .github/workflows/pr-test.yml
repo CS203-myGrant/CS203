@@ -44,6 +44,11 @@ jobs:
           java-version: "21"
           cache: maven
 
+      # Fails fast if the OpenAPI document is invalid, has a path outside /api/v1, is
+      # missing docs, or claims auth rules that differ from SecurityConfig. Run again below.
+      - name: Check API contract
+        run: ./mvnw test -Dtest=OpenApiContractTest
+
       - name: Run tests
         run: ./mvnw test
 

@@ -484,12 +484,35 @@
 
 <div class="modal-bg" id="modal-bg">
   <div class="modal">
-    <h3>Add a source to monitor</h3>
+    <h3 id="modal-title">Add a source to monitor</h3>
     <div class="field"><label>Source name</label><input id="modal-name" placeholder="e.g. DHS Federal Register feed"></div>
+    <div class="field"><label>Source type</label><select id="modal-type">
+      <option value="FEDERAL_REGISTER">Federal Register</option>
+      <option value="USCIS">USCIS</option>
+      <option value="VISA_BULLETIN">Visa Bulletin</option>
+      <option value="NEWS">News</option>
+      <option value="RSS">RSS</option>
+    </select></div>
     <div class="field"><label>URL</label><input id="modal-url" placeholder="https://..."></div>
+    <div class="field"><label>Poll interval (seconds)</label><input id="modal-interval" type="number" min="1" value="3600"></div>
+    <label><input id="modal-enabled" type="checkbox" checked> Enabled</label>
     <div class="form-actions">
       <button class="btn ghost small" onclick="closeModal()">Cancel</button>
-      <button class="btn small" onclick="addSource()">Add source</button>
+      <button class="btn small" onclick="saveSource()">Save source</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="review-modal-bg">
+  <div class="modal">
+    <h3>Edit review item before publishing</h3>
+    <input id="review-edit-id" type="hidden">
+    <div class="field"><label for="review-edit-title">Published title</label><input id="review-edit-title" maxlength="1000"></div>
+    <div class="field"><label for="review-edit-detail">Published explanation</label><textarea id="review-edit-detail" rows="6" maxlength="2000"></textarea></div>
+    <div class="field"><label for="review-edit-flag">Review label</label><input id="review-edit-flag" maxlength="100"></div>
+    <div class="form-actions">
+      <button class="btn ghost small" onclick="closeQueueEditor()">Cancel</button>
+      <button class="btn small" onclick="publishEditedQueue()">Publish edited item</button>
     </div>
   </div>
 </div>
@@ -650,6 +673,10 @@ const initialState = () => ({
   adminUsers: [],
   adminUsersLoading: false,
   adminUsersError: null,
+  adminSources: [],
+  adminSourcesLoading: false,
+  adminSourcesError: null,
+  editingSource: null,
   bulletinMonth: null,
   bulletinHealth: null,
   bulletinEntries: [],
@@ -897,8 +924,7 @@ async function parseApiResponse(response){
 }
 async function loadImmigrationDocuments() {
   try {
-    const response = await apiFetch('/api/v1/profiles/me/documents');
-    state.documents = await parseApiResponse(response);
+    state.documents = await fetchAllPages('/api/v1/profiles/me/documents');
     state.documentsError = null;
   } catch (error) {
     state.documents = [];
@@ -937,6 +963,16 @@ async function apiFetch(path, options = {}) {
     ...options,
     headers
   });
+}
+/* List endpoints return a Spring Page; this follows every page so a view still shows the whole list. */
+async function fetchAllPages(path){
+  const items=[];
+  const separator=path.includes('?')?'&':'?';
+  for(let page=0;;page++){
+    const body=await parseApiResponse(await apiFetch(`${path}${separator}page=${page}&size=100`));
+    items.push(...body.content);
+    if(body.last || !body.content.length) return items;
+  }
 }
 async function refreshCurrentSession() {
   if (!refreshPromise) {
@@ -1044,8 +1080,7 @@ async function loadProfile(){
 }
 async function loadPolicies(){
   try{
-    const response=await apiFetch('/api/v1/policies');
-    state.policyRecords=await parseApiResponse(response);
+    state.policyRecords=await fetchAllPages('/api/v1/policies');
     state.policyError=null;
   }catch(error){ state.policyError=error.message; }
   // The profile and admin pages list policy dates for the test clock.
@@ -1215,8 +1250,7 @@ function startFeedbackBadgePoll(role){
     feedbackBadgeTimer = setInterval(async () => {
       if(!state.token || state.view === 'feedbackInbox') return;
       try{
-        const response = await apiFetch('/api/v1/feedback/admin/conversations');
-        const convos = await parseApiResponse(response);
+        const convos = await fetchAllPages('/api/v1/feedback/admin/conversations');
         updateInboxBadge(convos);
       }catch(e){}
     }, 10000);
@@ -1247,7 +1281,7 @@ function goto(view, param){
   render();
   // Reload both on every visit so a policy imported since login shows up here.
   if(view==='dashboard'){ loadPolicies(); loadNotifications(); loadTestClock(); }
-  if(view==='admin' && state.role==='admin'){ loadAdminUsers(); loadTestClock(); loadPolicies(); }
+  if(view==='admin' && state.role==='admin'){ loadAdminUsers(); loadAdminSources(); loadTestClock(); loadPolicies(); }
   if(view==='visaBulletin' && state.role==='admin'){ loadVisaBulletin(); }
   if(view==='feedback') openHumanFeedback();
   if(view==='feedbackInbox'){ state.inboxLastSeen=Date.now(); updateInboxBadge(state.staffConversations); loadStaffConversations(); }
@@ -1258,13 +1292,35 @@ async function loadAdminUsers(){
   state.adminUsersError = null;
   render();
   try{
-    const response = await apiFetch('/api/v1/admin/users');
-    state.adminUsers = await parseApiResponse(response);
+    state.adminUsers = await fetchAllPages('/api/v1/admin/users');
   }catch(error){
     state.adminUsers = [];
     state.adminUsersError = error.message;
   }finally{
     state.adminUsersLoading = false;
+    if(state.view === 'admin') render();
+  }
+}
+async function loadAdminSources(){
+  state.adminSourcesLoading = true;
+  state.adminSourcesError = null;
+  if(state.view === 'admin') render();
+  try{
+    const [sourceResponse, statusResponse] = await Promise.all([
+      apiFetch('/api/v1/admin/sources'),
+      apiFetch('/api/v1/ingestion/status')
+    ]);
+    const sourcePayload = await parseApiResponse(sourceResponse);
+    const sources = sourcePayload?.content || sourcePayload;
+    const statusPayload = await parseApiResponse(statusResponse);
+    const statuses = statusPayload?.content || statusPayload;
+    const byId = new Map((statuses || []).map(status => [status.sourceId, status]));
+    state.adminSources = (sources || []).map(source => ({...source, health: byId.get(source.id) || null}));
+  }catch(error){
+    state.adminSources = [];
+    state.adminSourcesError = error.message;
+  }finally{
+    state.adminSourcesLoading = false;
     if(state.view === 'admin') render();
   }
 }
@@ -2016,7 +2072,7 @@ function renderQueue(){
       </div>
       <div class="entry-action" style="flex-direction:column;gap:8px;">
         <button class="btn small" onclick="resolveQueue('${q.id}','approve')">Approve</button>
-        <button class="btn ghost small" onclick="resolveQueue('${q.id}','edit')">Edit &amp; publish</button>
+        <button class="btn ghost small" onclick="openQueueEditor('${q.id}')">Edit &amp; publish</button>
       </div>
     </div>`).join('');
   return `
@@ -2026,7 +2082,33 @@ function renderQueue(){
 }
 function resolveQueue(id, action){
   queueItems = queueItems.filter(q=>q.id!==id);
-  showToast(action==='approve' ? 'Approved and published to the user.' : 'Saved your edit and published.');
+  showToast(action==='approve' ? 'Approved and published to the user.' : 'Published.');
+  goto('queue');
+}
+function openQueueEditor(id){
+  const item = queueItems.find(q=>q.id===id);
+  if(!item) return;
+  document.getElementById('review-edit-id').value = item.id;
+  document.getElementById('review-edit-title').value = item.title;
+  document.getElementById('review-edit-detail').value = item.detail;
+  document.getElementById('review-edit-flag').value = item.flag;
+  document.getElementById('review-modal-bg').classList.add('show');
+}
+function closeQueueEditor(){ document.getElementById('review-modal-bg').classList.remove('show'); }
+function publishEditedQueue(){
+  const id = document.getElementById('review-edit-id').value;
+  const item = queueItems.find(q=>q.id===id);
+  if(!item) return;
+  const title = document.getElementById('review-edit-title').value.trim();
+  const detail = document.getElementById('review-edit-detail').value.trim();
+  const flag = document.getElementById('review-edit-flag').value.trim();
+  if(!title || !detail || !flag){ showToast('Complete all review fields before publishing.'); return; }
+  item.title = title;
+  item.detail = detail;
+  item.flag = flag;
+  queueItems = queueItems.filter(q=>q.id!==id);
+  closeQueueEditor();
+  showToast('Your edits were published to the user.');
   goto('queue');
 }
 
@@ -2051,8 +2133,7 @@ async function loadVisaBulletin(){
     if(!state.bulletinMonth){
       state.bulletinMonth = state.bulletinHealth?.publicationMonth || bulletinCurrentMonth();
     }
-    const entriesResponse = await apiFetch(`/api/v1/ingestion/visa-bulletin/entries/${state.bulletinMonth}`);
-    state.bulletinEntries = await parseApiResponse(entriesResponse);
+    state.bulletinEntries = await fetchAllPages(`/api/v1/ingestion/visa-bulletin/entries/${state.bulletinMonth}`);
   }catch(error){
     state.bulletinEntries = [];
     state.bulletinError = error.message;
@@ -2171,13 +2252,23 @@ function renderVisaBulletin(){
 }
 
 function renderAdmin(){
-  const rows = sources.map((s,i)=>`
-    <tr>
-      <td>${s.name}</td>
-      <td><span class="status-dot ${s.status==='broken'?'warn':''}">${s.status==='broken'?'Needs attention':'Healthy'}</span></td>
-      <td style="font-family:var(--mono);font-size:12px;color:var(--muted);">${s.last}</td>
-      <td><button class="btn ghost small" onclick="toggleSource(${i})">${s.status==='disabled'?'Enable':'Disable'}</button></td>
-    </tr>`).join('');
+  const rows = state.adminSources.map(source=>{
+    const health = source.health;
+    const failed = (health?.failureCount || 0) > 0 || health?.lastError;
+    const status = !health?.lastRunAt ? 'Not synced' : failed ? 'Needs attention' : 'Healthy';
+    const statusClass = !health?.lastRunAt || failed ? 'warn' : '';
+    return `<tr>
+      <td><strong>${escapeHtml(source.name)}</strong><br><span class="tag">${escapeHtml(source.type)}</span></td>
+      <td><span class="status-dot ${statusClass}">${escapeHtml(status)}</span><br><small>${source.enabled?'Enabled':'Disabled'}</small></td>
+      <td style="font-family:var(--mono);font-size:12px;color:var(--muted);">${health?.lastRunAt ? escapeHtml(formatTimestamp(health.lastRunAt)) : 'Never'}</td>
+      <td>${health?.documentsFetched ?? 0}</td>
+      <td>${health?.chunksVectorised ?? 0}</td>
+      <td>${health?.failureCount ?? 0}</td>
+      <td><button class="btn ghost small" onclick="openSourceModal(${source.id})">Edit</button>
+        <button class="btn ghost small" onclick="toggleSource(${source.id},${!source.enabled})">${source.enabled?'Disable':'Enable'}</button>
+        <button class="btn small" onclick="syncSource(${source.id})" ${!source.enabled?'disabled':''}>Sync now</button></td>
+    </tr>${health?.lastError ? `<tr><td colspan="7"><div class="rag-error">${escapeHtml(health.lastError)}</div></td></tr>` : ''}`;
+  }).join('');
   const userRows = state.adminUsers.map(user=>`
     <tr>
       <td>${escapeHtml(user.userName || 'Unnamed user')}</td>
@@ -2191,28 +2282,68 @@ function renderAdmin(){
     : state.adminUsersError
       ? `<div class="rag-error">${escapeHtml(state.adminUsersError)}</div>`
       : `<table><tr><th>Name</th><th>Email</th><th>Role</th></tr>${userRows || '<tr><td colspan="3">No users found.</td></tr>'}</table>`;
+  const sourceContent = state.adminSourcesLoading
+    ? '<p class="rag-status">Loading monitored sources...</p>'
+    : state.adminSourcesError
+      ? `<div class="rag-error">${escapeHtml(state.adminSourcesError)}</div>`
+      : `<table style="margin-bottom:18px;"><tr><th>Source</th><th>Status</th><th>Last run</th><th>Docs</th><th>Chunks</th><th>Failures</th><th>Actions</th></tr>${rows || '<tr><td colspan="7">No monitored sources yet.</td></tr>'}</table>`;
   return `
     <div class="page-head">
       <h1>Monitored sources</h1>
       <p class="sub">Where myGRANT pulls policy changes from.</p>
     </div>
-    <table style="margin-bottom:18px;">
-      <tr><th>Source</th><th>Status</th><th>Last synced</th><th></th></tr>
-      ${rows}
-    </table>
-    <button class="btn ghost small" onclick="openModal()">Add a source</button>
+    ${sourceContent}
+    <button class="btn ghost small" onclick="openSourceModal()">Add a source</button>
+    <button class="btn small" onclick="syncAllSources()" ${state.adminSources.length?'':'disabled'}>Sync all enabled</button>
     <div class="page-head" style="margin-top:42px;"><h2>User access</h2><p class="sub">Assign applicant, manager, or administrator access.</p></div>
     ${usersContent}
     ${renderTestClock('global')}
   `;
 }
-function toggleSource(i){
-  sources[i].status = sources[i].status==='disabled' ? 'ok' : 'disabled';
-  showToast(sources[i].status==='disabled' ? 'Source disabled.' : 'Source enabled.');
-  render();
+async function toggleSource(id, enabled){
+  try{
+    const response = await apiFetch(`/api/v1/admin/sources/${id}/enabled`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})});
+    await parseApiResponse(response);
+    showToast(enabled ? 'Source enabled.' : 'Source disabled; its history is retained.');
+    await loadAdminSources();
+  }catch(error){ showToast(error.message); }
 }
-function openModal(){ document.getElementById('modal-bg').classList.add('show'); }
-function closeModal(){ document.getElementById('modal-bg').classList.remove('show'); }
+function openSourceModal(id){
+  state.editingSource = id ? state.adminSources.find(source => source.id === id) : null;
+  document.getElementById('modal-title').textContent = state.editingSource ? 'Edit monitored source' : 'Add a source to monitor';
+  document.getElementById('modal-name').value = state.editingSource?.name || '';
+  document.getElementById('modal-type').value = state.editingSource?.type || 'FEDERAL_REGISTER';
+  document.getElementById('modal-url').value = state.editingSource?.url || '';
+  document.getElementById('modal-interval').value = state.editingSource?.pollIntervalSeconds || 3600;
+  document.getElementById('modal-enabled').checked = state.editingSource ? state.editingSource.enabled : true;
+  document.getElementById('modal-bg').classList.add('show');
+}
+function closeModal(){ state.editingSource = null; document.getElementById('modal-bg').classList.remove('show'); }
+async function saveSource(){
+  const payload = {name:document.getElementById('modal-name').value.trim(),type:document.getElementById('modal-type').value,url:document.getElementById('modal-url').value.trim(),pollIntervalSeconds:Number(document.getElementById('modal-interval').value),enabled:document.getElementById('modal-enabled').checked};
+  if(!payload.name || !payload.url || !payload.pollIntervalSeconds){ showToast('Complete the source fields first.'); return; }
+  try{
+    const path = state.editingSource ? `/api/v1/admin/sources/${state.editingSource.id}` : '/api/v1/admin/sources';
+    const response = await apiFetch(path,{method:state.editingSource?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    await parseApiResponse(response);
+    const wasEditing = Boolean(state.editingSource);
+    closeModal();
+    showToast(wasEditing ? 'Source updated.' : 'Source added.');
+    await loadAdminSources();
+  }catch(error){ showToast(error.message); }
+}
+async function syncSource(id){ await runSourceSync({sourceId:id}); }
+async function syncAllSources(){ await runSourceSync({}); }
+async function runSourceSync(payload){
+  try{
+    const response = await apiFetch('/api/v1/ingestion/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const result = await parseApiResponse(response);
+    const results = Array.isArray(result) ? result : [result];
+    const failed = results.filter(item => !item.succeeded).length;
+    showToast(failed ? `${failed} source sync(s) need attention.` : 'Source sync completed.');
+    await loadAdminSources();
+  }catch(error){ showToast(error.message); }
+}
 function renderRag(){
   const s = ragScenarios[state.ragActive];
   const tabs = Object.keys(ragScenarios).map(k=>`
@@ -2520,8 +2651,7 @@ async function openHumanFeedback(){
 
 async function loadHumanMessages(forceRender){
   try{
-    const response=await apiFetch('/api/v1/feedback/messages');
-    const messages=await parseApiResponse(response);
+    const messages=await fetchAllPages('/api/v1/feedback/messages');
     const changed=messages.map(item=>item.id).join(',')!==state.feedbackMessages.map(item=>item.id).join(',');
     state.feedbackMessages=messages;
     if(state.view==='feedback'){
@@ -2562,8 +2692,7 @@ function renderFeedbackInbox(){
 
 async function loadStaffConversations(){
   try{
-    const response=await apiFetch('/api/v1/feedback/admin/conversations');
-    state.staffConversations=await parseApiResponse(response);
+    state.staffConversations=await fetchAllPages('/api/v1/feedback/admin/conversations');
     if(!state.selectedConversationId && state.staffConversations.length) state.selectedConversationId=state.staffConversations[0].id;
     if(state.view==='feedbackInbox') render();
     if(state.selectedConversationId) await loadStaffMessages(true);
@@ -2572,8 +2701,7 @@ async function loadStaffConversations(){
 }
 
 async function loadStaffConversationsOnce(){
-  const response=await apiFetch('/api/v1/feedback/admin/conversations');
-  state.staffConversations=await parseApiResponse(response);
+  state.staffConversations=await fetchAllPages('/api/v1/feedback/admin/conversations');
   if(state.view!=='feedbackInbox') updateInboxBadge(state.staffConversations);
 }
 
@@ -2585,8 +2713,7 @@ async function selectStaffConversation(id){
 async function loadStaffMessages(forceRender){
   if(!state.selectedConversationId) return;
   try{
-    const response=await apiFetch(`/api/v1/feedback/admin/conversations/${state.selectedConversationId}/messages`);
-    const messages=await parseApiResponse(response);
+    const messages=await fetchAllPages(`/api/v1/feedback/admin/conversations/${state.selectedConversationId}/messages`);
     const changed=messages.map(item=>item.id).join(',')!==state.feedbackMessages.map(item=>item.id).join(',');
     state.feedbackMessages=messages;
     if(state.view==='feedbackInbox' && (forceRender || changed)) render();
@@ -2604,14 +2731,6 @@ async function sendStaffFeedback(event){
   }catch(error){ state.feedbackError=error.message; render(); }
 }
 
-function addSource(){
-  const name = document.getElementById('modal-name').value.trim();
-  if(!name){ showToast('Give the source a name first.'); return; }
-  sources.push({name, status:'ok', last:'just now'});
-  closeModal();
-  showToast('Source added.');
-  render();
-}
 restoreSession();
 if(workosRedirectError) setAuthMessage(workosRedirectError);
 </script>

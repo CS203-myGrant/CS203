@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.servlet.HandlerExceptionResolver;
 
 import jakarta.servlet.FilterChain;
 import mygrant.user.User;
@@ -48,8 +49,8 @@ class JwtAuthenticationFilterTests {
         when(userRepository.findByEmail("student@example.com"))
                 .thenReturn(Optional.of(user));
 
-        JwtAuthenticationFilter filter =
-                new JwtAuthenticationFilter(jwtService, userRepository);
+        JwtAuthenticationFilter filter = new JwtAuthenticationFilter(
+                jwtService, userRepository, mock(HandlerExceptionResolver.class));
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setRequestURI("/api/v1/profiles/me");

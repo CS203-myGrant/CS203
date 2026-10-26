@@ -16,7 +16,8 @@ import mygrant.auth.JwtService;
 import mygrant.auth.SecurityConfig;
 import mygrant.ingestion.dto.IngestionResponse;
 import mygrant.ingestion.connector.ConnectorHealth;
-import mygrant.ingestion.connector.ConnectorStatusService;
+import mygrant.ingestion.dto.IngestionStatusResponse;
+import mygrant.ingestion.SourceSyncService;
 import mygrant.ingestion.connector.SourceIdentity;
 import mygrant.ingestion.federalregister.FederalRegisterIngestionService;
 import mygrant.policies.SourceType;
@@ -46,7 +47,7 @@ class IngestionControllerSecurityTest {
     private FederalRegisterIngestionService federalRegisterIngestionService;
 
     @MockBean
-    private ConnectorStatusService connectorStatusService;
+    private SourceSyncService sourceSyncService;
 
     @MockBean
     private JwtService jwtService;
@@ -98,14 +99,17 @@ class IngestionControllerSecurityTest {
     @Test
     void adminCanSeeAllConnectorHealthButApplicantCannot() throws Exception {
         stubToken(UserRole.ADMIN);
-        when(connectorStatusService.status()).thenReturn(List.of(
-                ConnectorHealth.notChecked(new SourceIdentity("FEDERAL_REGISTER", SourceType.PRIMARY)),
-                ConnectorHealth.notChecked(new SourceIdentity("VISA_BULLETIN", SourceType.PRIMARY))));
+        when(sourceSyncService.status()).thenReturn(List.of(
+                new IngestionStatusResponse(1L, "Federal Register", mygrant.sources.PolicySourceType.FEDERAL_REGISTER,
+                        "https://www.federalregister.gov", true, null, 0, 0, 0, null),
+                new IngestionStatusResponse(2L, "Visa Bulletin", mygrant.sources.PolicySourceType.VISA_BULLETIN,
+                        "https://travel.state.gov", true, null, 0, 0, 0, null)));
         mockMvc.perform(get("/api/v1/ingestion/status")
                         .header("Authorization", "Bearer token"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].source.id").value("FEDERAL_REGISTER"))
-                .andExpect(jsonPath("$[1].source.id").value("VISA_BULLETIN"));
+                .andExpect(jsonPath("$.content[0].sourceType").value("FEDERAL_REGISTER"))
+                .andExpect(jsonPath("$.content[1].sourceType").value("VISA_BULLETIN"))
+                .andExpect(jsonPath("$.totalElements").value(2));
 
         stubToken(UserRole.APPLICANT);
         mockMvc.perform(get("/api/v1/ingestion/status")

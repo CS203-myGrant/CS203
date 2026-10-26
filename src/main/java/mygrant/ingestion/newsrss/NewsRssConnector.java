@@ -18,6 +18,7 @@ import mygrant.ingestion.connector.SourceIdentity;
 import mygrant.ingestion.dto.IngestPolicyRequest;
 import mygrant.policies.PolicyStatus;
 import mygrant.policies.SourceType;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 /** Selects student and work-visa news summaries for secondary evidence. */
 @Service
@@ -70,6 +71,7 @@ public class NewsRssConnector implements DataConnector<NewsRssConnector.Request,
     @Override
     public Result persistDeduplicated(NewsRssParser.ParsedFeed feed, Request request) {
         int imported = 0;
+        int chunksVectorised = 0;
         int duplicates = 0;
         int unrelated = 0;
         List<String> failures = new ArrayList<>();
@@ -91,6 +93,7 @@ public class NewsRssConnector implements DataConnector<NewsRssConnector.Request,
                     duplicates++;
                 } else {
                     imported++;
+                    chunksVectorised += saved.chunksIndexed();
                 }
             } catch (PolicyAlreadyExistsException exception) {
                 // An edited summary at the same URL must not overwrite old evidence.
@@ -104,7 +107,7 @@ public class NewsRssConnector implements DataConnector<NewsRssConnector.Request,
                     + " article(s): " + String.join(", ", failures));
         }
         return new Result(feed.articles().size(), imported, duplicates, unrelated,
-                feed.invalidItems(), NewsRssClient.FEED_URL);
+                feed.invalidItems(), NewsRssClient.FEED_URL, chunksVectorised);
     }
 
     @Override
@@ -132,6 +135,12 @@ public class NewsRssConnector implements DataConnector<NewsRssConnector.Request,
     }
 
     public record Request(String savedXml) {}
+    @Schema(name = "NewsRssImportResult")
     public record Result(int articles, int imported, int duplicates, int unrelated,
-            int invalidItems, String feedUrl) {}
+            int invalidItems, String feedUrl, int chunksVectorised) {
+        public Result(int articles, int imported, int duplicates, int unrelated,
+                int invalidItems, String feedUrl) {
+            this(articles, imported, duplicates, unrelated, invalidItems, feedUrl, 0);
+        }
+    }
 }

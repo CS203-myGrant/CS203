@@ -1,12 +1,13 @@
 package mygrant.user;
 
 import java.util.Optional;
-import java.util.List;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Objects;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -206,9 +207,8 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public List<LoginResponse> listUsers() {
-        return userRepository.findAllByActiveTrueOrderByIdAsc().stream()
-                .map(LoginResponse::new)
-                .toList();
+    public Page<LoginResponse> listUsers(Pageable pageable) {
+        return userRepository.findAllByActiveTrueOrderByIdAsc(pageable)
+                .map(LoginResponse::new);
     }
 }
