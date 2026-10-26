@@ -572,7 +572,13 @@ let sources = [
   {name:'News API (secondary reporting)', status:'ok', last:'12 minutes ago'},
 ];
 
-const API_BASE = location.port === '8080' ? '' : 'http://localhost:8080';
+const configuredApiOrigin = window.MYGRANT_API_ORIGIN;
+const localPreviewOrigin = location.protocol === 'http:'
+  && ['localhost', '127.0.0.1'].includes(location.hostname)
+  && location.port !== '8080'
+  ? 'http://localhost:8080'
+  : location.origin;
+const API_BASE = (configuredApiOrigin || localPreviewOrigin).replace(/\/$/, '');
 /* Links in alert emails open #notification=<id> or #view=profile. The target waits in
    sessionStorage until the user is in the app, because WorkOS sign-in leaves this page
    and comes back with its own hash. */

@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+  ai:
+    ollama:
+      base-url: ${OLLAMA_BASE_URL}
+      embedding:
+        model: ${OLLAMA_EMBEDDING_MODEL:mxbai-embed-large}
+
+jwt:
+  secret: ${JWT_SECRET}
