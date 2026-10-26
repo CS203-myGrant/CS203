@@ -18,6 +18,7 @@ import mygrant.feedback.FeedbackAccessDeniedException;
 import mygrant.feedback.FeedbackNotFoundException;
 import mygrant.notifications.NotificationNotFoundException;
 import mygrant.policies.PolicyNotFoundException;
+import mygrant.sources.PolicySourceNotFoundException;
 import mygrant.user.UserNotFoundException;
 
 
@@ -36,6 +37,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(PolicyNotFoundException.class)
     public ResponseEntity<ApiError> handleNotFound(PolicyNotFoundException exception) {
+        return response(HttpStatus.NOT_FOUND, exception.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(PolicySourceNotFoundException.class)
+    public ResponseEntity<ApiError> handlePolicySourceNotFound(PolicySourceNotFoundException exception) {
         return response(HttpStatus.NOT_FOUND, exception.getMessage(), Map.of());
     }
 
