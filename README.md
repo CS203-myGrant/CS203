@@ -8,6 +8,147 @@ Java/Spring Boot backend for profile-aware immigration policy retrieval and impa
 - Docker Desktop (for PostgreSQL with pgvector)
 - Ollama with the `mxbai-embed-large` embedding model
 
+## Deployment (CS203-82)
+
+### Recorded choices
+
+- **App hosting:** Render Docker web service. The app is a stateless Java 21
+  Spring Boot HTTP service and already serves the checked-in frontend. Render
+  builds from the repository Dockerfile and exposes a public HTTPS URL.
+- **Database:** Render managed PostgreSQL, with a separate database for staging
+  and production. The existing Flyway migrations manage relational schema;
+  `V8__enable_pgvector.sql` enables pgvector, and Spring AI creates the
+  `policy_chunks` table on startup.
+- **LLM:** Keep Spring AI's existing Ollama integration and call a separately
+  reachable Ollama-compatible endpoint. The app container only makes HTTP
+  requests, so begin with CPU-hosted inference and measure latency/throughput
+  before considering GPU capacity. The endpoint must provide the configured
+  embedding and chat models (`mxbai-embed-large` and `llama3.2` by default).
+
+These are deployment recommendations based on the current code, not accounts
+or services already provisioned. Render supports Docker builds and PostgreSQL
+with pgvector ([Docker deployment](https://render.com/docs/docker),
+[PostgreSQL extensions](https://render.com/docs/postgresql-extensions)).
+
+### Build and run the container locally
+
+```bash
+cp .env.example .env
+docker compose up -d postgres
+docker build -t policy-impact .
+docker run --rm --env-file .env \
+  -e DATABASE_URL=jdbc:postgresql://host.docker.internal:5432/policy_impact \
+  -e DATABASE_PASSWORD=policy_password \
+  -e JWT_SECRET="$(openssl rand -base64 32)" \
+  -p 8080:8080 policy-impact
+```
+
+The Compose file's fallback password is for local development only. For a
+non-container Spring run, use `DATABASE_URL=jdbc:postgresql://localhost:5432/policy_impact`.
+
+Run Ollama on the host and ensure the models are installed. From a container,
+`localhost` refers to that container, so set `OLLAMA_BASE_URL` to an address
+reachable from the app container (for Docker Desktop, often
+`http://host.docker.internal:11434`). For cloud deployments use a private or
+otherwise secured endpoint reachable from the app service.
+
+### Staging and production
+
+Create one Render Docker web service and one managed PostgreSQL database per
+environment. Set `SPRING_PROFILES_ACTIVE=staging` or `production` on its service
+and only that environment's database credentials. Each first deployment applies
+Flyway migrations at startup; pgvector must be available to the database role.
+If the app database role cannot create extensions, have the database administrator
+enable `vector` once before the first app deploy. Set the web service's HTTP port
+to `8080` (or provide `PORT`, which the app honors).
+Use separate JWT signing keys, Ollama endpoints, and connector callback/webhook
+configuration in the two environments. Keep database backups enabled before
+applying schema changes. Never share a database between staging and production.
+
+Set these app variables in each service's environment/secret settings:
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `SPRING_PROFILES_ACTIVE` | Yes in hosting | `staging` or `production` |
+| `DATABASE_URL` | Yes | JDBC URL for that environment's PostgreSQL database |
+| `DATABASE_USERNAME` | Yes | Database login name |
+| `DATABASE_PASSWORD` | Yes | Database credential; secret |
+| `JWT_SECRET` | Yes | Base64-encoded signing key, at least 32 bytes; secret |
+| `OLLAMA_BASE_URL` | Yes | Reachable Ollama-compatible inference endpoint |
+| `CORS_ALLOWED_ORIGINS` | Only for a separately hosted frontend | Comma-separated exact frontend origins; omit for same-origin deployment |
+| `OLLAMA_EMBEDDING_MODEL` | No | Defaults to `mxbai-embed-large` |
+| `OLLAMA_CHAT_MODEL` | No | Defaults to `llama3.2` |
+| `JWT_EXPIRATION_MS` | No | Defaults to `3600000` |
+
+For the CS203-80 WorkOS connector, configure its API/client credentials and
+environment-specific callback/webhook URLs in the platform secret store once
+those connector variables are finalized. The tracked top-level app currently
+does not contain WorkOS integration code. Preserve the frontend at `/`; the
+Docker image copies the existing `app/` directory into the runtime image.
+
+The `.env.example` file contains variable names and blank credential fields,
+not usable secrets. Keep real values in Render's environment settings, and never
+commit `.env`. The local Compose PostgreSQL service is only for development.
+
+### CI/CD and production promotion (CS203-82)
+
+The GitHub Actions workflows implement this release path:
+
+```text
+Pull request to main -> Maven verification + Docker build
+Merge to main        -> build/push SHA-tagged image -> deploy that image to staging
+Staging              -> HTTPS health, login, profile, notification API and SSE checks
+Production           -> manually dispatch promotion for a staging-passed commit SHA
+Rollback             -> manually promote a previous staging-passed SHA
+```
+
+The staging workflow builds and publishes `ghcr.io/<owner>/<repository>:<commit-sha>`
+to GitHub Container Registry, then asks Render to deploy that image. Configure both
+Render services as image-backed services using that image name. Render must be able
+to pull it: make the package public or configure a Render registry credential for
+GitHub Container Registry. The deployment action targets the exact SHA image, so
+production promotion reuses the image that passed staging.
+
+Configure GitHub repository environments and values before enabling the workflows:
+
+| Environment | Variables | Secrets |
+| --- | --- | --- |
+| `staging` | `RENDER_SERVICE_ID`, `APP_BASE_URL` | `RENDER_API_KEY`, `SMOKE_USER_EMAIL`, `SMOKE_USER_PASSWORD` |
+| `production` | `RENDER_SERVICE_ID`, `APP_BASE_URL` | `RENDER_API_KEY`, `SMOKE_USER_EMAIL`, `SMOKE_USER_PASSWORD` |
+
+Use the Render service ID and an HTTPS base URL for each environment. Create a
+dedicated smoke-test account in each database. In GitHub repository settings,
+require at least one reviewer for the `production` environment and restrict its
+deployment branch to `main`. The production workflow only runs from `main`; it
+accepts a full commit SHA and checks that the SHA is on `main` and has a successful
+staging workflow before waiting for the environment approval. Protect `main` with
+pull requests, required review, and the `Build and deploy staging / verify` check;
+the staging workflow only deploys after a commit reaches that protected branch.
+
+The frontend and API currently ship from the same Spring Boot service. The frontend
+therefore uses the current browser origin as its API origin in staging and production;
+local static previews continue to call `http://localhost:8080`. If the frontend is
+later hosted separately, set `window.MYGRANT_API_ORIGIN` before the app script loads
+and set `CORS_ALLOWED_ORIGINS` on each service to that environment's exact HTTPS
+frontend origin. Do not use `*` for hosted origins. Same-origin deployments do not
+need cross-origin access.
+
+The active app uses JWT login and has no WorkOS callback route. Once CS203-80 adds or
+confirms the callback implementation, register its staging and production HTTPS
+callback URLs separately in WorkOS and the corresponding service settings. Do not
+register callback URLs for routes that the deployed app does not implement.
+
+After staging deploys, CI checks health, signs in with the staging smoke account,
+calls the authenticated profile and notification APIs, and opens the authenticated
+notification event stream. Also check browser notification permission and delivery
+manually in a real staging browser as part of CS203-69 release review.
+
+To roll back, open **Actions → Promote known-good build to production**, select the
+`main` branch, and enter the full SHA of the last known-good staging deployment.
+The workflow verifies that SHA and deploys its existing GHCR image after production
+approval. Render's Deploys history also records each deployment and supports its
+dashboard rollback action. Keep previous SHA-tagged images available in GHCR.
+
 Set `JAVA_HOME` to your JDK installation before using the Maven Wrapper.
 
 ## Run locally in WSL
@@ -639,7 +780,7 @@ This is usually correct behaviour rather than a fault:
 
 To re-run the demo with a document you already imported, delete it and import it again.
 The alerts cascade with the policy; the vector chunks are removed separately because the
-`policy_chunks` table has no foreign key to `policy_documents`:
+`policy_chunks` table has no foreign key to `policy_documents`: 
 
 ```bash
 docker exec -i policy-impact-postgres psql -U policy_user -d policy_impact <<'SQL'

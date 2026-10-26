@@ -1,0 +1,83 @@
+name: Promote known-good build to production
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Full commit SHA of a successful staging deployment (use a prior SHA to roll back)
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  validate-release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Confirm the requested SHA is on main and passed staging
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs.commit_sha }}
+        run: |
+          if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'commit_sha must be a full 40-character SHA.' >&2
+            exit 1
+          fi
+          git merge-base --is-ancestor "$RELEASE_SHA" origin/main || {
+            echo 'The requested commit is not reachable from main.' >&2
+            exit 1
+          }
+          successful_runs=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-staging.yml/runs?head_sha=${RELEASE_SHA}&status=completed&per_page=100")
+          successful_staging_run=$(jq --arg sha "$RELEASE_SHA" \
+            '[.workflow_runs[] | select(.event == "push" and .conclusion == "success" and .head_sha == $sha)] | length' \
+            <<< "$successful_runs")
+          if [[ "$successful_staging_run" == '0' ]]; then
+            echo 'No successful main-branch staging workflow was found for this SHA.' >&2
+            exit 1
+          fi
+
+  deploy-production:
+    if: github.ref == 'refs/heads/main'
+    needs: validate-release
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Trigger Render production deploy of the selected image
+        id: deploy
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ vars.RENDER_SERVICE_ID }}
+          RELEASE_SHA: ${{ inputs.commit_sha }}
+        run: |
+          image_name="ghcr.io/${GITHUB_REPOSITORY,,}"
+          response=$(curl --fail --silent --show-error \
+            --request POST "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys" \
+            --header "Authorization: Bearer ${RENDER_API_KEY}" \
+            --header 'Content-Type: application/json' \
+            --data "$(jq -cn --arg imageUrl "$image_name:$RELEASE_SHA" '{imageUrl: $imageUrl}')")
+          deploy_id=$(jq -er '.id' <<< "$response")
+          echo "deploy_id=$deploy_id" >> "$GITHUB_OUTPUT"
+      - name: Wait for Render deploy
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ vars.RENDER_SERVICE_ID }}
+          DEPLOY_ID: ${{ steps.deploy.outputs.deploy_id }}
+        run: bash .github/scripts/wait-for-render-deploy.sh
+      - name: Run authenticated production smoke checks
+        env:
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          SMOKE_USER_EMAIL: ${{ secrets.SMOKE_USER_EMAIL }}
+          SMOKE_USER_PASSWORD: ${{ secrets.SMOKE_USER_PASSWORD }}
+        run: bash .github/scripts/deployment-smoke.sh
