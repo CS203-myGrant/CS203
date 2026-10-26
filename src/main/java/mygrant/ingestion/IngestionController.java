@@ -25,7 +25,6 @@ import mygrant.common.Pages;
 import mygrant.ingestion.dto.IngestPolicyRequest;
 import mygrant.ingestion.dto.IngestionResponse;
 import mygrant.ingestion.connector.ConnectorHealth;
-import mygrant.ingestion.connector.ConnectorStatusService;
 import mygrant.ingestion.federalregister.FederalRegisterIngestionResponse;
 import mygrant.ingestion.federalregister.FederalRegisterIngestionService;
 
@@ -37,14 +36,14 @@ public class IngestionController {
 
     private final PolicyIngestionService ingestionService;
     private final FederalRegisterIngestionService federalRegisterIngestionService;
-    private final ConnectorStatusService connectorStatusService;
+    private final SourceSyncService sourceSyncService;
 
     public IngestionController(PolicyIngestionService ingestionService,
             FederalRegisterIngestionService federalRegisterIngestionService,
-            ConnectorStatusService connectorStatusService) {
+            SourceSyncService sourceSyncService) {
         this.ingestionService = ingestionService;
         this.federalRegisterIngestionService = federalRegisterIngestionService;
-        this.connectorStatusService = connectorStatusService;
+        this.sourceSyncService = sourceSyncService;
     }
 
     /** Indexes a policy supplied in the request body. */
@@ -59,6 +58,13 @@ public class IngestionController {
     @ApiResponse(responseCode = "409", description = "A different policy already has this external id")
     public IngestionResponse ingest(@Valid @RequestBody IngestPolicyRequest request) {
         return ingestionService.ingest(request);
+    }
+
+    /** Backwards-compatible health view for the Federal Register connector. */
+    @GetMapping("/federal-register/health")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ConnectorHealth federalRegisterHealth() {
+        return federalRegisterIngestionService.health();
     }
 
     /** Downloads, classifies, and indexes a published Federal Register document. */
@@ -76,21 +82,25 @@ public class IngestionController {
         return federalRegisterIngestionService.ingest(documentNumber, principal.getName());
     }
 
-    /** Admin health view for the Federal Register connector. */
-    @GetMapping("/federal-register/health")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Federal Register import health",
-            description = "Kept in memory, so it resets when the app restarts.")
-    public ConnectorHealth federalRegisterHealth() {
-        return federalRegisterIngestionService.health();
-    }
-
-    /** Admin health view for all configured connectors. */
+    /** Admin health view for all configured policy sources. */
     @GetMapping("/status")
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Health of every source connector",
-            description = "Ordered by source id; `sort` is ignored.")
-    public Page<ConnectorHealth> status(@ParameterObject @PageableDefault(size = 20) Pageable pageable) {
-        return Pages.of(connectorStatusService.status(), pageable);
+    @Operation(summary = "Health of every configured policy source",
+            description = "Reports the latest run, fetched documents, vectorised chunks and failures.")
+    public Page<mygrant.ingestion.dto.IngestionStatusResponse> status(
+            @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
+        return Pages.of(sourceSyncService.status(), pageable);
+    }
+
+    @PostMapping("/sync")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Synchronise policy sources",
+            description = "Synchronises one enabled source when sourceId is supplied, or all enabled sources otherwise.")
+    public Object sync(@RequestBody(required = false) mygrant.ingestion.dto.IngestionSyncRequest request,
+            Principal principal) {
+        if (request == null || request.sourceId() == null) {
+            return sourceSyncService.syncAll(principal);
+        }
+        return sourceSyncService.syncOne(request.sourceId(), principal);
     }
 }
