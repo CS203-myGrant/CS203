@@ -5,6 +5,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.client.RestClient;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -26,12 +28,20 @@ public class UscisProcessingTimeImporter implements DataConnector<String, JsonNo
     private final ObjectMapper json;
     private final UscisProcessingTimeParser parser;
     private final UscisProcessingTimeStore store;
+    private final RestClient client;
 
+    @Autowired
     public UscisProcessingTimeImporter(ObjectMapper json, UscisProcessingTimeParser parser,
-            UscisProcessingTimeStore store) {
+            UscisProcessingTimeStore store, RestClient.Builder builder) {
         this.json = json;
         this.parser = parser;
         this.store = store;
+        this.client = builder.build();
+    }
+
+    public UscisProcessingTimeImporter(ObjectMapper json, UscisProcessingTimeParser parser,
+            UscisProcessingTimeStore store) {
+        this(json, parser, store, RestClient.builder());
     }
 
     @Override
@@ -99,6 +109,26 @@ public class UscisProcessingTimeImporter implements DataConnector<String, JsonNo
         } catch (RuntimeException exception) {
             store.fail(stage, exception.getMessage());
             throw exception;
+        }
+    }
+
+    /** Pulls a JSON result from the configured official USCIS URL. */
+    public Result pull(String sourceUrl) {
+        String response = client.get().uri(sourceUrl).retrieve().body(String.class);
+        if (response == null || response.isBlank()) {
+            throw new IllegalArgumentException("USCIS response is empty");
+        }
+        try {
+            JsonNode data = json.readTree(response);
+            if (data == null || !data.isObject()) {
+                throw new IllegalArgumentException("USCIS response must be a JSON object");
+            }
+            if (!data.has("sourceUrl")) {
+                ((com.fasterxml.jackson.databind.node.ObjectNode) data).put("sourceUrl", sourceUrl);
+            }
+            return ingest(data.toString());
+        } catch (JsonProcessingException exception) {
+            throw new IllegalArgumentException("USCIS response is not valid JSON", exception);
         }
     }
 

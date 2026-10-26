@@ -1,7 +1,6 @@
 package mygrant.ingestion;
 
 import java.security.Principal;
-import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,7 +16,6 @@ import jakarta.validation.Valid;
 import mygrant.ingestion.dto.IngestPolicyRequest;
 import mygrant.ingestion.dto.IngestionResponse;
 import mygrant.ingestion.connector.ConnectorHealth;
-import mygrant.ingestion.connector.ConnectorStatusService;
 import mygrant.ingestion.federalregister.FederalRegisterIngestionResponse;
 import mygrant.ingestion.federalregister.FederalRegisterIngestionService;
 
@@ -28,14 +26,14 @@ public class IngestionController {
 
     private final PolicyIngestionService ingestionService;
     private final FederalRegisterIngestionService federalRegisterIngestionService;
-    private final ConnectorStatusService connectorStatusService;
+    private final SourceSyncService sourceSyncService;
 
     public IngestionController(PolicyIngestionService ingestionService,
             FederalRegisterIngestionService federalRegisterIngestionService,
-            ConnectorStatusService connectorStatusService) {
+            SourceSyncService sourceSyncService) {
         this.ingestionService = ingestionService;
         this.federalRegisterIngestionService = federalRegisterIngestionService;
-        this.connectorStatusService = connectorStatusService;
+        this.sourceSyncService = sourceSyncService;
     }
 
     /** Indexes a policy supplied in the request body. */
@@ -44,6 +42,13 @@ public class IngestionController {
     @ResponseStatus(HttpStatus.CREATED)
     public IngestionResponse ingest(@Valid @RequestBody IngestPolicyRequest request) {
         return ingestionService.ingest(request);
+    }
+
+    /** Backwards-compatible health view for the Federal Register connector. */
+    @GetMapping("/federal-register/health")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ConnectorHealth federalRegisterHealth() {
+        return federalRegisterIngestionService.health();
     }
 
     /** Downloads, classifies, and indexes a published Federal Register document. */
@@ -55,17 +60,19 @@ public class IngestionController {
         return federalRegisterIngestionService.ingest(documentNumber, principal.getName());
     }
 
-    /** Admin health view for the Federal Register connector. */
-    @GetMapping("/federal-register/health")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ConnectorHealth federalRegisterHealth() {
-        return federalRegisterIngestionService.health();
-    }
-
-    /** Admin health view for all configured connectors. */
     @GetMapping("/status")
     @PreAuthorize("hasRole('ADMIN')")
-    public List<ConnectorHealth> status() {
-        return connectorStatusService.status();
+    public java.util.List<mygrant.ingestion.dto.IngestionStatusResponse> status() {
+        return sourceSyncService.status();
+    }
+
+    @PostMapping("/sync")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Object sync(@RequestBody(required = false) mygrant.ingestion.dto.IngestionSyncRequest request,
+            Principal principal) {
+        if (request == null || request.sourceId() == null) {
+            return sourceSyncService.syncAll(principal);
+        }
+        return sourceSyncService.syncOne(request.sourceId(), principal);
     }
 }
