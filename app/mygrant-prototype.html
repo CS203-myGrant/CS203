@@ -1304,7 +1304,8 @@ async function loadAdminSources(){
       apiFetch('/api/v1/admin/sources'),
       apiFetch('/api/v1/ingestion/status')
     ]);
-    const sources = await parseApiResponse(sourceResponse);
+    const sourcePayload = await parseApiResponse(sourceResponse);
+    const sources = sourcePayload?.content || sourcePayload;
     const statusPayload = await parseApiResponse(statusResponse);
     const statuses = statusPayload?.content || statusPayload;
     const byId = new Map((statuses || []).map(status => [status.sourceId, status]));

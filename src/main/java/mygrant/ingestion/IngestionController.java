@@ -63,6 +63,8 @@ public class IngestionController {
     /** Backwards-compatible health view for the Federal Register connector. */
     @GetMapping("/federal-register/health")
     @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Get Federal Register connector health",
+            description = "Reports the latest Federal Register connector attempt and error state.")
     public ConnectorHealth federalRegisterHealth() {
         return federalRegisterIngestionService.health();
     }

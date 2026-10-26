@@ -18,6 +18,8 @@ import mygrant.ingestion.federalregister.FederalRegisterIngestionService;
 import mygrant.ingestion.newsrss.NewsRssConnector;
 import mygrant.ingestion.uscis.UscisProcessingTimeImporter;
 import mygrant.ingestion.visabulletin.VisaBulletinImporter;
+import mygrant.ingestion.connector.ConnectorHealth;
+import mygrant.ingestion.connector.ConnectorStatusService;
 import mygrant.sources.PolicySource;
 import mygrant.sources.PolicySourceRepository;
 import mygrant.sources.PolicySourceSyncRun;
@@ -34,11 +36,13 @@ public class SourceSyncService {
     private final VisaBulletinImporter visaBulletin;
     private final NewsRssConnector newsRss;
     private final UscisProcessingTimeImporter uscis;
+    private final ConnectorStatusService connectorStatusService;
 
     public SourceSyncService(PolicySourceRepository sourceRepository,
             PolicySourceSyncRunRepository runRepository, FederalRegisterClient federalRegisterClient,
             FederalRegisterIngestionService federalRegister, VisaBulletinImporter visaBulletin,
-            NewsRssConnector newsRss, UscisProcessingTimeImporter uscis) {
+            NewsRssConnector newsRss, UscisProcessingTimeImporter uscis,
+            ConnectorStatusService connectorStatusService) {
         this.sourceRepository = sourceRepository;
         this.runRepository = runRepository;
         this.federalRegisterClient = federalRegisterClient;
@@ -46,11 +50,18 @@ public class SourceSyncService {
         this.visaBulletin = visaBulletin;
         this.newsRss = newsRss;
         this.uscis = uscis;
+        this.connectorStatusService = connectorStatusService;
     }
 
     @Transactional(readOnly = true)
     public List<IngestionStatusResponse> status() {
-        return sourceRepository.findAllByOrderByIdAsc().stream()
+        List<PolicySource> sources = sourceRepository.findAllByOrderByIdAsc();
+        if (sources.isEmpty()) {
+            return connectorStatusService.status().stream()
+                    .map(this::status)
+                    .toList();
+        }
+        return sources.stream()
                 .map(source -> status(source, runRepository.findTopBySource_IdOrderByStartedAtDesc(source.getId()),
                         runRepository.countFailures(source.getId())))
                 .toList();
@@ -150,6 +161,21 @@ public class SourceSyncService {
                 run == null ? 0 : run.getDocumentsFetched(),
                 run == null ? 0 : run.getChunksVectorised(), failureCount,
                 run != null && run.getError() != null ? run.getError() : source.getLastError());
+    }
+
+    private IngestionStatusResponse status(ConnectorHealth health) {
+        String id = health.source().id();
+        mygrant.sources.PolicySourceType type = switch (id) {
+            case "FEDERAL_REGISTER" -> mygrant.sources.PolicySourceType.FEDERAL_REGISTER;
+            case "USCIS_PROCESSING_TIMES" -> mygrant.sources.PolicySourceType.USCIS;
+            case "VISA_BULLETIN" -> mygrant.sources.PolicySourceType.VISA_BULLETIN;
+            case "NEWS_RSS" -> mygrant.sources.PolicySourceType.RSS;
+            default -> mygrant.sources.PolicySourceType.NEWS;
+        };
+        return new IngestionStatusResponse(null, id, type, "", true,
+                health.lastAttemptAt(), 0, 0,
+                health.status() == ConnectorHealth.Status.FAILED ? 1 : 0,
+                health.errorMessage());
     }
 
     private String errorMessage(RuntimeException exception) {
