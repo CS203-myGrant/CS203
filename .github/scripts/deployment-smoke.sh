@@ -24,7 +24,7 @@ login=$(curl --fail --silent --show-error --max-time 20 \
 token=$(jq -er '.token | select(type == "string" and length > 0)' <<< "$login")
 
 profile=$(curl --fail --silent --show-error --max-time 20 \
-  --header "Authorization: Bearer $token" "$APP_BASE_URL/api/v1/profiles/me")
+  --header "Authorization: Bearer $token" "$APP_BASE_URL/api/v1/users/me")
 jq -e 'has("userId") and has("userEmail")' <<< "$profile" >/dev/null
 
 unread=$(curl --fail --silent --show-error --max-time 20 \

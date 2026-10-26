@@ -8,8 +8,6 @@ spring:
       base-url: ${OLLAMA_BASE_URL}
       embedding:
         model: ${OLLAMA_EMBEDDING_MODEL:mxbai-embed-large}
-      chat:
-        model: ${OLLAMA_CHAT_MODEL:llama3.2}
 
 jwt:
   secret: ${JWT_SECRET}

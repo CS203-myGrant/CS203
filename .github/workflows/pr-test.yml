@@ -46,3 +46,6 @@ jobs:
 
       - name: Run tests
         run: ./mvnw test
+
+      - name: Build Docker image
+        run: docker build --tag policy-impact:pr .

@@ -17,13 +17,14 @@ Java/Spring Boot backend for profile-aware immigration policy retrieval and impa
   builds from the repository Dockerfile and exposes a public HTTPS URL.
 - **Database:** Render managed PostgreSQL, with a separate database for staging
   and production. The existing Flyway migrations manage relational schema;
-  `V8__enable_pgvector.sql` enables pgvector, and Spring AI creates the
+  `V22__enable_pgvector.sql` enables pgvector after the current V1–V21 schema,
+  and Spring AI creates the
   `policy_chunks` table on startup.
-- **LLM:** Keep Spring AI's existing Ollama integration and call a separately
-  reachable Ollama-compatible endpoint. The app container only makes HTTP
-  requests, so begin with CPU-hosted inference and measure latency/throughput
-  before considering GPU capacity. The endpoint must provide the configured
-  embedding and chat models (`mxbai-embed-large` and `llama3.2` by default).
+- **AI services:** Ollama provides embeddings (`mxbai-embed-large`); OpenAI
+  generates RAG answers, and Anthropic provides the optional impact judge. The
+  app calls these providers over HTTP, so GPU hosting is not required for the
+  Spring service. Use a reachable Ollama endpoint and measure embedding latency
+  before allocating extra compute.
 
 These are deployment recommendations based on the current code, not accounts
 or services already provisioned. Render supports Docker builds and PostgreSQL
@@ -75,16 +76,24 @@ Set these app variables in each service's environment/secret settings:
 | `DATABASE_PASSWORD` | Yes | Database credential; secret |
 | `JWT_SECRET` | Yes | Base64-encoded signing key, at least 32 bytes; secret |
 | `OLLAMA_BASE_URL` | Yes | Reachable Ollama-compatible inference endpoint |
+| `OPENAI_API_KEY` | For RAG generation | OpenAI API credential; secret |
+| `ANTHROPIC_API_KEY` | Optional | Enables the Anthropic impact judge; secret |
+| `WORKOS_API_KEY` | For WorkOS sign-in | WorkOS API credential; secret |
+| `WORKOS_CLIENT_ID` | For WorkOS sign-in | WorkOS client identifier |
+| `WORKOS_REDIRECT_URI` | For WorkOS sign-in | Environment callback URL ending in `/api/v1/auth/workos/callback` |
+| `WORKOS_WEBHOOK_SECRET` | For WorkOS webhooks | WorkOS signing secret; secret |
+| `RESEND_API_KEY` | For email delivery | Resend API credential; secret |
+| `RESEND_FROM_EMAIL` | For email delivery | Verified sender address |
+| `APP_BASE_URL` | For email links | Public HTTPS app URL for this environment |
 | `CORS_ALLOWED_ORIGINS` | Only for a separately hosted frontend | Comma-separated exact frontend origins; omit for same-origin deployment |
 | `OLLAMA_EMBEDDING_MODEL` | No | Defaults to `mxbai-embed-large` |
-| `OLLAMA_CHAT_MODEL` | No | Defaults to `llama3.2` |
-| `JWT_EXPIRATION_MS` | No | Defaults to `3600000` |
+| `JWT_EXPIRATION_MS` | No | Defaults to `900000` (15 minutes) |
 
-For the CS203-80 WorkOS connector, configure its API/client credentials and
-environment-specific callback/webhook URLs in the platform secret store once
-those connector variables are finalized. The tracked top-level app currently
-does not contain WorkOS integration code. Preserve the frontend at `/`; the
-Docker image copies the existing `app/` directory into the runtime image.
+Configure WorkOS separately for staging and production. Register each service's
+`WORKOS_REDIRECT_URI` in WorkOS and point its webhook subscription to
+`https://<environment-host>/api/v1/webhooks/workos`. Keep the callback and webhook
+secrets in that environment's platform secret store. Preserve the frontend at `/`;
+the Docker image copies the existing `app/` directory into the runtime image.
 
 The `.env.example` file contains variable names and blank credential fields,
 not usable secrets. Keep real values in Render's environment settings, and never
@@ -95,7 +104,7 @@ commit `.env`. The local Compose PostgreSQL service is only for development.
 The GitHub Actions workflows implement this release path:
 
 ```text
-Pull request to main -> Maven verification + Docker build
+Pull request to main -> existing Maven CI + Docker build
 Merge to main        -> build/push SHA-tagged image -> deploy that image to staging
 Staging              -> HTTPS health, login, profile, notification API and SSE checks
 Production           -> manually dispatch promotion for a staging-passed commit SHA
@@ -122,7 +131,7 @@ require at least one reviewer for the `production` environment and restrict its
 deployment branch to `main`. The production workflow only runs from `main`; it
 accepts a full commit SHA and checks that the SHA is on `main` and has a successful
 staging workflow before waiting for the environment approval. Protect `main` with
-pull requests, required review, and the `Build and deploy staging / verify` check;
+pull requests, required review, and the `PR build and test / Maven tests` check;
 the staging workflow only deploys after a commit reaches that protected branch.
 
 The frontend and API currently ship from the same Spring Boot service. The frontend
@@ -133,10 +142,8 @@ and set `CORS_ALLOWED_ORIGINS` on each service to that environment's exact HTTPS
 frontend origin. Do not use `*` for hosted origins. Same-origin deployments do not
 need cross-origin access.
 
-The active app uses JWT login and has no WorkOS callback route. Once CS203-80 adds or
-confirms the callback implementation, register its staging and production HTTPS
-callback URLs separately in WorkOS and the corresponding service settings. Do not
-register callback URLs for routes that the deployed app does not implement.
+The staging workflow checks password login and protected APIs. Also verify WorkOS
+sign-in returns through the environment's registered HTTPS callback before release.
 
 After staging deploys, CI checks health, signs in with the staging smoke account,
 calls the authenticated profile and notification APIs, and opens the authenticated
