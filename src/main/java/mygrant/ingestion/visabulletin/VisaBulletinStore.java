@@ -11,6 +11,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import mygrant.ingestion.connector.ConnectorHealth;
 
 @Repository
@@ -119,10 +120,12 @@ public class VisaBulletinStore {
         });
     }
 
+    @Schema(name = "VisaBulletinEntry")
     public record EntryView(String preferenceType, String chartType, String category,
             String chargeabilityArea, String cutoffKind, LocalDate cutoffDate,
             String sourceUrl) {}
 
+    @Schema(name = "VisaBulletinHealth")
     public record Health(String status, Instant lastAttemptAt, Instant lastSuccessAt,
             YearMonth publicationMonth, String sourceUrl, ConnectorHealth.Stage errorStage,
             String errorMessage) {}

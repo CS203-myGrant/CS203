@@ -11,10 +11,18 @@ import org.springframework.web.util.UriComponentsBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import mygrant.auth.JwtService;
 import mygrant.workos.WorkOsService;
 
+/** Browser redirects for Google sign-in through WorkOS; errors travel in the URL fragment, not as API errors. */
 @RestController
+@Tag(name = "Authentication")
 public class WorkOsController {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(WorkOsController.class);
@@ -30,6 +38,12 @@ public class WorkOsController {
     }
 
     @GetMapping("/api/v1/auth/workos/login")
+    @SecurityRequirements
+    @Operation(summary = "Start Google sign-in through WorkOS",
+            description = "A browser navigation, not an API call. Redirects to WorkOS, or back to the app "
+                    + "with `#workosError=...` when WorkOS is not configured.")
+    @ApiResponse(responseCode = "302", description = "Redirect to WorkOS, or back to the app with an error",
+            content = @Content)
     public ResponseEntity<Void> login() {
         try {
             URI location = workOsService.authorizationUri(jwtService.generateStateToken());
@@ -40,10 +54,15 @@ public class WorkOsController {
     }
 
     @GetMapping("/api/v1/auth/workos/callback")
+    @SecurityRequirements
+    @Operation(summary = "Finish Google sign-in",
+            description = "WorkOS sends the browser here. Redirects to the app with the tokens in the URL "
+                    + "fragment (`#workosToken=...&workosRefreshToken=...`), or with `#workosError=...`.")
+    @ApiResponse(responseCode = "302", description = "Redirect back to the app", content = @Content)
     public ResponseEntity<Void> callback(
-            @RequestParam(required = false) String code,
-            @RequestParam(required = false) String state,
-            @RequestParam(required = false) String error) {
+            @Parameter(description = "Authorization code from WorkOS") @RequestParam(required = false) String code,
+            @Parameter(description = "State token issued by the login redirect") @RequestParam(required = false) String state,
+            @Parameter(description = "Set by WorkOS when sign-in failed") @RequestParam(required = false) String error) {
         if (error != null || code == null || state == null || !jwtService.isValidStateToken(state)) {
             return redirectWithError("WorkOS sign-in was cancelled or could not be verified.");
         }

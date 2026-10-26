@@ -107,8 +107,9 @@ class IngestionControllerSecurityTest {
         mockMvc.perform(get("/api/v1/ingestion/status")
                         .header("Authorization", "Bearer token"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].sourceType").value("FEDERAL_REGISTER"))
-                .andExpect(jsonPath("$[1].sourceType").value("VISA_BULLETIN"));
+                .andExpect(jsonPath("$.content[0].sourceType").value("FEDERAL_REGISTER"))
+                .andExpect(jsonPath("$.content[1].sourceType").value("VISA_BULLETIN"))
+                .andExpect(jsonPath("$.totalElements").value(2));
 
         stubToken(UserRole.APPLICANT);
         mockMvc.perform(get("/api/v1/ingestion/status")

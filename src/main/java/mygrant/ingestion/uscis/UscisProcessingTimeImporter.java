@@ -18,6 +18,7 @@ import mygrant.ingestion.connector.ContentHash;
 import mygrant.ingestion.connector.DataConnector;
 import mygrant.ingestion.connector.SourceIdentity;
 import mygrant.policies.SourceType;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 /** Imports an admin-saved USCIS result while live access is unavailable. */
 @Service
@@ -149,6 +150,7 @@ public class UscisProcessingTimeImporter implements DataConnector<String, JsonNo
         }
     }
 
+    @Schema(name = "UscisProcessingTimeImportResult")
     public record Result(long snapshotId, boolean duplicate, String formType,
             String formCategory, String office, LocalDate observedOn, int percentile,
             java.math.BigDecimal percentileValue, String durationUnit, String sourceUrl) {}

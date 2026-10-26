@@ -108,7 +108,16 @@ curl -s http://localhost:8080/api/v1/profiles/me \
 
 New email/password and WorkOS accounts start with `profileComplete = false`.
 Until onboarding is saved, the account can access only profile/onboarding,
-current-user, and account-deletion endpoints. F-1, J-1, and H-1B profiles do not
+current-user, and account-deletion endpoints; everything else answers 403 "Complete your
+profile before using this feature". Save the profile to finish onboarding:
+
+```bash
+curl -s -X PUT http://localhost:8080/api/v1/profiles/me \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"visaType": "F-1", "academicLevel": "Undergraduate", "programEndDate": "2028-05-31"}'
+```
+
+F-1, J-1, and H-1B profiles do not
 need Visa Bulletin fields. Visa Bulletin fields are optional, but if one is supplied,
 immigrant category, chargeability area, and priority date must all be supplied.
 
@@ -117,24 +126,38 @@ using the API or browser interface. After code changes, stop Spring with `Ctrl+C
 and run `./mvnw spring-boot:run` again; a running JVM does not reload Java changes.
 
 The health endpoint is available at `http://localhost:8080/actuator/health`.
-Swagger UI is available at `http://localhost:8080/swagger-ui.html`.
+Swagger UI is available at `http://localhost:8080/swagger-ui.html`; see
+[Swagger UI and the API contract](#swagger-ui-and-the-api-contract).
 
 ### Import a Visa Bulletin
 
 Sign in as an admin, then open **Admin → Visa Bulletin**. The panel shows
 import health and saved cutoff entries for a publication month. It can attempt to
 fetch the official page or import a saved official HTML page. Applicants and managers cannot
-access the panel or its API. Use an admin JWT for the equivalent API requests
-(`YYYY-MM` is the bulletin publication month):
+access the panel or its API. Every `/api/v1/ingestion` request needs an admin JWT; an
+applicant's `$TOKEN` gets 403. Sign in as the [admin account](#admin-account-setup) with
+`.env` loaded:
+
+```bash
+ADMIN_TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d "{\"userEmail\": \"$ADMIN_EMAIL\", \"userPassword\": \"$ADMIN_PASSWORD\"}" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
+```
+
+Then (`YYYY-MM` is the bulletin publication month):
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/ingestion/visa-bulletin/2026-10 \
-  -H "Authorization: Bearer $TOKEN"
+  -H "Authorization: Bearer $ADMIN_TOKEN"
 curl http://localhost:8080/api/v1/ingestion/visa-bulletin/health \
-  -H "Authorization: Bearer $TOKEN"
-curl http://localhost:8080/api/v1/ingestion/visa-bulletin/entries/2026-10 \
-  -H "Authorization: Bearer $TOKEN"
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+curl "http://localhost:8080/api/v1/ingestion/visa-bulletin/entries/2026-10?size=200" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
+
+The entries come back as a [page](#pagination), 20 at a time unless you pass `size`; a
+month has about 150.
 
 If the Department of State blocks the server download (HTTP 403), use the
 **Open official page** link in the admin panel, save that page as HTML in a
@@ -145,7 +168,7 @@ The equivalent API request is:
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/ingestion/visa-bulletin/saved \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: text/html" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: text/html" \
   --data-binary @saved-bulletin.html
 ```
 
@@ -301,10 +324,103 @@ POST /api/v1/rag/query
 
 ## API
 
-Ingest a recent policy document:
+Every API endpoint is under `/api/v1`. Only the browser UI (`/`, `/mygrant-prototype.html`),
+Swagger UI (`/swagger-ui.html`, `/v3/api-docs`) and the health probe (`/actuator/health`) are
+outside it.
+
+### Breaking changes in v1
+
+- **Unversioned routes removed.** `/policies`, `/ingestion/**` and `/rag/**` moved to
+  `/api/v1/policies`, `/api/v1/ingestion/**` and `/api/v1/rag/**`. There are no aliases: the old
+  paths return 404, like any unknown route. Authentication and roles did not change; every
+  ingestion endpoint is still ADMIN only.
+- **List endpoints return a page, not an array.** Read the items from `content`; see
+  [Pagination](#pagination). This affects `GET /api/v1/policies`,
+  `/api/v1/profiles/me/documents`, `/api/v1/feedback/messages`,
+  `/api/v1/feedback/admin/conversations`, `/api/v1/feedback/admin/conversations/{id}/messages`,
+  `/api/v1/admin/users`, `/api/v1/ingestion/status` and
+  `/api/v1/ingestion/visa-bulletin/entries/{month}`. `/api/v1/notifications` was already a page.
+- **Every error has the same body.** See [Errors](#errors). Responses that used to differ: 401
+  (empty body), 403 and every Spring error such as an unknown route, wrong method or missing
+  parameter (Spring Boot's `{timestamp, status, error, path}` with no message), the RAG 503
+  (`{message}` only), and the WorkOS webhook's 400 and 500 (empty body).
+- **CORS is configured only in `SecurityConfig`.** Browsers may call the API from
+  `http://localhost:*` and `http://127.0.0.1:*`; other origins get 403. The
+  `@CrossOrigin("*")` on the auth endpoints is gone. It never took effect, because the security
+  filter refused other origins first, so no working caller changes.
+
+### Errors
+
+Every error from `/api/v1` is JSON with this shape, whatever the request's `Accept` header:
+
+```json
+{
+  "timestamp": "2026-10-25T14:03:12.481Z",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "Request validation failed",
+  "validationErrors": {"question": "must not be blank"}
+}
+```
+
+`validationErrors` maps field names to problems for request validation and is empty
+otherwise. `message` is safe to show to users. An unexpected server error answers 500 with a
+generic message and is logged in full on the server; responses never contain stack traces.
+The unsubscribe page behind alert emails is the one exception: it is an HTML page for people.
+
+### Pagination
+
+Every endpoint that returns a list returns a Spring Data page:
+
+```json
+{
+  "content": [ ... ],
+  "totalElements": 42,
+  "totalPages": 3,
+  "number": 0,
+  "size": 20,
+  "first": true,
+  "last": false,
+  ...
+}
+```
+
+Pass `page` (from 0) and `size` (default 20, at most 2000). Each list keeps the order it always
+had. `sort=property,asc|desc` reorders `/api/v1/policies` (by `id` otherwise); the other lists
+have a fixed order, such as newest first, and `sort` only orders items that tie on it.
+`ingestion/status` and `visa-bulletin/entries` are built in memory and ignore `sort`. An
+unknown sort property is a 400.
+
+### Swagger UI and the API contract
+
+Open `http://localhost:8080/swagger-ui.html` while the app runs. Endpoints are grouped by
+feature (Authentication, Profile, Policies, Notifications, Ingestion, Admin and so on). Each
+one shows its summary, request and response schemas, whether it needs a JWT (the lock icon)
+and which role, and its error responses with the `ApiError` body. To try a protected
+endpoint, call `POST /api/v1/auth/login`, choose **Authorize** and paste the `token`. The
+raw document is at `http://localhost:8080/v3/api-docs`.
+
+The document is generated from the controller annotations. `OpenApiConfig` adds the 401
+and 403 responses and the role notes from `@PreAuthorize`, so a controller declares only its
+own errors. Mark a public endpoint with an empty `@SecurityRequirements`.
+
+`OpenApiContractTest` checks the document on every pull request (the **Check API contract**
+step) and fails if:
+
+- the document is not valid OpenAPI,
+- a path is outside `/api/v1`,
+- an operation lacks a summary, a known tag, a success response or the `ApiError` body on
+  its errors, or
+- an operation's documented token or role requirement differs from what the app does.
+
+Run it locally with `./mvnw test -Dtest=OpenApiContractTest`; it writes the document to
+`target/openapi.json`.
+
+Ingest a recent policy document (ADMIN only):
 
 ```http
 POST /api/v1/ingestion/documents
+Authorization: Bearer <admin token>
 Content-Type: application/json
 
 {
@@ -325,6 +441,7 @@ Query the indexed evidence:
 
 ```http
 POST /api/v1/rag/query
+Authorization: Bearer <token>
 Content-Type: application/json
 
 {
@@ -425,7 +542,7 @@ document number:
 ```bash
 curl -s -X POST \
   http://localhost:8080/api/v1/ingestion/federal-register/2026-14439 \
-  -H "Authorization: Bearer $TOKEN" | jq
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq
 ```
 
 The response includes classification flags and the signals that caused each match:
@@ -487,11 +604,12 @@ the stated visa type and instruct the models not to assume that an I-140 filing 
 different current immigration status. The judge can still make mistakes; consult the
 official source and a qualified adviser when appropriate.
 
-To inspect the judge result in the terminal, sign in using the instructions above and run:
+To inspect the judge result in the terminal, get `ADMIN_TOKEN` as in
+[Import a Visa Bulletin](#import-a-visa-bulletin) and run:
 
 ```bash
 curl -s -X POST http://localhost:8080/api/v1/ingestion/federal-register/2026-14439 \
-  -H "Authorization: Bearer $TOKEN" | jq '.impactAssessment'
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.impactAssessment'
 ```
 
 Check `evaluation.verdict` (`YES`, `NO`, or `UNAVAILABLE`), `evaluation.reason`, and
@@ -518,13 +636,15 @@ reused, not that no vectors exist.
 Confirm the metadata was stored:
 
 ```bash
-curl -s http://localhost:8080/api/v1/policies | jq
+curl -s http://localhost:8080/api/v1/policies \
+  -H "Authorization: Bearer $TOKEN" | jq '.content[] | {id, externalId, title}'
 ```
 
 Then confirm that its vector chunks are retrievable for F-1:
 
 ```bash
 curl -s -X POST http://localhost:8080/api/v1/rag/query \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "question": "What does the fixed period of admission policy change for F-1 students?",
@@ -598,7 +718,7 @@ Click **Notifications** in the sidebar, or read the same data from the terminal:
 
 ```bash
 curl -s http://localhost:8080/api/v1/notifications \
-  -H "Authorization: Bearer $TOKEN" | jq
+  -H "Authorization: Bearer $TOKEN" | jq '.content'
 ```
 
 Each entry reports whether it needs attention and which profile fields it refers to:
@@ -821,7 +941,9 @@ and zone; there is no per-user time zone.
 ## Test RAG from the terminal
 
 Open a second WSL terminal while Spring Boot is still running. `jq` formats the JSON;
-remove `| jq` if it is not installed.
+remove `| jq` if it is not installed. The queries need `$TOKEN` from
+[Authentication and JWT](#authentication-and-jwt), for an account that has finished
+onboarding.
 
 ### 1. Check the services
 
@@ -838,6 +960,7 @@ the Ollama embedding model should be listed.
 
 ```bash
 curl -s -X POST http://localhost:8080/api/v1/rag/query \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "question": "What does the fixed period of admission rule change for F-1 students, and when is it effective?",
@@ -854,6 +977,7 @@ the API failed.
 
 ```bash
 curl -s -X POST http://localhost:8080/api/v1/rag/query \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "question": "Does the fixed period of admission rule also apply to J-1 exchange visitors?",
@@ -869,6 +993,7 @@ Ask about this F-1/J-1 rule using an H-1B filter:
 
 ```bash
 curl -s -X POST http://localhost:8080/api/v1/rag/query \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "question": "What does rule 2026-14439 change for F-1 students?",

@@ -11,6 +11,7 @@ import mygrant.ingestion.connector.ContentHash;
 import mygrant.ingestion.connector.DataConnector;
 import mygrant.ingestion.connector.SourceIdentity;
 import mygrant.policies.SourceType;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 @Service
 public class VisaBulletinImporter implements DataConnector<YearMonth, String,
@@ -110,6 +111,7 @@ public class VisaBulletinImporter implements DataConnector<YearMonth, String,
         }
     }
 
+    @Schema(name = "VisaBulletinImportResult")
     public record Result(YearMonth publicationMonth, int entriesProcessed, String sourceUrl) {}
 
     public record PreparedBulletin(VisaBulletinParser.Bulletin bulletin, String contentHash) {}

@@ -18,6 +18,7 @@ import mygrant.ingestion.connector.SourceIdentity;
 import mygrant.ingestion.dto.IngestPolicyRequest;
 import mygrant.policies.PolicyStatus;
 import mygrant.policies.SourceType;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 /** Selects student and work-visa news summaries for secondary evidence. */
 @Service
@@ -134,6 +135,7 @@ public class NewsRssConnector implements DataConnector<NewsRssConnector.Request,
     }
 
     public record Request(String savedXml) {}
+    @Schema(name = "NewsRssImportResult")
     public record Result(int articles, int imported, int duplicates, int unrelated,
             int invalidItems, String feedUrl, int chunksVectorised) {
         public Result(int articles, int imported, int duplicates, int unrelated,

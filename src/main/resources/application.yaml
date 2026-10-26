@@ -84,8 +84,12 @@ mygrant:
     digest-lookback: ${EMAIL_DIGEST_LOOKBACK:48h}
 
 springdoc:
+  # Every JSON endpoint is documented as application/json rather than */*.
+  default-produces-media-type: application/json
   swagger-ui:
     path: /swagger-ui.html
+    # Within each feature section, list operations alphabetically by path.
+    operations-sorter: alpha
 
 management:
   endpoints:

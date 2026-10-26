@@ -1,10 +1,11 @@
 package mygrant.feedback;
 
-import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,10 +37,10 @@ public class FeedbackService {
         return response(conversation, user);
     }
 
-    public List<FeedbackMessageResponse> applicantMessages(String email) {
+    public Page<FeedbackMessageResponse> applicantMessages(String email, Pageable pageable) {
         User user = user(email);
         FeedbackConversation conversation = ownedOpenConversation(user);
-        return messageResponses(conversation);
+        return messageResponses(conversation, pageable);
     }
 
     @Transactional
@@ -51,19 +52,18 @@ public class FeedbackService {
         return saveMessage(conversation, user, "APPLICANT", body);
     }
 
-    public List<FeedbackConversationResponse> staffConversations(String email) {
+    public Page<FeedbackConversationResponse> staffConversations(String email, Pageable pageable) {
         requireStaff(user(email));
-        Map<Long, User> users = userRepository.findAllById(conversationRepository.findAll().stream()
+        Page<FeedbackConversation> conversations = conversationRepository.findAllByOrderByUpdatedAtDesc(pageable);
+        Map<Long, User> users = userRepository.findAllById(conversations.stream()
                         .map(FeedbackConversation::getUserId).toList()).stream()
                 .collect(Collectors.toMap(User::getId, Function.identity()));
-        return conversationRepository.findAllByOrderByUpdatedAtDesc().stream()
-                .map(conversation -> response(conversation, users.get(conversation.getUserId())))
-                .toList();
+        return conversations.map(conversation -> response(conversation, users.get(conversation.getUserId())));
     }
 
-    public List<FeedbackMessageResponse> staffMessages(String email, Long conversationId) {
+    public Page<FeedbackMessageResponse> staffMessages(String email, Long conversationId, Pageable pageable) {
         requireStaff(user(email));
-        return messageResponses(conversation(conversationId));
+        return messageResponses(conversation(conversationId), pageable);
     }
 
     @Transactional
@@ -83,17 +83,17 @@ public class FeedbackService {
         return FeedbackMessageResponse.from(saved, sender.getFullName());
     }
 
-    private List<FeedbackMessageResponse> messageResponses(FeedbackConversation conversation) {
-        List<FeedbackMessage> messages = messageRepository
-                .findByConversationIdOrderByCreatedAtAscIdAsc(conversation.getId());
+    private Page<FeedbackMessageResponse> messageResponses(FeedbackConversation conversation, Pageable pageable) {
+        Page<FeedbackMessage> messages = messageRepository
+                .findByConversationIdOrderByCreatedAtAscIdAsc(conversation.getId(), pageable);
         Map<Long, User> senders = userRepository.findAllById(messages.stream()
                         .map(FeedbackMessage::getSenderId).distinct().toList()).stream()
                 .collect(Collectors.toMap(User::getId, Function.identity()));
-        return messages.stream().map(message -> {
+        return messages.map(message -> {
             User sender = senders.get(message.getSenderId());
             return FeedbackMessageResponse.from(message,
                     sender == null ? "Unknown user" : sender.getFullName());
-        }).toList();
+        });
     }
 
     private FeedbackConversation ownedOpenConversation(User user) {
