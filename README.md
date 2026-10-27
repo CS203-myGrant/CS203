@@ -12,9 +12,11 @@ Java/Spring Boot backend for profile-aware immigration policy retrieval and impa
 
 ### Recorded choices
 
-- **App hosting:** Render Docker web service. The app is a stateless Java 21
-  Spring Boot HTTP service and already serves the checked-in frontend. Render
-  builds from the repository Dockerfile and exposes a public HTTPS URL.
+- **App hosting:** Render image-backed Docker web service. The app is a stateless
+  Java 21 Spring Boot HTTP service and already serves the checked-in frontend.
+  GitHub Actions builds the repository Dockerfile, publishes a commit-tagged image
+  to GHCR, and asks Render to deploy that exact image. Render exposes the service
+  over a public HTTPS URL.
 - **Database:** Render managed PostgreSQL, with a separate database for staging
   and production. The existing Flyway migrations manage relational schema;
   `V22__enable_pgvector.sql` enables pgvector after the current V1–V21 schema,
@@ -55,8 +57,10 @@ otherwise secured endpoint reachable from the app service.
 
 ### Staging and production
 
-Create one Render Docker web service and one managed PostgreSQL database per
-environment. Set `SPRING_PROFILES_ACTIVE=staging` or `production` on its service
+Create one Render image-backed web service and one managed PostgreSQL database
+per environment. The workflows expect image-backed services using the GHCR image
+described below; do not connect these services to the Git repository's automatic
+build/deploy path. Set `SPRING_PROFILES_ACTIVE=staging` or `production` on its service
 and only that environment's database credentials. Each first deployment applies
 Flyway migrations at startup; pgvector must be available to the database role.
 If the app database role cannot create extensions, have the database administrator
@@ -131,7 +135,8 @@ require at least one reviewer for the `production` environment and restrict its
 deployment branch to `main`. The production workflow only runs from `main`; it
 accepts a full commit SHA and checks that the SHA is on `main` and has a successful
 staging workflow before waiting for the environment approval. Protect `main` with
-pull requests, required review, and the `PR build and test / Maven tests` check;
+pull requests, required review, and the **Maven tests** status check from the
+`PR build and test` workflow;
 the staging workflow only deploys after a commit reaches that protected branch.
 
 The frontend and API currently ship from the same Spring Boot service. The frontend
