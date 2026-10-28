@@ -67,7 +67,7 @@ class TestClockServiceTests {
             FederalRegisterImportRequest request = invocation.getArgument(0);
             return switch (request.documentNumber()) {
                 case "2022-00804" -> throw new IllegalArgumentException("No supported visa category was detected");
-                case "2022-00942" -> throw new IllegalStateException("Ollama is down");
+                case "2022-00942" -> throw new IllegalStateException("Embedding service is down");
                 default -> null;
             };
         });
