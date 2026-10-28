@@ -25,12 +25,26 @@ spring:
     open-in-view: false
 
   ai:
+    # Spring AI is used only for embeddings. Chat goes through OpenAiGenerationService,
+    # so every other OpenAI model the starter offers is switched off.
     model:
-      embedding: ollama
-    ollama:
-      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      embedding: openai
+      chat: none
+      image: none
+      audio:
+        speech: none
+        transcription: none
+      moderation: none
+    openai:
+      # The starter refuses to start without a key, so tests and CI that never embed
+      # anything get a placeholder; a real call with it fails with HTTP 401.
+      api-key: ${OPENAI_API_KEY:not-configured}
       embedding:
-        model: ${OLLAMA_EMBEDDING_MODEL:mxbai-embed-large}
+        options:
+          model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+          # Matches the pgvector column below, so switching from the old 1024-dimension
+          # Ollama model needed no schema change. Change both together.
+          dimensions: 1024
     vectorstore:
       pgvector:
         initialize-schema: true

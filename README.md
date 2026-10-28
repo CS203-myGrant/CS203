@@ -6,7 +6,7 @@ Java/Spring Boot backend for profile-aware immigration policy retrieval and impa
 
 - Java 21+
 - Docker Desktop (for PostgreSQL with pgvector)
-- Ollama with the `mxbai-embed-large` embedding model
+- An OpenAI API key in `OPENAI_API_KEY`, used for RAG embeddings and answers
 
 ## Deployment (CS203-82)
 
@@ -20,11 +20,10 @@ Java/Spring Boot backend for profile-aware immigration policy retrieval and impa
   `V22__enable_pgvector.sql` enables pgvector after the current V1–V21 schema,
   and Spring AI creates the
   `policy_chunks` table on startup.
-- **AI services:** Ollama provides embeddings (`mxbai-embed-large`); OpenAI
-  generates RAG answers, and Anthropic provides the optional impact judge. The
-  app calls these providers over HTTP, so GPU hosting is not required for the
-  Spring service. Use a reachable Ollama endpoint and measure embedding latency
-  before allocating extra compute.
+- **AI services:** OpenAI provides embeddings (`text-embedding-3-small`, 1024
+  dimensions) and generates RAG answers, and Anthropic provides the optional
+  impact judge. The app calls these providers over HTTP, so no GPU or model
+  hosting is required.
 
 These are deployment recommendations based on the current code, not accounts
 or services already provisioned. Render supports Docker builds and PostgreSQL
@@ -47,11 +46,8 @@ docker run --rm --env-file .env \
 The Compose file's fallback password is for local development only. For a
 non-container Spring run, use `DATABASE_URL=jdbc:postgresql://localhost:5432/policy_impact`.
 
-Run Ollama on the host and ensure the models are installed. From a container,
-`localhost` refers to that container, so set `OLLAMA_BASE_URL` to an address
-reachable from the app container (for Docker Desktop, often
-`http://host.docker.internal:11434`). For cloud deployments use a private or
-otherwise secured endpoint reachable from the app service.
+Set `OPENAI_API_KEY` in `.env`; the container reaches OpenAI over the internet, so
+nothing else needs to run on the host.
 
 ### Staging and production
 
@@ -62,7 +58,7 @@ Flyway migrations at startup; pgvector must be available to the database role.
 If the app database role cannot create extensions, have the database administrator
 enable `vector` once before the first app deploy. Set the web service's HTTP port
 to `8080` (or provide `PORT`, which the app honors).
-Use separate JWT signing keys, Ollama endpoints, and connector callback/webhook
+Use separate JWT signing keys, OpenAI keys, and connector callback/webhook
 configuration in the two environments. Keep database backups enabled before
 applying schema changes. Never share a database between staging and production.
 
@@ -75,8 +71,7 @@ Set these app variables in each service's environment/secret settings:
 | `DATABASE_USERNAME` | Yes | Database login name |
 | `DATABASE_PASSWORD` | Yes | Database credential; secret |
 | `JWT_SECRET` | Yes | Base64-encoded signing key, at least 32 bytes; secret |
-| `OLLAMA_BASE_URL` | Yes | Reachable Ollama-compatible inference endpoint |
-| `OPENAI_API_KEY` | For RAG generation | OpenAI API credential; secret |
+| `OPENAI_API_KEY` | Yes | OpenAI API credential for RAG embeddings and answers; secret. Staging and production refuse to start without it |
 | `ANTHROPIC_API_KEY` | Optional | Enables the Anthropic impact judge; secret |
 | `WORKOS_API_KEY` | For WorkOS sign-in | WorkOS API credential; secret |
 | `WORKOS_CLIENT_ID` | For WorkOS sign-in | WorkOS client identifier |
@@ -86,7 +81,7 @@ Set these app variables in each service's environment/secret settings:
 | `RESEND_FROM_EMAIL` | For email delivery | Verified sender address |
 | `APP_BASE_URL` | For email links | Public HTTPS app URL for this environment |
 | `CORS_ALLOWED_ORIGINS` | Only for a separately hosted frontend | Comma-separated exact frontend origins; omit for same-origin deployment |
-| `OLLAMA_EMBEDDING_MODEL` | No | Defaults to `mxbai-embed-large` |
+| `OPENAI_EMBEDDING_MODEL` | No | Defaults to `text-embedding-3-small`; must support 1024-dimension vectors |
 | `JWT_EXPIRATION_MS` | No | Defaults to `900000` (15 minutes) |
 
 Configure WorkOS separately for staging and production. Register each service's
@@ -161,20 +156,31 @@ Set `JAVA_HOME` to your JDK installation before using the Maven Wrapper.
 ## Run locally in WSL
 
 From the cloned `CS203` directory (not the parent `Project` directory), start
-PostgreSQL and install the Ollama embedding model:
+PostgreSQL:
 
 ```bash
 docker compose up -d
 docker compose ps
-ollama pull mxbai-embed-large
 ```
 
-Make sure the Ollama server is running. If it is not already running, use a separate
-terminal and keep it open:
+Put your OpenAI key in `.env` as `OPENAI_API_KEY=...`. The app starts without one, but
+importing policies and asking RAG questions then fail with HTTP 401 from OpenAI.
+
+### Moving from Ollama to OpenAI embeddings
+
+Policy chunks used to be embedded with Ollama `mxbai-embed-large`. They are now embedded
+with OpenAI `text-embedding-3-small`, asked for the same 1024 dimensions, so the
+`policy_chunks` table is unchanged. The two models' vectors cannot be compared, so if
+your database has policies imported before the switch, re-embed them once as an admin:
 
 ```bash
-ollama serve
+curl -X POST http://localhost:8080/api/v1/ingestion/embeddings/rebuild \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
+
+The response reports `chunksReembedded`. Policies, alerts and citations are untouched;
+only the vectors are replaced. Until you run it, RAG answers match against the old
+vectors and are unreliable. Ollama is no longer needed.
 
 Start Spring Boot from the `CS203` directory:
 
@@ -391,7 +397,8 @@ authentication filter on every request, across all devices.
   for the relevant features.
 
 Configuration can be overridden with `DATABASE_URL`, `DATABASE_USERNAME`,
-`DATABASE_PASSWORD`, `OLLAMA_BASE_URL`, and `OLLAMA_EMBEDDING_MODEL`.
+`DATABASE_PASSWORD`, `OPENAI_API_KEY`, and `OPENAI_EMBEDDING_MODEL` (any OpenAI model
+that can return 1024-dimension vectors).
 `JWT_SECRET` is required and must be a Base64-encoded key of at least 32 bytes.
 Copy `.env.example` to `.env` for the complete local configuration template. `.env`
 is ignored by Git and must never be committed.
@@ -459,7 +466,7 @@ The implemented RAG path is:
 POST /api/v1/ingestion/documents
   -> save the original policy in policy_documents
   -> split the policy into chunks
-  -> create Ollama embeddings
+  -> create OpenAI embeddings
   -> store chunks and citation metadata in pgvector
 
 POST /api/v1/rag/query
@@ -940,7 +947,7 @@ the date. It searches the Federal Register for rules, proposed rules and notices
 DHS, State and Labor that mention F-1, J-1 or H-1B and were published in the 30 days up
 to the date. It imports up to 20 of them before updating inboxes. Documents the classifier
 finds are not about a supported visa type are skipped. These imports skip the AI impact
-assessment, but each still downloads the full text and embeds it with Ollama, so
+assessment, but each still downloads the full text and embeds it with OpenAI, so
 expect it to take a minute. Imported policies stay in the database after the clock moves.
 
 Dates are kept in memory, so a restart returns everyone to the real date. Alerts created
@@ -1097,12 +1104,11 @@ onboarding.
 
 ```bash
 curl -s http://localhost:8080/actuator/health
-ollama list
 docker compose ps
 ```
 
-The health response should contain `"status":"UP"`; PostgreSQL should be healthy and
-the Ollama embedding model should be listed.
+The health response should contain `"status":"UP"`, PostgreSQL should be healthy, and
+`OPENAI_API_KEY` must be set.
 
 ### 2. Ask an F-1 question
 
@@ -1184,17 +1190,18 @@ requires signing in again.
 The separate RAG inspector calls `/api/v1/rag/query`. The RAG flow is:
 
 1. Ingest policy documents using the RAG inspector (or `/api/v1/ingestion/documents`).
-2. Split documents and embed their text with Ollama `mxbai-embed-large`.
+2. Split documents and embed their text with OpenAI `text-embedding-3-small` (1024 dimensions).
 3. Store embeddings and source metadata in PostgreSQL/pgvector.
 4. Embed the user's question and retrieve matching chunks filtered by visa type.
 5. Pass the retrieved text and question to OpenAI `gpt-6.1-sol` and return an answer
    with citations. If nothing matches, return an insufficient-evidence answer.
 
-Start Ollama and confirm the embedding model is available with `ollama list`. If missing,
-run `ollama pull mxbai-embed-large`. Import a source before
-asking about it; an empty index cannot provide a grounded answer.
+Set `OPENAI_API_KEY`, and import a source before asking about it; an empty index cannot
+provide a grounded answer.
 
-OpenAI is used only after evidence retrieval; sending a question without retrieved
-evidence is not part of this RAG flow. Keeping the current embedding model avoids
-rebuilding the existing 1024-dimensional vector index; changing the embedding model
-requires re-embedding the documents and checking dimensions.
+The question is embedded to find evidence, and the answer model is called only after
+evidence is retrieved; sending a question without retrieved evidence is not part of this
+RAG flow. Visa classification stays a keyword rule set and never calls a model. Changing
+the embedding model requires the same 1024 dimensions, or a matching change to
+`spring.ai.vectorstore.pgvector.dimensions` and a rebuilt table, followed by
+`POST /api/v1/ingestion/embeddings/rebuild`.

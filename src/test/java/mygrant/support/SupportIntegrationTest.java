@@ -75,7 +75,7 @@ class SupportIntegrationTest {
     void unavailableAiReturnsServiceErrorAndSameTokenStillWorks() throws Exception {
         String applicant = account(UserRole.APPLICANT);
         when(vectors.similaritySearch(any(org.springframework.ai.vectorstore.SearchRequest.class)))
-                .thenThrow(new ResourceAccessException("Ollama unavailable"));
+                .thenThrow(new ResourceAccessException("Embedding service unavailable"));
         mvc.perform(post("/api/v1/rag/query").header("Authorization", applicant)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"question\":\"What changed?\",\"visaType\":\"F-1\"}"))
