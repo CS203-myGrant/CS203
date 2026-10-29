@@ -127,6 +127,7 @@
     display:inline-flex;align-items:center;gap:8px;padding:12px 14px;font-size:15px;font-weight:700;color:#fff;
     text-decoration:none;border-bottom:4px solid transparent;margin-bottom:-4px;cursor:pointer;
   }
+  button.nav-link{background:none;border:0;border-bottom:4px solid transparent;font-family:inherit;}
   .nav-link:hover{background:var(--ink-soft);color:#fff;}
   .nav-link.active{border-bottom-color:#fff;background:var(--ink-soft);}
   .nav-badge{font-size:12px;font-weight:700;background:var(--urgent);color:#fff;padding:0 7px;border-radius:10px;min-width:20px;text-align:center;line-height:18px;}
@@ -456,6 +457,7 @@
     <div id="nav-student" class="nav-group" style="display:none;">
       <div class="nav-label">Case</div>
       <a class="nav-link" data-view="dashboard" onclick="goto('dashboard')">Your alerts<span id="nav-unread" class="nav-badge" style="display:none;">0</span></a>
+      <button class="nav-link" data-view="applicationProgress" type="button" onclick="goto('applicationProgress')">Application tracker</button>
     </div>
 
     <div id="nav-manager" class="nav-group" style="display:none;">
@@ -885,6 +887,7 @@ async function submitProfileCompletion(event){
   }
 }
 async function logout(){
+  if(!confirmApplicationLeave()) return;
   const accessToken = state.token;
   const refreshToken = state.refreshToken;
 
@@ -905,6 +908,7 @@ async function logout(){
 }
 
 function clearLocalSession(){
+  state.applicationTracker=null;
   stopFeedbackPolling();
   if(feedbackBadgeTimer){ clearInterval(feedbackBadgeTimer); feedbackBadgeTimer=null; }
   if(notificationStreamController) notificationStreamController.abort();
@@ -1285,6 +1289,8 @@ function startFeedbackBadgePoll(role){
 }
 
 function goto(view, param){
+  if(state.view==='applicationProgress' && view==='applicationProgress') return;
+  if(!confirmApplicationLeave()) return;
   stopFeedbackPolling();
   if(view === 'rag' && state.role !== 'admin'){
     showToast('The RAG inspector is available to administrators only.');
@@ -1302,6 +1308,7 @@ function goto(view, param){
     loadPolicies();
   }
   state.view = view;
+  if(view==='applicationProgress') loadApplicationProgress();
   if(param) state.openAlert = param;
   document.querySelectorAll('.nav-link, .profile-btn').forEach(l=>l.classList.toggle('active', l.dataset.view===view));
   updateBreadcrumb(view);
@@ -1369,7 +1376,9 @@ const VIEW_LABELS = {
   profile:'Your profile', manager:'Team impact', queue:'Review queue', admin:'Monitored sources', visaBulletin:'Visa Bulletin',
   rag:'RAG inspector', feedback:'Get feedback', feedbackInbox:'Feedback inbox', profileCompletion:'Complete your profile'
 };
-const VIEW_PARENTS = {notificationDetail:'dashboard', alertDetail:'dashboard'};
+VIEW_LABELS.policyDetail='Policy details';
+VIEW_LABELS.applicationProgress='Application tracker';
+const VIEW_PARENTS = {notificationDetail:'dashboard', alertDetail:'dashboard', policyDetail:'dashboard'};
 function homeView(){ return state.role==='manager' ? 'manager' : state.role==='admin' ? 'admin' : 'dashboard'; }
 function updateBreadcrumb(view){
   const crumb = document.getElementById('breadcrumb');
@@ -1396,6 +1405,8 @@ function render(){
   else if(state.view==='notifications') main.innerHTML = renderNotifications();
   else if(state.view==='notificationDetail') main.innerHTML = renderNotificationDetail(state.openAlert);
   else if(state.view==='alertDetail') main.innerHTML = renderAlertDetail(state.openAlert);
+  else if(state.view==='applicationProgress') main.innerHTML = renderApplicationProgress();
+  else if(state.view==='policyDetail') main.innerHTML = renderPolicyDetail();
   else if(state.view==='profile') main.innerHTML = renderAccountProfile();
   else if(state.view==='manager') main.innerHTML = renderManager();
   else if(state.view==='queue') main.innerHTML = renderQueue();
@@ -1489,7 +1500,7 @@ function renderLiveDashboard(){
         <p>Published ${escapeHtml(formatDate(policy.publicationDate))}${policy.effectiveDate ? `; effective ${escapeHtml(formatDate(policy.effectiveDate))}` : ''}.</p>
         <div class="tag-row"><span class="tag">${escapeHtml(policy.status)}</span><span class="tag">${escapeHtml(policy.agency)}</span><span class="tag">${escapeHtml(policy.visaType)}</span></div>
       </div>
-      <div class="entry-action">${sourceLink(policy)}</div>
+      <div class="entry-action" style="gap:8px;"><button class="btn small" onclick="openPolicyDetail(${Number(policy.id)})">See how this impacts me</button>${sourceLink(policy)}</div>
     </div>`).join('');
 
   return `
@@ -1511,6 +1522,185 @@ function renderLiveDashboard(){
     ${state.policyRecords===null
       ? (state.policyError ? '' : '<div class="empty">Loading policies...</div>')
       : policyRows || '<div class="empty"><div class="big">No matching policies yet</div>Import a Federal Register document from the RAG inspector.</div>'}`;
+}
+
+window.addEventListener('beforeunload',event=>{
+  if(state.applicationTracker?.dirty){ event.preventDefault(); event.returnValue=''; }
+});
+
+const APPLICATION_STEPS=[
+  {title:'Determine your visa type',body:'Choose the category that matches your purpose of travel, such as B-1 for business, B-2 for tourism, or F-1 for academic study.',url:'https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/all-visa-categories.html',link:'Find your visa category'},
+  {title:'Complete Form DS-160',body:'Submit the online application, provide a compliant photo, and keep the barcode confirmation page for your appointment.',url:'https://ceac.state.gov/GenNIV/',link:'Open the official DS-160 form'},
+  {title:'Pay the application fee',body:'Follow the payment instructions for your category and consular post. Many non-petition visas carry a $185 application fee; other categories and additional fees differ. Keep the receipt.',url:'https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/fees/fees-visa-services.html',link:'Check current visa fees'},
+  {title:'Schedule your interview',body:'Use your embassy or consulate’s official scheduling instructions and choose a passport delivery or pickup option where available. Follow local instructions if eligible for an interview waiver.',url:'https://sg.usembassy.gov/visas/',link:'U.S. Embassy Singapore visa services'},
+  {title:'Prepare required documents',body:'Check your post’s document list: passport, DS-160 confirmation, fee receipt where required, photo if needed, and supporting evidence for your visa category. Passport validity rules have country-specific exceptions.',url:'https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html',link:'Review official document guidance'},
+  {title:'Attend your visa interview',body:'Bring the required documents and follow your appointment instructions. Mark this complete after attending, or after your post confirms an interview waiver applies.',url:'https://travel.state.gov/content/travel/en/us-visas.html',link:'Official visa guidance'},
+  {title:'Receive your passport',body:'Follow the consulate’s decision and delivery instructions. Approval and return dates are not guaranteed; additional processing may be required. Mark complete once your passport is returned.',url:'https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/administrative-processing-information.html',link:'Understand processing after interview'}
+];
+
+async function loadApplicationProgress(){
+  const tracker={loading:true,saving:false,error:null,details:null,updatedAt:null,dirty:false,savedSnapshot:null};
+  state.applicationTracker=tracker;
+  const token=state.token;
+  try{
+    const saved=await parseApiResponse(await apiFetch('/api/v1/profiles/me/application-progress'));
+    tracker.details=saved.details; tracker.updatedAt=saved.updatedAt;
+    tracker.savedSnapshot=JSON.stringify(saved.details);
+  }catch(error){tracker.error=error.message;}
+  finally{tracker.loading=false;if(state.token===token && state.applicationTracker===tracker && state.view==='applicationProgress') render();}
+}
+
+function applicationProgress(steps){
+  const completed=new Set(steps);
+  return {count:completed.size,percent:Math.round(completed.size/7*100),next:APPLICATION_STEPS.findIndex((step,index)=>!completed.has(index+1))};
+}
+
+function confirmApplicationLeave(){
+  const tracker=state.applicationTracker;
+  if(!tracker?.dirty) return true;
+  if(!window.confirm('You have unsaved application changes. Leave without saving?')) return false;
+  tracker.dirty=false;
+  return true;
+}
+
+function applicationSaveStatus(tracker){
+  return tracker.saving?'Updating...':tracker.dirty?'Unsaved changes':tracker.updatedAt?`Last updated ${formatTimestamp(tracker.updatedAt)}`:'Not saved yet';
+}
+
+function renderApplicationProgress(){
+  const tracker=state.applicationTracker;
+  const heading='<div class="page-head"><h1>Application tracker</h1><p class="sub">Keep your visa application details and next steps in one place. Progress is based on your checklist updates.</p></div>';
+  if(!tracker || tracker.loading) return heading+'<p role="status">Loading your application...</p>';
+  if(!tracker.details) return heading+`<div class="rag-error" role="alert">${escapeHtml(tracker.error || 'Unable to load your application.')}</div><button class="btn" onclick="loadApplicationProgress();render()">Try again</button>`;
+  const d=tracker.details,progress=applicationProgress(d.completedSteps);
+  const field=(name,label,type='text',max=150)=>`<div class="field"><label for="application-${name}">${label}</label><input id="application-${name}" name="${name}" type="${type}" maxlength="${max}" value="${escapeAttribute(d[name] || '')}"></div>`;
+  return heading+`<p id="application-save-status" role="status" style="text-align:right;font-style:italic;margin:-16px 0 20px;">${escapeHtml(applicationSaveStatus(tracker))}</p><form id="application-tracker-form" onsubmit="saveApplicationProgress(event)" oninput="updateApplicationProgress()">
+    <fieldset style="border:0;padding:0;margin:0;min-width:0;" ${tracker.saving?'disabled':''}>
+    <section class="detail-card" aria-labelledby="application-progress-heading">
+      <div class="tag-row"><span class="tag">Your checklist</span><span class="tag">Self-reported</span></div>
+      <h2 id="application-progress-heading">${progress.count===7?'Checklist complete':'Your application, step by step'}</h2>
+      <p id="application-progress-label">${progress.count} of 7 steps complete &middot; ${progress.percent}%</p>
+      <progress id="application-progress-bar" max="7" value="${progress.count}" aria-labelledby="application-progress-label" style="width:100%;height:16px;accent-color:var(--primary);"></progress>
+      <p id="application-next-step" style="margin-top:16px;"><strong>${progress.next<0?'All steps checked. This does not confirm a visa decision.':`Next: ${escapeHtml(APPLICATION_STEPS[progress.next].title)}`}</strong></p>
+    </section>
+    <h2>Application details</h2><p>This tracker is for a consular nonimmigrant visa application using DS-160.</p>
+    <div class="form-grid">
+      <div class="field"><label for="application-visaType">Visa category</label><input id="application-visaType" name="visaType" list="application-visa-categories" required maxlength="30" value="${escapeAttribute(d.visaType)}" placeholder="e.g. F-1 or B-1/B-2"><datalist id="application-visa-categories">${['B-1','B-2','B-1/B-2','F-1','J-1','M-1','H-1B'].map(v=>`<option value="${v}"></option>`).join('')}</datalist></div>
+      ${field('interviewLocation','Embassy or consulate')}${field('ds160Confirmation','DS-160 confirmation number','text',30)}${field('interviewDate','Interview date','date')}${field('intendedTravelDate','Intended travel date','date')}
+      <div class="field"><label for="application-notes">Application notes</label><textarea id="application-notes" name="notes" rows="3" maxlength="2000">${escapeHtml(d.notes)}</textarea></div>
+    </div>
+    <h2 style="margin-top:32px;">Your application checklist</h2>
+    <p id="application-student-note" class="citation-box" ${/^(F|J|M)-/i.test(d.visaType)?'':'hidden'}>Students and exchange visitors: have your I-20 or DS-2019 and SEVIS ID ready for DS-160. Check whether an I-901 SEVIS fee applies before your interview. <a href="https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html" target="_blank" rel="noopener noreferrer">Student visa guidance</a></p>
+    <ol style="list-style:none;padding:0;">${APPLICATION_STEPS.map((step,index)=>`<li class="detail-card" style="margin-bottom:16px;"><div style="display:flex;gap:16px;align-items:flex-start;"><input type="checkbox" id="application-step-${index+1}" name="completedSteps" value="${index+1}" ${d.completedSteps.includes(index+1)?'checked':''} style="width:22px;height:22px;flex-shrink:0;margin-top:4px;accent-color:var(--primary);"><div><label for="application-step-${index+1}" style="font-weight:700;font-size:20px;cursor:pointer;">${index+1}. ${step.title}</label><p style="line-height:1.6;max-width:80ch;">${step.body}</p><a href="${step.url}" target="_blank" rel="noopener noreferrer">${step.link} &rarr;</a></div></div></li>`).join('')}</ol>
+    <div class="detail-card" style="position:sticky;bottom:0;z-index:2;background:var(--panel);border-top:1px solid var(--base-lighter);padding:10px 16px;margin-bottom:0;">
+      ${tracker.error?`<p class="rag-error" role="alert">${escapeHtml(tracker.error)}</p>`:''}
+      <button class="btn small" type="submit">${tracker.saving?'Updating...':'Update application progress'}</button>
+    </div></fieldset></form>`;
+}
+
+function readApplicationForm(form){
+  const data=new FormData(form);
+  return {visaType:data.get('visaType').trim(),interviewLocation:data.get('interviewLocation').trim(),ds160Confirmation:data.get('ds160Confirmation').trim(),interviewDate:data.get('interviewDate') || null,intendedTravelDate:data.get('intendedTravelDate') || null,notes:data.get('notes').trim(),completedSteps:data.getAll('completedSteps').map(Number)};
+}
+
+function updateApplicationProgress(){
+  const form=document.getElementById('application-tracker-form');
+  const details=readApplicationForm(form);
+  state.applicationTracker.details=details;
+  state.applicationTracker.dirty=JSON.stringify(details)!==state.applicationTracker.savedSnapshot;
+  const progress=applicationProgress(details.completedSteps);
+  document.getElementById('application-progress-bar').value=progress.count;
+  document.getElementById('application-progress-label').textContent=`${progress.count} of 7 steps complete · ${progress.percent}%`;
+  document.getElementById('application-next-step').textContent=progress.next<0?'All steps checked. This does not confirm a visa decision.':`Next: ${APPLICATION_STEPS[progress.next].title}`;
+  document.getElementById('application-student-note').hidden=!/^(F|J|M)-/i.test(details.visaType);
+  document.getElementById('application-save-status').textContent=applicationSaveStatus(state.applicationTracker);
+}
+
+async function saveApplicationProgress(event){
+  event.preventDefault();
+  const tracker=state.applicationTracker;
+  if(tracker.saving) return;
+  const details=readApplicationForm(event.target);
+  tracker.details=details; tracker.saving=true; tracker.dirty=true; tracker.error=null; render();
+  try{
+    const saved=await parseApiResponse(await apiFetch('/api/v1/profiles/me/application-progress',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(details)}));
+    tracker.details=saved.details;tracker.updatedAt=saved.updatedAt;
+    tracker.savedSnapshot=JSON.stringify(saved.details);tracker.dirty=false;
+  }catch(error){tracker.error=error.message;}
+  finally{tracker.saving=false;if(state.applicationTracker===tracker && state.view==='applicationProgress')render();}
+}
+
+async function openPolicyDetail(id){
+  const detail={id, policy:null, assessment:null, loading:true, error:null, reportText:'', reporting:false, reported:false, reportError:null};
+  state.policyDetail=detail;
+  goto('policyDetail');
+  try{
+    detail.policy=await parseApiResponse(await apiFetch(`/api/v1/policies/${id}`));
+    if(state.policyDetail===detail && state.view==='policyDetail') render();
+    const response=await apiFetch(`/api/v1/policies/${id}/recommendation`,{method:'POST'});
+    if(response.status===404){
+      throw new Error('Personalized recommendations are not available on this server yet. Please try again after the latest backend has been deployed. You can still read the policy summary and original source.');
+    }
+    detail.assessment=await parseApiResponse(response);
+  }catch(error){ detail.error=error.message; }
+  finally{ detail.loading=false; if(state.policyDetail===detail && state.view==='policyDetail') render(); }
+}
+
+function policySummary(content){
+  const text=String(content || '').replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi,'')
+    .replace(/<[^>]*>/g,' ').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&')
+    .replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'");
+  const match=text.match(/\bSUMMARY:\s*([\s\S]*?)(?=\n\s*(?:DATES|ADDRESSES|FOR FURTHER INFORMATION|SUPPLEMENTARY INFORMATION):|$)/i);
+  return match ? match[1].replace(/\[\[Page[^\]]*\]\]/g,'').replace(/\s+/g,' ').trim()
+    : 'An official summary is not available for this policy. Read the original source for the complete details.';
+}
+
+function renderPolicyRecommendation(assessment){
+  const unavailable=assessment.urgency==='UNAVAILABLE';
+  return `<section class="detail-card" aria-labelledby="policy-impact-heading">
+    <h2 id="policy-impact-heading">How this affects you</h2>
+    <div class="tag-row"><span class="tag">${escapeHtml(formatUrgency(assessment.urgency))}</span>${assessment.requiresHumanReview?'<span class="tag">Needs human review</span>':''}</div>
+    <p style="line-height:1.7;">${escapeHtml(assessment.summary)}</p>
+    ${(assessment.reasons || []).length?`<h3>Why this matters for your profile</h3><ul>${assessment.reasons.map(reason=>`<li>${escapeHtml(reason)}</li>`).join('')}</ul>`:''}
+    ${!unavailable?`<h3>What to do next</h3><ol>${(assessment.recommendedActions || []).map(action=>`<li style="margin-bottom:12px;">${escapeHtml(action)}</li>`).join('')}</ol><p class="rag-status">Based on your saved profile and the policy source. Confirm important decisions with a qualified adviser.</p>`:''}
+    </section>`;
+}
+
+function renderPolicyDetail(){
+  const detail=state.policyDetail;
+  const back='<button class="back-link" onclick="goto(\'dashboard\')">&larr; Back to policies</button>';
+  if(!detail) return back;
+  const policy=detail.policy;
+  return `${back}
+    ${policy?`<div class="detail-card"><h1>${escapeHtml(policy.title)}</h1>
+      <div class="tag-row"><span class="tag">${escapeHtml(policy.status)}</span><span class="tag">${escapeHtml(policy.agency)}</span><span class="tag">${escapeHtml(policy.visaType)}</span></div>
+      <p>Published ${escapeHtml(formatDate(policy.publicationDate))}${policy.effectiveDate?`; effective ${escapeHtml(formatDate(policy.effectiveDate))}`:''}.</p>
+      ${policy.sourceUrl?`<a class="btn ghost small" href="${escapeAttribute(policy.sourceUrl)}" target="_blank" rel="noopener noreferrer">Read original source</a>`:''}
+      <section style="margin-top:24px;" aria-labelledby="policy-summary-heading"><h2 id="policy-summary-heading">Policy summary</h2><p style="line-height:1.75;max-width:80ch;">${escapeHtml(policySummary(policy.content))}</p><p class="rag-status">From the official source summary.</p></section></div>`:''}
+    ${detail.loading?'<p role="status">Reviewing this policy against your profile. This may take a moment...</p>':''}
+    ${detail.error?`<div class="rag-error" role="alert">${escapeHtml(detail.error)}</div><button class="btn ghost small" onclick="openPolicyDetail(${Number(detail.id)})">Try again</button>`:''}
+    ${detail.assessment?`${renderPolicyRecommendation(detail.assessment)}
+      <div class="detail-card"><h2>Report a recommendation</h2><p>Tell the team what seems incorrect or missing. The policy and assessment will be included.</p>
+      ${detail.reported?'<p role="status">Report sent. You can follow up in Feedback.</p><button class="btn ghost small" onclick="openFeedback()">Open feedback</button>':`
+      <form onsubmit="reportPolicyRecommendation(event)"><label for="recommendation-report">What needs correcting?</label>
+      <textarea id="recommendation-report" required maxlength="900" rows="4" style="display:block;width:100%;margin:12px 0;" oninput="state.policyDetail.reportText=this.value">${escapeHtml(detail.reportText)}</textarea>
+      ${detail.reportError?`<p class="rag-error" role="alert">${escapeHtml(detail.reportError)}</p>`:''}
+      <button class="btn" type="submit" ${detail.reporting?'disabled':''}>${detail.reporting?'Sending...':'Report recommendation'}</button></form>`}</div>`:''}`;
+}
+
+async function reportPolicyRecommendation(event){
+  event.preventDefault();
+  const detail=state.policyDetail;
+  if(!detail || detail.reporting || detail.reported || !detail.reportText.trim()) return;
+  detail.reporting=true; detail.reportError=null; render();
+  const assessment=detail.assessment;
+  const context=JSON.stringify({urgency:assessment.urgency,summary:assessment.summary,actions:assessment.recommendedActions,provider:assessment.provider,model:assessment.model});
+  const message=`Recommendation report | Policy ${detail.id} (${detail.policy.externalId})\n${detail.policy.title.slice(0,180)}\nUser report: ${detail.reportText.trim().slice(0,900)}\nAssessment: ${context.slice(0,650)}`;
+  try{
+    await parseApiResponse(await apiFetch('/api/v1/feedback/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:message.slice(0,2000)})}));
+    detail.reported=true;
+  }catch(error){ detail.reportError=error.message; }
+  finally{ detail.reporting=false; if(state.policyDetail===detail && state.view==='policyDetail') render(); }
 }
 
 function renderNotificationDetail(id){
