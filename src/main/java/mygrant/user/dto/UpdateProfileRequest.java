@@ -1,6 +1,7 @@
 package mygrant.user.dto;
 
 import java.time.LocalDate;
+import java.util.Set;
 
 /*
  * Every field is optional.
@@ -22,7 +23,10 @@ public record UpdateProfileRequest(
         LocalDate programEndDate,
         LocalDate upcomingTravelDate,
         String immigrantCategory,
-        String chargeabilityArea
+        String chargeabilityArea,
+        Set<String> clearFields,
+        Set<String> consentedFields
+
 ) {
     public UpdateProfileRequest(
             String visaType,
@@ -40,9 +44,13 @@ public record UpdateProfileRequest(
             LocalDate programEndDate,
             LocalDate upcomingTravelDate
     ) {
-        this(visaType, countryOfOrigin, countryOfCitizenship, currentLocation,
-                employmentStatus, employer, visaStartDate, visaExpiryDate,
-                optStartDate, i140FilingDate, priorityDate, academicLevel,
-                programEndDate, upcomingTravelDate, null, null);
+        this(
+                visaType, countryOfOrigin, countryOfCitizenship,
+                currentLocation, employmentStatus, employer,
+                visaStartDate, visaExpiryDate, optStartDate,
+                i140FilingDate, priorityDate, academicLevel,
+                programEndDate, upcomingTravelDate,
+                null, null, Set.of(), Set.of()
+        );
     }
 }

@@ -76,7 +76,7 @@ class ImpactJudgeServiceTests {
 
     private ProfileImpactAssessment candidate() {
         return new ProfileImpactAssessment(ImpactUrgency.MEDIUM, 70, "May apply",
-                List.of("Relevant profile"), List.of("Review the source"), true,
+                List.of("Relevant profile"), List.of("Review the source"), List.of(), true,
                 "OpenAI", "generator", null, 1);
     }
 }

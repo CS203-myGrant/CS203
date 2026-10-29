@@ -3,6 +3,8 @@ package mygrant.user;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.time.Instant;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,12 +21,15 @@ public class UserProfileService {
 
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
+    private final ProfileFieldConsentRepository consentRepository;
 
     public UserProfileService(
             UserRepository userRepository,
-            UserProfileRepository userProfileRepository) {
+            UserProfileRepository userProfileRepository,
+            ProfileFieldConsentRepository consentRepository) {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
+        this.consentRepository = consentRepository;
     }
 
     @Transactional(readOnly = true)
@@ -35,7 +40,7 @@ public class UserProfileService {
                 .orElseThrow(() ->
                         new IllegalStateException("Profile does not exist for authenticated user"));
 
-        return ProfileResponse.from(profile);
+        return response(profile);
     }
 
     @Transactional
@@ -47,9 +52,12 @@ public class UserProfileService {
 
         UserProfile profile = userProfileRepository.findById(user.getId())
         .orElseGet(() -> UserProfile.fromUser(user));
-
         applyUpdates(profile, request);
+        clearWithdrawnFields(user.getId(), profile, request);
+        validateOnboardingConsent(user, profile, request);
         validate(profile);
+
+        recordConsents(user.getId(), profile, request);
 
         profile.setVersion(profile.getVersion() + 1);
         user.setProfileComplete(true);
@@ -64,7 +72,19 @@ public class UserProfileService {
         userRepository.save(user);
 
         UserProfile savedProfile = userProfileRepository.save(profile);
-        return ProfileResponse.from(savedProfile);
+        return response(savedProfile);
+    }
+
+    private ProfileResponse response(UserProfile profile) {
+        Map<String, Instant> consents = consentRepository
+                .findByUserId(profile.getUserId())
+                .stream()
+                .collect(Collectors.toUnmodifiableMap(
+                        consent -> consent.getFieldName().name(),
+                        ProfileFieldConsent::getConsentedAt
+                ));
+
+        return ProfileResponse.from(profile, consents);
     }
 
     private User currentUser(String email) {
@@ -144,6 +164,131 @@ public class UserProfileService {
 
         if (request.upcomingTravelDate() != null) {
             profile.setUpcomingTravelDate(request.upcomingTravelDate());
+        }
+    }
+
+    private void clearWithdrawnFields(
+        Long userId,
+        UserProfile profile,
+        UpdateProfileRequest request) {
+
+        Set<String> clearFields = request.clearFields() == null
+                ? Set.of()
+                : request.clearFields();
+
+        for (String fieldName : clearFields) {
+            ProfileFieldDefinition field = profileField(fieldName, "clearFields");
+
+            if (field.required()) {
+                throw new ProfileValidationException(Map.of(
+                        field.apiName(), "This required field cannot be withdrawn"
+                ));
+            }
+
+            clearProfileField(profile, field);
+
+            consentRepository.deleteByUserIdAndFieldName(userId, field);
+        }
+    }
+
+    private void clearProfileField(UserProfile profile, ProfileFieldDefinition field) {
+        switch (field) {
+            case COUNTRY_OF_ORIGIN -> profile.setCountryOfOrigin(null);
+            case COUNTRY_OF_CITIZENSHIP -> profile.setCountryOfCitizenship(null);
+            case CURRENT_LOCATION -> profile.setCurrentLocation(null);
+            case EMPLOYMENT_STATUS -> profile.setEmploymentStatus(null);
+            case EMPLOYER -> profile.setEmployer(null);
+            case VISA_START_DATE -> profile.setVisaStartDate(null);
+            case VISA_EXPIRY_DATE -> profile.setVisaExpiryDate(null);
+            case OPT_START_DATE -> profile.setOptStartDate(null);
+            case I140_FILING_DATE -> profile.setI140FilingDate(null);
+            case PRIORITY_DATE -> profile.setPriorityDate(null);
+            case ACADEMIC_LEVEL -> profile.setAcademicLevel(null);
+            case PROGRAM_END_DATE -> profile.setProgramEndDate(null);
+            case UPCOMING_TRAVEL_DATE -> profile.setUpcomingTravelDate(null);
+            case IMMIGRANT_CATEGORY -> profile.setImmigrantCategory(null);
+            case CHARGEABILITY_AREA -> profile.setChargeabilityArea(null);
+            case VISA_TYPE -> throw new IllegalArgumentException("visaType is required");
+        }
+    }
+
+    private void recordConsents(
+            Long userId,
+            UserProfile profile,
+            UpdateProfileRequest request) {
+
+        Set<String> consentedFields = request.consentedFields() == null
+                ? Set.of()
+                : request.consentedFields();
+
+        for (String fieldName : consentedFields) {
+            ProfileFieldDefinition field = profileField(fieldName, "consentedFields");
+
+            if (!isPopulated(profile, field)) {
+                continue;
+            }
+
+            consentRepository.save(new ProfileFieldConsent(
+                    userId,
+                    field,
+                    java.time.Instant.now()
+            ));
+        }
+    }
+
+    private ProfileFieldDefinition profileField(String fieldName, String requestField) {
+        try {
+            return ProfileFieldDefinition.valueOf(fieldName);
+        } catch (IllegalArgumentException exception) {
+            throw new ProfileValidationException(Map.of(
+                    requestField,
+                    "Unknown profile field: " + fieldName
+            ));
+        }
+    }
+
+    private boolean isPopulated(UserProfile profile, ProfileFieldDefinition field) {
+        return switch (field) {
+            case VISA_TYPE -> isPresent(profile.getVisaType());
+            case COUNTRY_OF_ORIGIN -> isPresent(profile.getCountryOfOrigin());
+            case COUNTRY_OF_CITIZENSHIP -> isPresent(profile.getCountryOfCitizenship());
+            case CURRENT_LOCATION -> isPresent(profile.getCurrentLocation());
+            case EMPLOYMENT_STATUS -> isPresent(profile.getEmploymentStatus());
+            case EMPLOYER -> isPresent(profile.getEmployer());
+            case VISA_START_DATE -> profile.getVisaStartDate() != null;
+            case VISA_EXPIRY_DATE -> profile.getVisaExpiryDate() != null;
+            case OPT_START_DATE -> profile.getOptStartDate() != null;
+            case I140_FILING_DATE -> profile.getI140FilingDate() != null;
+            case PRIORITY_DATE -> profile.getPriorityDate() != null;
+            case ACADEMIC_LEVEL -> isPresent(profile.getAcademicLevel());
+            case PROGRAM_END_DATE -> profile.getProgramEndDate() != null;
+            case UPCOMING_TRAVEL_DATE -> profile.getUpcomingTravelDate() != null;
+            case IMMIGRANT_CATEGORY -> isPresent(profile.getImmigrantCategory());
+            case CHARGEABILITY_AREA -> isPresent(profile.getChargeabilityArea());
+        };
+    }
+
+    private void validateOnboardingConsent(
+            User user,
+            UserProfile profile,
+            UpdateProfileRequest request) {
+        if (user.isProfileComplete()) {
+            return;
+        }
+
+        Set<String> consentedFields = request.consentedFields() == null
+                ? Set.of()
+                : request.consentedFields();
+        Map<String, String> errors = new LinkedHashMap<>();
+
+        for (ProfileFieldDefinition field : ProfileFieldDefinition.values()) {
+            if (isPopulated(profile, field) && !consentedFields.contains(field.name())) {
+                errors.put(field.apiName(), "Consent is required before this field can be used.");
+            }
+        }
+
+        if (!errors.isEmpty()) {
+            throw new ProfileValidationException(errors);
         }
     }
 
