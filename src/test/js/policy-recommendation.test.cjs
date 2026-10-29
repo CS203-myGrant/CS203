@@ -6,7 +6,7 @@ const html=fs.readFileSync('app/mygrant-prototype.html','utf8');
 const source=html.slice(html.indexOf('async function openPolicyDetail('),html.indexOf('function renderNotificationDetail('));
 function setup(fetch){
   const context=vm.createContext({state:{},apiFetch:fetch,parseApiResponse:async response=>response,
-    goto(view){context.state.view=view;},render(){}});
+    goto(view){context.state.view=view;},render(){},fetchAllPages:async()=>[]});
   vm.runInContext(source,context);
   return context;
 }

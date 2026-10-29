@@ -105,6 +105,7 @@ class AccountPurgeServiceTests {
         notificationsBeforeEmails.verify(emailDeliveryRepository).deleteAllByUserId(USER_ID);
         verify(userProfileRepository).deleteRecommendationsByUserId(USER_ID);
         verify(userProfileRepository).deleteApplicationProgressByUserId(USER_ID);
+        verify(userProfileRepository).deleteQuestionHistoryByUserId(USER_ID);
         verify(userProfileRepository).deleteById(USER_ID);
         verify(immigrationDocumentRepository).deleteAllByUserId(USER_ID);
         verify(deletionRequestRepository).deleteAllByUserId(USER_ID);

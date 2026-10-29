@@ -31,13 +31,17 @@ public class RagService {
     private final OpenAiGenerationService generator;
     private final EvidenceRanker evidenceRanker;
     private final ImpactJudgeService judge;
+    private final ProfilePolicyRetrieval profiles;
+    private final mygrant.policies.PolicyQuestionHistory history;
 
     public RagService(VectorStore vectorStore, OpenAiGenerationService generator,
-            EvidenceRanker evidenceRanker, ImpactJudgeService judge) {
+            EvidenceRanker evidenceRanker, ImpactJudgeService judge, ProfilePolicyRetrieval profiles,
+            mygrant.policies.PolicyQuestionHistory history) {
         this.vectorStore = vectorStore;
         this.generator = generator;
         this.evidenceRanker = evidenceRanker;
         this.judge = judge;
+        this.profiles=profiles;this.history=history;
     }
 
     /** Answers from retrieved evidence or returns an insufficient-evidence response. */
@@ -51,13 +55,25 @@ public class RagService {
                 .build();
 
         List<Document> evidence = evidenceRanker.rank(vectorStore.similaritySearch(searchRequest));
+        return answer(request.question(),visaType,evidence);
+    }
+
+    public RagQueryResponse queryForUser(String email,String question){
+        var profile=profiles.profile(email);
+        var evidence=evidenceRanker.rank(profiles.search(profile,question,null));
+        var response=answer(question,profile.getVisaType(),evidence);
+        history.record(email,null,question,response);
+        return response;
+    }
+
+    private RagQueryResponse answer(String question,String visaType,List<Document> evidence){
         if (evidence.isEmpty()) {
             return insufficientEvidence();
         }
 
         Assessment assessment = assess(evidence);
         String context = "User visa type: " + visaType + "\nEvidence:\n" + formatEvidence(evidence)
-                + "\nQuestion: " + request.question();
+                + "\nQuestion: " + question;
         String answer = generator.generate("""
                         You are myGRANT, an immigration policy information system.
                         Answer only from the supplied evidence.
@@ -81,10 +97,11 @@ public class RagService {
 
     private String formatEvidence(List<Document> evidence) {
         StringBuilder context = new StringBuilder();
+        Map<String,Integer> numbers=new LinkedHashMap<>();
         for (int index = 0; index < evidence.size(); index++) {
             Document document = evidence.get(index);
             context.append("[%d] %s | %s | %s%n%s%n%n".formatted(
-                    index + 1,
+                    numbers.computeIfAbsent(metadata(document,"externalId"),key->numbers.size()+1),
                     metadata(document, "title"),
                     metadata(document, "status"),
                     metadata(document, "sourceUrl"),

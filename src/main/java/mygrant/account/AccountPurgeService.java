@@ -75,6 +75,7 @@ public class AccountPurgeService {
         emailPreferenceRepository.deleteById(userId);
         userProfileRepository.deleteRecommendationsByUserId(userId);
         userProfileRepository.deleteApplicationProgressByUserId(userId);
+        userProfileRepository.deleteQuestionHistoryByUserId(userId);
         userProfileRepository.deleteById(userId);
         immigrationDocumentRepository.deleteAllByUserId(userId);
         deletionRequestRepository.deleteAllByUserId(userId);
