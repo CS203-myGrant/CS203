@@ -73,6 +73,8 @@ public class AccountPurgeService {
         // After the notifications, which reference their email.
         emailDeliveryRepository.deleteAllByUserId(userId);
         emailPreferenceRepository.deleteById(userId);
+        userProfileRepository.deleteRecommendationsByUserId(userId);
+        userProfileRepository.deleteApplicationProgressByUserId(userId);
         userProfileRepository.deleteById(userId);
         immigrationDocumentRepository.deleteAllByUserId(userId);
         deletionRequestRepository.deleteAllByUserId(userId);
