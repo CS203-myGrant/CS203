@@ -55,6 +55,7 @@ class PolicyRecommendationStoreTest {
         assertEquals(result, store().getOrGenerate("user", policy, () -> result));
         assertEquals(result, store().getOrGenerate("user", policy, () -> { throw new AssertionError("AI called twice"); }));
         verify(jdbc, times(1)).update(anyString(), eq(1L), eq(21L), anyString(), anyString());
+        assertEquals(result, store().findCurrent("user", policy).orElseThrow());
     }
 
     @Test

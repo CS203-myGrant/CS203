@@ -73,6 +73,22 @@ public class PolicyRecommendationStore {
         }
     }
 
+    /** Reads only this user's current assessment; asking a question never regenerates it. */
+    public java.util.Optional<ProfileImpactAssessment> findCurrent(String email, PolicyDocument policy) {
+        var user = users.findByEmail(email).orElseThrow(() -> new IllegalStateException("User not found"));
+        var profile = profiles.findById(user.getId()).orElseGet(() -> UserProfile.fromUser(user));
+        List<String> saved = jdbc.queryForList("""
+                SELECT assessment_json FROM policy_recommendations
+                WHERE user_id = ? AND policy_id = ? AND input_hash = ?
+                """, String.class, user.getId(), policy.getId(), fingerprint(profile, policy));
+        if (saved.isEmpty()) return java.util.Optional.empty();
+        try {
+            return java.util.Optional.of(mapper.readValue(saved.getFirst(), ProfileImpactAssessment.class));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
+            return java.util.Optional.empty();
+        }
+    }
+
     private String json(Object value) {
         try {
             return mapper.writeValueAsString(value);
