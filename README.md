@@ -1121,6 +1121,11 @@ The health response should contain `"status":"UP"`, PostgreSQL should be healthy
 
 ### 2. Ask an F-1 question
 
+Retrieval uses the signed-in account's saved immigration profile. The legacy `visaType`
+request field is ignored. Use an account whose saved category is F-1 for this example;
+use a J-1 account for step 3 and an H-1B account for step 4. Changing the JSON field
+does not change the caller's retrieval scope.
+
 ```bash
 curl -s -X POST http://localhost:8080/api/v1/rag/query \
   -H "Authorization: Bearer $TOKEN" \
@@ -1152,7 +1157,7 @@ Check for citation `2026-14439` and compare the answer with the linked source.
 
 ### 4. Verify the visa filter
 
-Ask about this F-1/J-1 rule using an H-1B filter:
+Sign in with an H-1B profile and ask about this F-1/J-1 rule:
 
 ```bash
 curl -s -X POST http://localhost:8080/api/v1/rag/query \
@@ -1169,6 +1174,30 @@ have indexed them. Do not judge correctness from answer text alone: inspect `cit
 `confidence`, `requiresReview`, and `warnings`.
 
 ## Run automated tests
+
+### Policy Q&A and saved conversations (CS203-55 through CS203-58)
+
+- Retrieval filters use the authenticated caller's saved visa category. Policy-specific
+  follow-ups additionally restrict retrieval to that policy. Profile fields inform generation;
+  user identity is omitted from the model prompt.
+  If vector search finds no qualifying chunk for a selected policy that matches the saved
+  visa category, the assistant uses bounded passages from that policy's stored source.
+  This fallback has LOW confidence, requires review, and still needs judge approval.
+- `POST /api/v1/policies/{id}/questions` accepts `{"question":"What should I do next?"}`.
+  Responses include `answer`, `citations`, `confidence`, `requiresReview`, and `evaluation`.
+  Confidence describes evidence strength and uncertainty, not a calibrated legal probability.
+- `GET /api/v1/policies/{id}/questions?page=0&size=20` returns only the signed-in user's
+  saved exchanges for that policy, oldest first. The last five database exchanges provide
+  follow-up context. Client-provided history is ignored.
+- General questions use `POST /api/v1/rag/query` with `{"question":"What changed?"}`;
+  their history is available at `GET /api/v1/rag/history?page=0&size=20`.
+- Both paths store returned answers and review notices, including citations, confidence
+  and judge metadata. Rejected raw model output is not stored. Account deletion removes history.
+- The recommendation page restores saved conversations after refresh/sign-in and renders
+  citation links and confidence. Generated answers still require independent judge approval.
+- Restart Spring Boot to apply migration `V27__create_policy_question_history.sql`.
+
+### Test commands
 
 ```bash
 ./mvnw test

@@ -36,7 +36,8 @@ class RagServiceTests {
 
     @BeforeEach
     void setUp() {
-        ragService = new RagService(vectorStore, generator, new EvidenceRanker(), judge);
+        ragService = new RagService(vectorStore, generator, new EvidenceRanker(), judge,
+                org.mockito.Mockito.mock(ProfilePolicyRetrieval.class),org.mockito.Mockito.mock(mygrant.policies.PolicyQuestionHistory.class));
     }
 
     @Test

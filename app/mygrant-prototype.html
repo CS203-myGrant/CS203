@@ -1634,7 +1634,7 @@ async function saveApplicationProgress(event){
 async function openPolicyDetail(id){
   const detail={id, policy:null, assessment:null, loading:true, error:null, reportText:'', reporting:false, reported:false, reportError:null};
   state.policyChats=state.policyChats || {};
-  detail.chat=state.policyChats[id] || (state.policyChats[id]={messages:[],draft:'',sending:false,error:null});
+  detail.chat=state.policyChats[id] || (state.policyChats[id]={messages:[],draft:'',sending:false,error:null,historyLoaded:false,historyLoading:false});
   state.policyDetail=detail;
   goto('policyDetail');
   try{
@@ -1645,6 +1645,7 @@ async function openPolicyDetail(id){
       throw new Error('Personalized recommendations are not available on this server yet. Please try again after the latest backend has been deployed. You can still read the policy summary and original source.');
     }
     detail.assessment=await parseApiResponse(response);
+    await loadPolicyChatHistory(detail);
   }catch(error){ detail.error=error.message; }
   finally{ detail.loading=false; if(state.policyDetail===detail && state.view==='policyDetail') render(); }
 }
@@ -1692,6 +1693,25 @@ function renderPolicyDetail(){
       <button class="btn" type="submit" ${detail.reporting?'disabled':''}>${detail.reporting?'Sending...':'Report recommendation'}</button></form>`}</div>`:''}`;
 }
 
+async function loadPolicyChatHistory(detail){
+  const chat=detail.chat;
+  if(chat.historyLoaded || chat.historyLoading)return;
+  chat.historyLoading=true;chat.error=null;
+  try{
+    const rows=await fetchAllPages(`/api/v1/policies/${detail.id}/questions`);
+    chat.messages=rows.flatMap(row=>[{role:'USER',message:row.question},
+      {role:'ASSISTANT',message:row.response.answer,...row.response}]);
+    chat.historyLoaded=true;
+  }catch(error){chat.error='Could not load saved conversation. '+error.message;}
+  finally{chat.historyLoading=false;}
+}
+
+async function retryPolicyChatHistory(){
+  const detail=state.policyDetail;
+  await loadPolicyChatHistory(detail);
+  if(state.policyDetail===detail && state.view==='policyDetail')render();
+}
+
 function renderPolicyChat(detail){
   const chat=detail.chat;
   return `<section class="detail-card" aria-labelledby="policy-chat-heading">
@@ -1700,20 +1720,24 @@ function renderPolicyChat(detail){
     <div class="chat-shell" style="max-width:100%;">
       <div class="chat-head"><strong>Policy assistant</strong><span class="tag">AI-generated</span></div>
       <div class="chat-log" id="policy-chat-log" role="log" aria-label="Policy questions and answers" aria-live="polite" style="min-height:180px;height:auto;max-height:480px;">
+        ${chat.historyLoading?'<p role="status">Loading saved conversation...</p>':''}
         ${chat.messages.length?chat.messages.map(message=>`<div class="chat-row ${message.role==='USER'?'mine':''}">
           <span class="chat-meta">${message.role==='USER'?'You':'Policy assistant'}</span>
           <div class="chat-message">${escapeHtml(message.message)}</div>
+          ${message.confidence?`<span class="chat-meta">${escapeHtml(message.confidence)} evidence confidence</span>`:''}
+          ${(message.citations || []).map((citation,index)=>/^https?:\/\//i.test(citation.sourceUrl || '')?`<a href="${escapeAttribute(citation.sourceUrl)}" target="_blank" rel="noopener noreferrer" style="font-size:14px;">[${index+1}] ${escapeHtml(citation.title)}</a>`:'').join('')}
           ${message.evaluation?`<span class="chat-meta">${message.evaluation.verdict==='YES'?'AI cross-check passed':'Answer withheld: independent review '+escapeHtml(message.evaluation.verdict.toLowerCase())}</span>`:''}
-          ${message.role==='ASSISTANT'?`${message.sourceUrl && /^https?:\/\//i.test(message.sourceUrl)?`<a href="${escapeAttribute(message.sourceUrl)}" target="_blank" rel="noopener noreferrer" style="font-size:14px;">[1] ${escapeHtml(message.sourceTitle || 'Policy source')}</a>`:''}${message.requiresReview?'<span class="tag">Confirm with a qualified adviser</span>':''}`:''}
+          ${message.role==='ASSISTANT'?`${!message.citations && message.sourceUrl && /^https?:\/\//i.test(message.sourceUrl)?`<a href="${escapeAttribute(message.sourceUrl)}" target="_blank" rel="noopener noreferrer" style="font-size:14px;">[1] ${escapeHtml(message.sourceTitle || 'Policy source')}</a>`:''}${message.requiresReview?'<span class="tag">Confirm with a qualified adviser</span>':''}`:''}
         </div>`).join(''):'<p class="rag-status">What would you like to understand about this policy?</p>'}
         ${chat.sending?'<p role="status">Checking the policy source and independently reviewing the answer...</p>':''}
       </div>
       ${!chat.messages.length?`<div style="display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px;">${['Why does this affect me?','What should I do next?','When does this change take effect?'].map(question=>`<button class="btn ghost small" type="button" onclick="setPolicyChatQuestion('${question}')" ${chat.sending?'disabled':''}>${question}</button>`).join('')}</div>`:''}
       ${chat.error?`<p class="rag-error" role="alert" style="margin:12px;">${escapeHtml(chat.error)}</p>`:''}
+      ${!chat.historyLoaded && chat.error?'<button class="btn ghost small" type="button" onclick="retryPolicyChatHistory()">Reload conversation</button>':''}
       <form class="chat-compose" onsubmit="sendPolicyQuestion(event)" style="align-items:flex-end;flex-wrap:wrap;">
         <label for="policy-chat-question" style="width:100%;">Your question</label>
         <textarea id="policy-chat-question" required maxlength="2000" rows="2" placeholder="Ask a follow-up question..." style="flex:1;min-width:180px;padding:10px;font:inherit;" oninput="state.policyDetail.chat.draft=this.value" ${chat.sending?'disabled':''}>${escapeHtml(chat.draft)}</textarea>
-        <button class="btn small" type="submit" ${chat.sending?'disabled':''}>${chat.sending?'Answering...':'Send question'}</button>
+        <button class="btn small" type="submit" ${chat.sending || chat.historyLoading || !chat.historyLoaded?'disabled':''}>${chat.sending?'Answering...':'Send question'}</button>
       </form>
     </div>
     <p class="rag-status">Answers use this policy's source and your saved profile. They may be incomplete. This is informational guidance, not legal advice.</p>
@@ -1732,13 +1756,12 @@ function setPolicyChatQuestion(question){
 async function sendPolicyQuestion(event){
   event.preventDefault();
   const detail=state.policyDetail,chat=detail?.chat;
-  if(!chat || chat.sending || !chat.draft.trim()) return;
+  if(!chat || chat.sending || chat.historyLoading || !chat.historyLoaded || !chat.draft.trim()) return;
   const question=chat.draft.trim();
-  const history=chat.messages.slice(-10).map(({role,message})=>({role,message}));
   chat.sending=true;chat.error=null;chat.messages.push({role:'USER',message:question});chat.draft='';render();
   try{
-    const answer=await parseApiResponse(await apiFetch(`/api/v1/policies/${detail.id}/questions`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,history})}));
-    chat.messages.push({role:'ASSISTANT',message:answer.answer,sourceTitle:answer.sourceTitle,sourceUrl:answer.sourceUrl,requiresReview:answer.requiresReview,evaluation:answer.evaluation});
+    const answer=await parseApiResponse(await apiFetch(`/api/v1/policies/${detail.id}/questions`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,history:[]})}));
+    chat.messages.push({role:'ASSISTANT',message:answer.answer,...answer});
   }catch(error){
     chat.messages.pop();chat.draft=question;chat.error=error.message;
   }finally{
@@ -2852,7 +2875,7 @@ function renderRag(){
     ${ingest ? renderProfileImpact(ingest.impactAssessment) + renderFederalRegisterSource(ingest) : ''}
     <form class="rag-query-form" onsubmit="submitRagQuery(event)">
       <div class="field"><label for="rag-question">Ask about an indexed policy</label><input id="rag-question" maxlength="2000" required placeholder="How does the new fixed admission period affect an F-1 student?" value="${escapeAttribute(state.ragQuestion)}"></div>
-      <div class="field"><label for="rag-visa-type">Visa category</label><select id="rag-visa-type"><option ${state.ragVisaType==='F-1'?'selected':''}>F-1</option><option ${state.ragVisaType==='J-1'?'selected':''}>J-1</option><option ${state.ragVisaType==='H-1B'?'selected':''}>H-1B</option></select></div>
+      <div class="field"><label for="rag-visa-type">Visa category from your profile</label><input id="rag-visa-type" readonly value="${escapeAttribute(state.profile?.visaType || state.user?.visaType || '')}"><small>Retrieval uses your saved profile, which you can update in Your profile.</small></div>
       <button class="btn" type="submit" ${state.ragLoading?'disabled':''}>${state.ragLoading?'Searching...':'Ask myGRANT'}</button>
     </form>
     ${state.ragLoading?'<p class="rag-status">Embedding the question, searching pgvector, and generating a grounded answer...</p>':''}
@@ -2975,7 +2998,7 @@ async function submitFederalRegisterImport(event){
 async function submitRagQuery(event){
   event.preventDefault();
   const question = document.getElementById('rag-question').value.trim();
-  const visaType = document.getElementById('rag-visa-type').value;
+  const visaType = state.profile?.visaType || state.user?.visaType || '';
   if(!question) return;
   Object.assign(state,{ragQuestion:question,ragVisaType:visaType,ragLoading:true,ragResult:null,ragError:null});
   render();

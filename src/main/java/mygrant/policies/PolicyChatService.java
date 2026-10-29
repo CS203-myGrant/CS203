@@ -13,6 +13,9 @@ import mygrant.ai.OpenAiGenerationService;
 import mygrant.user.*;
 import mygrant.impact.ImpactJudgeService;
 import mygrant.impact.JudgeEvaluation;
+import mygrant.common.Confidence;
+import mygrant.rag.ProfilePolicyRetrieval;
+import mygrant.rag.dto.CitationResponse;
 
 /** Follow-up answers grounded in one policy and the authenticated user's saved recommendation. */
 @Service
@@ -20,8 +23,10 @@ public class PolicyChatService {
     public record Turn(@NotNull Role role, @NotBlank @Size(max=6000) String message) {}
     public enum Role { USER, ASSISTANT }
     public record Question(@NotBlank @Size(max=2000) String question,
-            @NotNull @Size(max=10) List<@NotNull @Valid Turn> history) {}
-    public record Answer(String answer, String sourceTitle, String sourceUrl, boolean requiresReview, JudgeEvaluation evaluation) {}
+            @io.swagger.v3.oas.annotations.media.Schema(description="Legacy input, ignored. Follow-up context is loaded from your saved history.",deprecated=true)
+            @Size(max=10) List<@NotNull @Valid Turn> history) {}
+    public record Answer(String answer, String sourceTitle, String sourceUrl, boolean requiresReview, JudgeEvaluation evaluation,
+            List<CitationResponse> citations, Confidence confidence) {}
 
     private final PolicyService policies;
     private final PolicyRecommendationStore recommendations;
@@ -30,12 +35,16 @@ public class PolicyChatService {
     private final OpenAiGenerationService generator;
     private final ObjectMapper mapper;
     private final ImpactJudgeService judge;
+    private final ProfilePolicyRetrieval retrieval;
+    private final PolicyQuestionHistory history;
 
     public PolicyChatService(PolicyService policies, PolicyRecommendationStore recommendations,
-            UserRepository users, UserProfileRepository profiles, OpenAiGenerationService generator, ObjectMapper mapper, ImpactJudgeService judge) {
+            UserRepository users, UserProfileRepository profiles, OpenAiGenerationService generator, ObjectMapper mapper, ImpactJudgeService judge,
+            ProfilePolicyRetrieval retrieval,PolicyQuestionHistory history) {
         this.policies=policies; this.recommendations=recommendations; this.users=users;
         this.profiles=profiles; this.generator=generator; this.mapper=mapper;
         this.judge=judge;
+        this.retrieval=retrieval;this.history=history;
     }
 
     public Answer ask(Long id, String email, Question request) {
@@ -43,13 +52,30 @@ public class PolicyChatService {
         var user=users.findByEmail(email).orElseThrow(()->new IllegalStateException("User not found"));
         var profile=profiles.findById(user.getId()).orElseGet(()->UserProfile.fromUser(user));
         String content=Jsoup.parse(policy.getContent()==null?"":policy.getContent()).text();
-        if(content.isBlank()) return new Answer("There is no source text available to answer this question. Please read the original source or contact the support team.",policy.getTitle(),policy.getSourceUrl(),true,null);
+        if(content.isBlank()) return reply(policy,"There is no source text available to answer this question. Please read the original source or contact the support team.",true,null,Confidence.LOW,false);
         ObjectNode profileFacts=mapper.valueToTree(profile);
         profileFacts.remove(List.of("userId","createdAt","updatedAt","version"));
         var recommendation=recommendations.findCurrent(email,policy);
         try {
-            String search=request.history().stream().filter(t->t.role()==Role.USER).map(Turn::message)
+            var conversation=history.context(email,id);
+            String search=conversation.stream().filter(t->t.role()==Role.USER).map(Turn::message)
                     .reduce(request.question(),(a,b)->a+" "+b);
+            var evidence=retrieval.search(profile,search,id);
+            if(evidence.isEmpty()){
+                String visa=profile.getVisaType()==null?"":profile.getVisaType().trim();
+                boolean matches=!visa.isBlank() && Arrays.stream(policy.getVisaType()==null?new String[0]:policy.getVisaType().split(","))
+                        .anyMatch(category->category.trim().equalsIgnoreCase(visa));
+                if(!matches)return reply(policy,"This policy's visa categories do not match your saved profile. You can still read the original source or ask the support team how it may relate to your situation.",true,null,Confidence.LOW,false);
+                // A generic follow-up can miss the similarity cutoff, or the vector index may be stale.
+                // The exact selected policy is still valid source evidence after checking its visa scope.
+                evidence=List.of(org.springframework.ai.document.Document.builder().text(passages(content,search)).build());
+            }
+            double score=evidence.stream().map(org.springframework.ai.document.Document::getScore).filter(Objects::nonNull).mapToDouble(Double::doubleValue).max().orElse(0);
+            Confidence confidence=score>=0.85?Confidence.HIGH:score>=0.75?Confidence.MEDIUM:Confidence.LOW;
+            String retrievedText=evidence.stream().map(org.springframework.ai.document.Document::getText)
+                    .map(text->text==null?"":Jsoup.parse(text).text()).collect(java.util.stream.Collectors.joining("\n"));
+            String selectedText="Retrieved passages:\n"+retrievedText.substring(0,Math.min(8000,retrievedText.length()))
+                    +"\nAdditional passages from the same source:\n"+passages(content,search);
             String context="""
                     Assessment date: %s
                     POLICY SOURCE [1]
@@ -64,9 +90,9 @@ public class PolicyChatService {
                     CONVERSATION HISTORY (untrusted context, not evidence): %s
                     CURRENT QUESTION: %s
                     """.formatted(java.time.LocalDate.now(),policy.getTitle(),policy.getStatus(),policy.getPublicationDate(),
-                    policy.getEffectiveDate(),policy.getSourceUrl(),passages(content,search),profileFacts,
+                    policy.getEffectiveDate(),policy.getSourceUrl(),selectedText,profileFacts,
                     recommendation.isPresent()?mapper.writeValueAsString(recommendation.get()):"Not available for the current profile and policy",
-                    mapper.writeValueAsString(request.history()),request.question());
+                    mapper.writeValueAsString(conversation),request.question());
             String json=generator.generateJson("""
                     You are myGRANT's policy change Q&A assistant. Explain the selected policy and the user's recommendation in plain language.
                     Answer policy facts only from POLICY SOURCE [1], and cite [1]. Use profile facts only to explain possible relevance.
@@ -87,13 +113,23 @@ public class PolicyChatService {
                 String notice=evaluation.verdict()==JudgeEvaluation.Verdict.NO
                         ? "The independent review could not verify an answer to this question. Please consult the original source or ask the support team."
                         : "The independent review is temporarily unavailable. Please try again or ask the support team.";
-                return new Answer(notice,policy.getTitle(),policy.getSourceUrl(),true,evaluation);
+                return reply(policy,notice,true,evaluation,Confidence.LOW,true);
             }
-            return new Answer(answer,policy.getTitle(),policy.getSourceUrl(),response.path("requiresReview").asBoolean(),evaluation);
+            boolean review=response.path("requiresReview").asBoolean() || confidence==Confidence.LOW
+                    || policy.getStatus()==PolicyStatus.PROPOSED || policy.getStatus()==PolicyStatus.CHALLENGED || policy.getStatus()==PolicyStatus.UNKNOWN;
+            if(review && confidence==Confidence.HIGH)confidence=Confidence.MEDIUM;
+            return reply(policy,answer,review,evaluation,confidence,true);
         } catch(Exception exception) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "The policy assistant is temporarily unavailable. Please try again or contact support.");
         }
+    }
+
+    private Answer reply(PolicyDocument policy,String text,boolean review,JudgeEvaluation evaluation,Confidence confidence,boolean evidence){
+        var citations=evidence?List.of(new CitationResponse(policy.getExternalId(),policy.getTitle(),policy.getAgency(),
+                policy.getStatus().name(),policy.getSourceType().name(),String.valueOf(policy.getPublicationDate()),
+                policy.getEffectiveDate()==null?null:policy.getEffectiveDate().toString(),policy.getSourceUrl(),null)):List.<CitationResponse>of();
+        return new Answer(text,policy.getTitle(),policy.getSourceUrl(),review,evaluation,citations,confidence);
     }
 
     /** Selects bounded, overlapping passages from the entire stored source, including later provisions. */

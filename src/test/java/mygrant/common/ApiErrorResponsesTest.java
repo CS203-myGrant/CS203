@@ -54,6 +54,7 @@ import mygrant.user.UserRole;
         FeedbackController.class, ImmigrationDocumentController.class})
 @Import({SecurityConfig.class, JwtAuthenticationFilter.class})
 class ApiErrorResponsesTest {
+    @MockBean mygrant.policies.PolicyQuestionHistory questionHistory;
 
     private static final String RAG_QUESTION = "{\"question\":\"What changed?\",\"visaType\":\"F-1\"}";
 
@@ -104,8 +105,7 @@ class ApiErrorResponsesTest {
         mvc.perform(post("/api/v1/rag/query").header("Authorization", applicant)
                         .contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(apiError(400, "Request validation failed"))
-                .andExpect(jsonPath("$.validationErrors.question").exists())
-                .andExpect(jsonPath("$.validationErrors.visaType").exists());
+                .andExpect(jsonPath("$.validationErrors.question").exists());
         mvc.perform(post("/api/v1/rag/query").header("Authorization", applicant)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"question\":"))
                 .andExpect(apiError(400, "Request body is invalid. Check the JSON and date values."));
@@ -126,7 +126,7 @@ class ApiErrorResponsesTest {
         mvc.perform(post("/api/v1/ingestion/visa-bulletin/2026-10").header("Authorization", token(UserRole.ADMIN, true)))
                 .andExpect(apiError(502, "Visa Bulletin import failed; inspect /api/v1/ingestion/visa-bulletin/health"));
 
-        when(ragService.query(any())).thenThrow(new ResourceAccessException("Embedding service unavailable"));
+        when(ragService.queryForUser(any(),any())).thenThrow(new ResourceAccessException("Embedding service unavailable"));
         mvc.perform(post("/api/v1/rag/query").header("Authorization", token(UserRole.APPLICANT, true))
                         .contentType(MediaType.APPLICATION_JSON).content(RAG_QUESTION))
                 .andExpect(apiError(503,
@@ -135,7 +135,7 @@ class ApiErrorResponsesTest {
 
     @Test
     void unexpectedFailuresHideTheirDetails() throws Exception {
-        when(ragService.query(any())).thenThrow(new IllegalStateException("password=hunter2"));
+        when(ragService.queryForUser(any(),any())).thenThrow(new IllegalStateException("password=hunter2"));
 
         mvc.perform(post("/api/v1/rag/query").header("Authorization", token(UserRole.APPLICANT, true))
                         .contentType(MediaType.APPLICATION_JSON).content(RAG_QUESTION))
