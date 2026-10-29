@@ -881,6 +881,7 @@ async function logout(){
 }
 
 function clearLocalSession(){
+  state.policyChats={};
   state.applicationTracker=null;
   stopFeedbackPolling();
   if(feedbackBadgeTimer){ clearInterval(feedbackBadgeTimer); feedbackBadgeTimer=null; }
@@ -1605,6 +1606,8 @@ async function saveApplicationProgress(event){
 
 async function openPolicyDetail(id){
   const detail={id, policy:null, assessment:null, loading:true, error:null, reportText:'', reporting:false, reported:false, reportError:null};
+  state.policyChats=state.policyChats || {};
+  detail.chat=state.policyChats[id] || (state.policyChats[id]={messages:[],draft:'',sending:false,error:null});
   state.policyDetail=detail;
   goto('policyDetail');
   try{
@@ -1632,6 +1635,7 @@ function renderPolicyRecommendation(assessment){
   const unavailable=assessment.urgency==='UNAVAILABLE';
   return `<section class="detail-card" aria-labelledby="policy-impact-heading">
     <h2 id="policy-impact-heading">How this affects you</h2>
+    ${assessment.evaluation?`<p class="rag-status">${assessment.evaluation.verdict==='YES'?'AI cross-check passed':'Independent review: '+escapeHtml(assessment.evaluation.verdict)}</p>`:''}
     <div class="tag-row"><span class="tag">${escapeHtml(formatUrgency(assessment.urgency))}</span>${assessment.requiresHumanReview?'<span class="tag">Needs human review</span>':''}</div>
     <p style="line-height:1.7;">${escapeHtml(assessment.summary)}</p>
     ${(assessment.reasons || []).length?`<h3>Why this matters for your profile</h3><ul>${assessment.reasons.map(reason=>`<li>${escapeHtml(reason)}</li>`).join('')}</ul>`:''}
@@ -1652,13 +1656,72 @@ function renderPolicyDetail(){
       <section style="margin-top:24px;" aria-labelledby="policy-summary-heading"><h2 id="policy-summary-heading">Policy summary</h2><p style="line-height:1.75;max-width:80ch;">${escapeHtml(policySummary(policy.content))}</p><p class="rag-status">From the official source summary.</p></section></div>`:''}
     ${detail.loading?'<p role="status">Reviewing this policy against your profile. This may take a moment...</p>':''}
     ${detail.error?`<div class="rag-error" role="alert">${escapeHtml(detail.error)}</div><button class="btn ghost small" onclick="openPolicyDetail(${Number(detail.id)})">Try again</button>`:''}
-    ${detail.assessment?`${renderPolicyRecommendation(detail.assessment)}
+    ${detail.assessment?`${renderPolicyRecommendation(detail.assessment)}${renderPolicyChat(detail)}
       <div class="detail-card"><h2>Report a recommendation</h2><p>Tell the team what seems incorrect or missing. The policy and assessment will be included.</p>
       ${detail.reported?'<p role="status">Report sent. You can follow up in Feedback.</p><button class="btn ghost small" onclick="openFeedback()">Open feedback</button>':`
       <form onsubmit="reportPolicyRecommendation(event)"><label for="recommendation-report">What needs correcting?</label>
       <textarea id="recommendation-report" required maxlength="900" rows="4" style="display:block;width:100%;margin:12px 0;" oninput="state.policyDetail.reportText=this.value">${escapeHtml(detail.reportText)}</textarea>
       ${detail.reportError?`<p class="rag-error" role="alert">${escapeHtml(detail.reportError)}</p>`:''}
       <button class="btn" type="submit" ${detail.reporting?'disabled':''}>${detail.reporting?'Sending...':'Report recommendation'}</button></form>`}</div>`:''}`;
+}
+
+function renderPolicyChat(detail){
+  const chat=detail.chat;
+  return `<section class="detail-card" aria-labelledby="policy-chat-heading">
+    <h2 id="policy-chat-heading">Questions about this change?</h2>
+    <p>Ask about this policy, your recommendation, or your next steps.</p>
+    <div class="chat-shell" style="max-width:100%;">
+      <div class="chat-head"><strong>Policy assistant</strong><span class="tag">AI-generated</span></div>
+      <div class="chat-log" id="policy-chat-log" role="log" aria-label="Policy questions and answers" aria-live="polite" style="min-height:180px;height:auto;max-height:480px;">
+        ${chat.messages.length?chat.messages.map(message=>`<div class="chat-row ${message.role==='USER'?'mine':''}">
+          <span class="chat-meta">${message.role==='USER'?'You':'Policy assistant'}</span>
+          <div class="chat-message">${escapeHtml(message.message)}</div>
+          ${message.evaluation?`<span class="chat-meta">${message.evaluation.verdict==='YES'?'AI cross-check passed':'Answer withheld: independent review '+escapeHtml(message.evaluation.verdict.toLowerCase())}</span>`:''}
+          ${message.role==='ASSISTANT'?`${message.sourceUrl && /^https?:\/\//i.test(message.sourceUrl)?`<a href="${escapeAttribute(message.sourceUrl)}" target="_blank" rel="noopener noreferrer" style="font-size:14px;">[1] ${escapeHtml(message.sourceTitle || 'Policy source')}</a>`:''}${message.requiresReview?'<span class="tag">Confirm with a qualified adviser</span>':''}`:''}
+        </div>`).join(''):'<p class="rag-status">What would you like to understand about this policy?</p>'}
+        ${chat.sending?'<p role="status">Checking the policy source and independently reviewing the answer...</p>':''}
+      </div>
+      ${!chat.messages.length?`<div style="display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px;">${['Why does this affect me?','What should I do next?','When does this change take effect?'].map(question=>`<button class="btn ghost small" type="button" onclick="setPolicyChatQuestion('${question}')" ${chat.sending?'disabled':''}>${question}</button>`).join('')}</div>`:''}
+      ${chat.error?`<p class="rag-error" role="alert" style="margin:12px;">${escapeHtml(chat.error)}</p>`:''}
+      <form class="chat-compose" onsubmit="sendPolicyQuestion(event)" style="align-items:flex-end;flex-wrap:wrap;">
+        <label for="policy-chat-question" style="width:100%;">Your question</label>
+        <textarea id="policy-chat-question" required maxlength="2000" rows="2" placeholder="Ask a follow-up question..." style="flex:1;min-width:180px;padding:10px;font:inherit;" oninput="state.policyDetail.chat.draft=this.value" ${chat.sending?'disabled':''}>${escapeHtml(chat.draft)}</textarea>
+        <button class="btn small" type="submit" ${chat.sending?'disabled':''}>${chat.sending?'Answering...':'Send question'}</button>
+      </form>
+    </div>
+    <p class="rag-status">Answers use this policy's source and your saved profile. They may be incomplete. This is informational guidance, not legal advice.</p>
+    <button class="btn ghost small" type="button" onclick="openFeedback()">Ask the support team</button>
+  </section>`;
+}
+
+function setPolicyChatQuestion(question){
+  const chat=state.policyDetail?.chat;
+  if(!chat || chat.sending) return;
+  chat.draft=question;
+  const input=document.getElementById('policy-chat-question');
+  if(input){input.value=question;input.focus();}
+}
+
+async function sendPolicyQuestion(event){
+  event.preventDefault();
+  const detail=state.policyDetail,chat=detail?.chat;
+  if(!chat || chat.sending || !chat.draft.trim()) return;
+  const question=chat.draft.trim();
+  const history=chat.messages.slice(-10).map(({role,message})=>({role,message}));
+  chat.sending=true;chat.error=null;chat.messages.push({role:'USER',message:question});chat.draft='';render();
+  try{
+    const answer=await parseApiResponse(await apiFetch(`/api/v1/policies/${detail.id}/questions`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,history})}));
+    chat.messages.push({role:'ASSISTANT',message:answer.answer,sourceTitle:answer.sourceTitle,sourceUrl:answer.sourceUrl,requiresReview:answer.requiresReview,evaluation:answer.evaluation});
+  }catch(error){
+    chat.messages.pop();chat.draft=question;chat.error=error.message;
+  }finally{
+    chat.sending=false;
+    if(state.policyDetail?.chat===chat && state.view==='policyDetail'){
+      render();
+      const log=document.getElementById('policy-chat-log');if(log)log.scrollTop=log.scrollHeight;
+      document.getElementById('policy-chat-question')?.focus();
+    }
+  }
 }
 
 async function reportPolicyRecommendation(event){

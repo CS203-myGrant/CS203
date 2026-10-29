@@ -46,14 +46,15 @@ public class PolicyRecommendationStore {
                 """, String.class, user.getId(), policy.getId(), hash);
         if (!saved.isEmpty()) {
             try {
-                return mapper.readValue(saved.getFirst(), ProfileImpactAssessment.class);
+                var assessment = mapper.readValue(saved.getFirst(), ProfileImpactAssessment.class);
+                if (approved(assessment)) return assessment;
             } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
                 // A previously saved response may no longer match the current response format.
             }
         }
         ProfileImpactAssessment result = generate.get();
         // Transient provider failures must remain retryable on the next visit.
-        if (result.urgency() != ImpactUrgency.UNAVAILABLE) {
+        if (approved(result)) {
             jdbc.update("""
                     INSERT INTO policy_recommendations (user_id, policy_id, input_hash, assessment_json)
                     VALUES (?, ?, ?, ?)
@@ -73,11 +74,32 @@ public class PolicyRecommendationStore {
         }
     }
 
+    /** Reads only this user's current assessment; asking a question never regenerates it. */
+    public java.util.Optional<ProfileImpactAssessment> findCurrent(String email, PolicyDocument policy) {
+        var user = users.findByEmail(email).orElseThrow(() -> new IllegalStateException("User not found"));
+        var profile = profiles.findById(user.getId()).orElseGet(() -> UserProfile.fromUser(user));
+        List<String> saved = jdbc.queryForList("""
+                SELECT assessment_json FROM policy_recommendations
+                WHERE user_id = ? AND policy_id = ? AND input_hash = ?
+                """, String.class, user.getId(), policy.getId(), fingerprint(profile, policy));
+        if (saved.isEmpty()) return java.util.Optional.empty();
+        try {
+            return java.util.Optional.of(mapper.readValue(saved.getFirst(), ProfileImpactAssessment.class)).filter(PolicyRecommendationStore::approved);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
+            return java.util.Optional.empty();
+        }
+    }
+
     private String json(Object value) {
         try {
             return mapper.writeValueAsString(value);
         } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
             throw new IllegalStateException("Unable to serialize policy assessment", exception);
         }
+    }
+
+    private static boolean approved(ProfileImpactAssessment assessment) {
+        return assessment.urgency() != ImpactUrgency.UNAVAILABLE && assessment.evaluation() != null
+                && assessment.evaluation().verdict() == mygrant.impact.JudgeEvaluation.Verdict.YES;
     }
 }

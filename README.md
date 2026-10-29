@@ -76,7 +76,7 @@ Set these app variables in each service's environment/secret settings:
 | `DATABASE_PASSWORD` | Yes | Database credential; secret |
 | `JWT_SECRET` | Yes | Base64-encoded signing key, at least 32 bytes; secret |
 | `OPENAI_API_KEY` | Yes | OpenAI API credential for RAG embeddings and answers; secret. Staging and production refuse to start without it |
-| `ANTHROPIC_API_KEY` | Optional | Enables the Anthropic impact judge; secret |
+| `ANTHROPIC_API_KEY` | Required for verified AI output | Enables independent review of recommendations and policy Q&A; secret |
 | `WORKOS_API_KEY` | For WorkOS sign-in | WorkOS API credential; secret |
 | `WORKOS_CLIENT_ID` | For WorkOS sign-in | WorkOS client identifier |
 | `WORKOS_REDIRECT_URI` | For WorkOS sign-in | Environment callback URL ending in `/api/v1/auth/workos/callback` |
@@ -753,10 +753,14 @@ the generated assessment using the Anthropic API.
 Claude Haiku 5.5 independently checks the generated urgency and recommended next steps against the
 same profile and policy excerpt. A `YES` verdict returns the assessment. A `NO` returns a
 safe human-review response without retrying either model. If Claude is unavailable, the
-single OpenAI assessment is returned with an `UNAVAILABLE` judge result, a clear
-"not independently double-checked" notice, and a link to contact the myGRANT team.
-If OpenAI is unavailable, Claude produces one fallback assessment with the same notice;
-it is never treated as its own independent approval. A successful judge verdict is not proof of legal accuracy.
+generated assessment is withheld with an `UNAVAILABLE` judge result and a retry/support notice.
+If OpenAI is unavailable, the app reports that recommendations are temporarily unavailable;
+it does not display a self-reviewed fallback. Saved recommendations are reused only when
+their independent evaluation is `YES` and their policy/profile inputs are current.
+Policy follow-up chat and the RAG query endpoint also send every generated answer through
+the independent judge using the same source evidence, question and profile context used
+for generation. Rejected or unchecked answers are replaced by a safe notice; the API returns
+the judge result in `evaluation`. A successful judge verdict is not proof of legal accuracy.
 High-urgency results always require human review. Confidence is model-reported and is not
 a calibrated probability. This review is based on the first 12,000 characters, not the
 whole document; the deterministic notification rules remain separate. Both prompts use

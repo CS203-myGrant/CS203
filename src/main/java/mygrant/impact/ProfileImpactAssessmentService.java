@@ -74,29 +74,14 @@ public class ProfileImpactAssessmentService {
                 return withEvaluation(candidate, evaluation, false);
             }
             if (evaluation.verdict() == JudgeEvaluation.Verdict.UNAVAILABLE) {
-                return withEvaluation(candidate, evaluation, true);
+                return unavailable("The independent review is temporarily unavailable. Please try again or contact the myGRANT team.", evaluation, 1);
             }
             return unavailable("The independent review could not support this assessment. Please contact the myGRANT team for help.",
                     evaluation, 1);
         } catch (Exception exception) {
-            log.warn("OpenAI impact assessment failed; attempting one Claude fallback. Error type: {}",
+            log.warn("Impact assessment or independent review failed. Error type: {}",
                     exception.getClass().getSimpleName());
-            return fallbackToClaude(context);
-        }
-    }
-
-    private ProfileImpactAssessment fallbackToClaude(String context) {
-        try {
-            ProfileImpactAssessment fallback = assessmentFromJson(
-                    judge.generateFallbackAssessment(systemPrompt(), context, responseSchema()),
-                    "Claude fallback", judge.model());
-            JudgeEvaluation unverified = new JudgeEvaluation(JudgeEvaluation.Verdict.UNAVAILABLE,
-                    "OpenAI was unavailable. This Claude fallback assessment was not independently checked.",
-                    judge.model());
-            return withEvaluation(fallback, unverified, true);
-        } catch (Exception exception) {
-            log.warn("Claude fallback assessment failed; error type: {}", exception.getClass().getSimpleName());
-            return unavailable("Urgency assessment is temporarily unavailable; the source was still imported successfully.");
+            return unavailable("Urgency assessment is temporarily unavailable. Please try again or contact the myGRANT team.");
         }
     }
 

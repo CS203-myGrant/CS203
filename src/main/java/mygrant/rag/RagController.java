@@ -27,7 +27,7 @@ public class RagController {
     @Operation(summary = "Ask a question about indexed policies",
             description = "Retrieves evidence for the visa type (F-1, J-1 or H-1B) and answers from it with "
                     + "citations. With no matching evidence it says so instead of guessing. Not legal advice; "
-                    + "check `confidence`, `requiresReview` and `warnings`.")
+                    + "Generated answers must pass independent review; check `evaluation`, `confidence`, `requiresReview` and `warnings`.")
     @ApiResponse(responseCode = "200", description = "The answer and its evidence")
     @ApiResponse(responseCode = "400", description = "The question or visa type is missing, too long or unsupported")
     @ApiResponse(responseCode = "503", description = "The embedding or AI service is unavailable")
