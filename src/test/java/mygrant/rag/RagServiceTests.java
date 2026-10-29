@@ -29,12 +29,14 @@ class RagServiceTests {
 
     @Mock
     private OpenAiGenerationService generator;
+    @Mock
+    private mygrant.impact.ImpactJudgeService judge;
 
     private RagService ragService;
 
     @BeforeEach
     void setUp() {
-        ragService = new RagService(vectorStore, generator, new EvidenceRanker());
+        ragService = new RagService(vectorStore, generator, new EvidenceRanker(), judge);
     }
 
     @Test
@@ -56,5 +58,21 @@ class RagServiceTests {
                 .hasMessageContaining("Unsupported visa type");
 
         verify(vectorStore, never()).similaritySearch(any(SearchRequest.class));
+    }
+
+    @Test
+    void generatedAnswerMustPassJudgeBeforeBeingReturned() {
+        var document=org.springframework.ai.document.Document.builder().text("A proposed policy source")
+                .metadata(java.util.Map.of("externalId","doc","title","Policy","agency","DHS","status","PROPOSED",
+                        "sourceType","PRIMARY","publicationDate","2026-01-01","sourceUrl","https://example.org")).build();
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(document));
+        when(generator.generate(any(),any())).thenReturn("Generated candidate [1]");
+        for(var verdict:mygrant.impact.JudgeEvaluation.Verdict.values()){
+            when(judge.evaluateAnswer(any(),any())).thenReturn(new mygrant.impact.JudgeEvaluation(verdict,"Review","judge"));
+            var response=ragService.query(new RagQueryRequest("When?","F-1"));
+            assertThat(response.evaluation().verdict()).isEqualTo(verdict);
+            if(verdict==mygrant.impact.JudgeEvaluation.Verdict.YES)assertThat(response.answer()).isEqualTo("Generated candidate [1]");
+            else assertThat(response.answer()).doesNotContain("Generated candidate");
+        }
     }
 }

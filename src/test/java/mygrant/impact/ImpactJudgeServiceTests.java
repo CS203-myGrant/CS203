@@ -79,4 +79,21 @@ class ImpactJudgeServiceTests {
                 List.of("Relevant profile"), List.of("Review the source"), List.of(), true,
                 "OpenAI", "generator", null, 1);
     }
+
+    @Test
+    void independentlyReviewsQuestionAnswersAndReadsRejection() throws Exception {
+        RestClient.Builder builder=RestClient.builder();
+        MockRestServiceServer server=MockRestServiceServer.bindTo(builder).build();
+        String judgment=mapper.writeValueAsString(Map.of("verdict","NO","reason","Unsupported deadline"));
+        String response=mapper.writeValueAsString(Map.of("stop_reason","end_turn","content",List.of(Map.of("type","text","text",judgment))));
+        server.expect(requestTo("https://claude.test/v1/messages"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("policy Q&A answer")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("CURRENT QUESTION")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Unsupported candidate")))
+                .andRespond(withSuccess(response,MediaType.APPLICATION_JSON));
+        var judge=new ImpactJudgeService(builder,mapper,"key","judge","https://claude.test");
+        assertThat(judge.evaluateAnswer("SOURCE [1]: facts. CURRENT QUESTION: When?","Unsupported candidate [1]").verdict())
+                .isEqualTo(JudgeEvaluation.Verdict.NO);
+        server.verify();
+    }
 }

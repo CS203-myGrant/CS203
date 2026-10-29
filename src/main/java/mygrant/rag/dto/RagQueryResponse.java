@@ -10,6 +10,7 @@ public record RagQueryResponse(
         boolean requiresReview,
         List<CitationResponse> citations,
         List<RetrievedEvidenceResponse> retrievedEvidence,
-        List<String> warnings
+        List<String> warnings,
+        mygrant.impact.JudgeEvaluation evaluation
 ) {
 }
