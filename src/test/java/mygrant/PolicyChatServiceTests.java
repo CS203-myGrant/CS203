@@ -35,7 +35,7 @@ class PolicyChatServiceTests {
         User user=new User();user.setId(7L);user.setVisaType("F-1");
         when(users.findByEmail("owner@example.org")).thenReturn(Optional.of(user));
         when(recommendations.findCurrent("owner@example.org",policy)).thenReturn(Optional.of(new ProfileImpactAssessment(
-                ImpactUrgency.MEDIUM,80,"Saved assessment",List.of("Reason"),List.of("Verify dates"),true,"OpenAI","model",null,1)));
+                ImpactUrgency.MEDIUM,80,"Saved assessment",List.of("Reason"),List.of("Verify dates"),List.of(),true,"OpenAI","model",null,1)));
     }
     @Test void answersWithSavedRecommendationAndServerSideProfile(){
         when(generator.generateJson(anyString(),anyString(),anyMap(),eq("policy_follow_up")))
