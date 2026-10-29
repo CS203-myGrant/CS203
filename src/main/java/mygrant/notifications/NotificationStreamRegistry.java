@@ -28,6 +28,11 @@ public class NotificationStreamRegistry {
         emitter.onCompletion(remove);
         emitter.onTimeout(remove);
         emitter.onError(ignored -> remove.run());
+        try {
+            emitter.send(SseEmitter.event().comment("connected"));
+        } catch (IOException exception) {
+            emitter.completeWithError(exception);
+        }
         return emitter;
     }
 
