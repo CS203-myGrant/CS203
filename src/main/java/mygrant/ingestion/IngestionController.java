@@ -1,6 +1,7 @@
 package mygrant.ingestion;
 
 import java.security.Principal;
+import java.util.Map;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -37,13 +38,16 @@ public class IngestionController {
     private final PolicyIngestionService ingestionService;
     private final FederalRegisterIngestionService federalRegisterIngestionService;
     private final SourceSyncService sourceSyncService;
+    private final EmbeddingRebuildService embeddingRebuildService;
 
     public IngestionController(PolicyIngestionService ingestionService,
             FederalRegisterIngestionService federalRegisterIngestionService,
-            SourceSyncService sourceSyncService) {
+            SourceSyncService sourceSyncService,
+            EmbeddingRebuildService embeddingRebuildService) {
         this.ingestionService = ingestionService;
         this.federalRegisterIngestionService = federalRegisterIngestionService;
         this.sourceSyncService = sourceSyncService;
+        this.embeddingRebuildService = embeddingRebuildService;
     }
 
     /** Indexes a policy supplied in the request body. */
@@ -82,6 +86,20 @@ public class IngestionController {
     public FederalRegisterIngestionResponse ingestFederalRegister(
             @PathVariable String documentNumber, Principal principal) {
         return federalRegisterIngestionService.ingest(documentNumber, principal.getName());
+    }
+
+    /**
+     * Re-embeds every stored chunk with the configured embedding model. Run once after
+     * changing the model; until then, questions match against vectors from the old one.
+     */
+    @PostMapping("/embeddings/rebuild")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Re-embed every stored policy chunk",
+            description = "Recomputes each chunk's vector with the configured embedding model. Run once "
+                    + "after changing the model; policies, alerts and citations are unchanged.")
+    @ApiResponse(responseCode = "200", description = "How many chunks were re-embedded")
+    public Map<String, Integer> rebuildEmbeddings() {
+        return Map.of("chunksReembedded", embeddingRebuildService.rebuild());
     }
 
     /** Admin health view for all configured policy sources. */

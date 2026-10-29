@@ -50,6 +50,9 @@ class IngestionControllerSecurityTest {
     private SourceSyncService sourceSyncService;
 
     @MockBean
+    private EmbeddingRebuildService embeddingRebuildService;
+
+    @MockBean
     private JwtService jwtService;
 
     @MockBean
@@ -115,6 +118,21 @@ class IngestionControllerSecurityTest {
         mockMvc.perform(get("/api/v1/ingestion/status")
                         .header("Authorization", "Bearer token"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void onlyAdminCanRebuildEmbeddings() throws Exception {
+        stubToken(UserRole.APPLICANT);
+        mockMvc.perform(post("/api/v1/ingestion/embeddings/rebuild")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isForbidden());
+
+        stubToken(UserRole.ADMIN);
+        when(embeddingRebuildService.rebuild()).thenReturn(12);
+        mockMvc.perform(post("/api/v1/ingestion/embeddings/rebuild")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.chunksReembedded").value(12));
     }
 
     private void stubToken(UserRole role) {
