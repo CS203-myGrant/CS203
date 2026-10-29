@@ -126,7 +126,7 @@ class ApiErrorResponsesTest {
         mvc.perform(post("/api/v1/ingestion/visa-bulletin/2026-10").header("Authorization", token(UserRole.ADMIN, true)))
                 .andExpect(apiError(502, "Visa Bulletin import failed; inspect /api/v1/ingestion/visa-bulletin/health"));
 
-        when(ragService.query(any())).thenThrow(new ResourceAccessException("Ollama unavailable"));
+        when(ragService.query(any())).thenThrow(new ResourceAccessException("Embedding service unavailable"));
         mvc.perform(post("/api/v1/rag/query").header("Authorization", token(UserRole.APPLICANT, true))
                         .contentType(MediaType.APPLICATION_JSON).content(RAG_QUESTION))
                 .andExpect(apiError(503,

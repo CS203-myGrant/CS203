@@ -31,7 +31,7 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
-            <!-- Spring AI's Ollama starter brings in 2.2.30, which wins over the version
+            <!-- Spring AI's model starter brings in 2.2.30, which wins over the version
                  springdoc's swagger-core 2.2.36 needs; with it, any @Schema annotation
                  breaks /v3/api-docs with NoSuchMethodError. Keep in step with springdoc. -->
             <dependency>
@@ -103,7 +103,7 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-model-ollama</artifactId>
+            <artifactId>spring-ai-starter-model-openai</artifactId>
         </dependency>
 
         <dependency>
