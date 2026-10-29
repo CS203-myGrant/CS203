@@ -41,7 +41,7 @@ class PolicyChatControllerTest {
 
     @Test void applicantCanAskUsingOnlyTheirAuthenticatedIdentity() throws Exception {
         signIn();
-        when(chat.ask(eq(21L),eq("owner@example.org"),any())).thenReturn(new PolicyChatService.Answer("Answer [1]","Source","https://example.org",true));
+        when(chat.ask(eq(21L),eq("owner@example.org"),any())).thenReturn(new PolicyChatService.Answer("Answer [1]","Source","https://example.org",true,null));
         mvc.perform(post("/api/v1/policies/21/questions").header("Authorization","Bearer token")
                 .contentType(MediaType.APPLICATION_JSON).content("{\"question\":\"Why?\",\"history\":[]}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.answer").value("Answer [1]"))

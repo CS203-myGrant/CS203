@@ -22,8 +22,10 @@ class PolicyChatServiceTests {
     final UserProfileRepository profiles=mock(UserProfileRepository.class);
     final OpenAiGenerationService generator=mock(OpenAiGenerationService.class);
     final PolicyDocument policy=mock(PolicyDocument.class);
-    final PolicyChatService service=new PolicyChatService(policies,recommendations,users,profiles,generator,new ObjectMapper().findAndRegisterModules());
+    final ImpactJudgeService judge=mock(ImpactJudgeService.class);
+    final PolicyChatService service=new PolicyChatService(policies,recommendations,users,profiles,generator,new ObjectMapper().findAndRegisterModules(),judge);
     @BeforeEach void setup(){
+        when(judge.evaluateAnswer(anyString(),anyString())).thenReturn(new JudgeEvaluation(JudgeEvaluation.Verdict.YES,"Supported","judge"));
         when(policies.findById(21L)).thenReturn(policy);
         when(policy.getTitle()).thenReturn("Selected policy");
         when(policy.getStatus()).thenReturn(PolicyStatus.PROPOSED);
@@ -47,6 +49,7 @@ class PolicyChatServiceTests {
         assertFalse(context.getValue().contains("owner@example.org"));
         assertFalse(context.getValue().contains("<html>"));
         verify(recommendations,never()).getOrGenerate(anyString(),any(),any());
+        verify(judge).evaluateAnswer(eq(context.getValue()),eq("Check this proposed rule [1]."));
     }
     @Test void noSourceDoesNotCallModel(){
         when(policy.getContent()).thenReturn("");
@@ -64,5 +67,15 @@ class PolicyChatServiceTests {
         String selected=PolicyChatService.passages(text,"Explain UNIQUEDEADLINE");
         assertTrue(selected.contains("UNIQUEDEADLINE"));
         assertTrue(selected.length()<18000);
+    }
+    @Test void rejectsUnapprovedOrUnavailableAnswers(){
+        for(var verdict:List.of(JudgeEvaluation.Verdict.NO,JudgeEvaluation.Verdict.UNAVAILABLE)){
+            when(generator.generateJson(anyString(),anyString(),anyMap(),anyString())).thenReturn("{\"answer\":\"Unsupported secret claim\",\"requiresReview\":false}");
+            when(judge.evaluateAnswer(anyString(),anyString())).thenReturn(new JudgeEvaluation(verdict,"Not verified","judge"));
+            var response=service.ask(21L,"owner@example.org",new PolicyChatService.Question("Why?",List.of()));
+            assertFalse(response.answer().contains("Unsupported secret claim"));
+            assertTrue(response.requiresReview());
+            assertEquals(verdict,response.evaluation().verdict());
+        }
     }
 }

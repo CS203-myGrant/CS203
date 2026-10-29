@@ -46,14 +46,15 @@ public class PolicyRecommendationStore {
                 """, String.class, user.getId(), policy.getId(), hash);
         if (!saved.isEmpty()) {
             try {
-                return mapper.readValue(saved.getFirst(), ProfileImpactAssessment.class);
+                var assessment = mapper.readValue(saved.getFirst(), ProfileImpactAssessment.class);
+                if (approved(assessment)) return assessment;
             } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
                 // A previously saved response may no longer match the current response format.
             }
         }
         ProfileImpactAssessment result = generate.get();
         // Transient provider failures must remain retryable on the next visit.
-        if (result.urgency() != ImpactUrgency.UNAVAILABLE) {
+        if (approved(result)) {
             jdbc.update("""
                     INSERT INTO policy_recommendations (user_id, policy_id, input_hash, assessment_json)
                     VALUES (?, ?, ?, ?)
@@ -83,7 +84,7 @@ public class PolicyRecommendationStore {
                 """, String.class, user.getId(), policy.getId(), fingerprint(profile, policy));
         if (saved.isEmpty()) return java.util.Optional.empty();
         try {
-            return java.util.Optional.of(mapper.readValue(saved.getFirst(), ProfileImpactAssessment.class));
+            return java.util.Optional.of(mapper.readValue(saved.getFirst(), ProfileImpactAssessment.class)).filter(PolicyRecommendationStore::approved);
         } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
             return java.util.Optional.empty();
         }
@@ -95,5 +96,10 @@ public class PolicyRecommendationStore {
         } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
             throw new IllegalStateException("Unable to serialize policy assessment", exception);
         }
+    }
+
+    private static boolean approved(ProfileImpactAssessment assessment) {
+        return assessment.urgency() != ImpactUrgency.UNAVAILABLE && assessment.evaluation() != null
+                && assessment.evaluation().verdict() == mygrant.impact.JudgeEvaluation.Verdict.YES;
     }
 }

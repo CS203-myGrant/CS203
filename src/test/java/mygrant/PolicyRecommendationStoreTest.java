@@ -27,7 +27,7 @@ class PolicyRecommendationStoreTest {
     final PolicyDocument policy = new PolicyDocument("doc", "Policy", "Agency", "F-1", PolicyStatus.FINAL,
             SourceType.PRIMARY, LocalDate.of(2026, 7, 17), null, "https://example.org", "Text", "hash");
     final ProfileImpactAssessment result = new ProfileImpactAssessment(ImpactUrgency.LOW, 90, "Summary",
-            List.of("Reason"), List.of("Next step"), false, "OpenAI", "model", null, 1);
+            List.of("Reason"), List.of("Next step"), false, "OpenAI", "model", new JudgeEvaluation(JudgeEvaluation.Verdict.YES,"Supported","judge"), 1);
     String savedHash;
     String savedJson;
 
@@ -89,5 +89,16 @@ class PolicyRecommendationStoreTest {
         store().getOrGenerate("other", policy, () -> { generated[0] = true; return result; });
         assertTrue(generated[0]);
         verify(jdbc).queryForList(anyString(), eq(String.class), eq(2L), eq(21L), anyString());
+    }
+
+    @Test
+    void legacyUnverifiedCacheEntryIsNeitherReturnedNorUsedAsChatContext() throws Exception {
+        store().getOrGenerate("user",policy,()->result);
+        savedJson=mapper.writeValueAsString(new ProfileImpactAssessment(ImpactUrgency.LOW,90,"Unchecked old result",
+                List.of(),List.of(),true,"OpenAI","model",null,1));
+        assertTrue(store().findCurrent("user",policy).isEmpty());
+        boolean[] regenerated={false};
+        assertEquals(result,store().getOrGenerate("user",policy,()->{regenerated[0]=true;return result;}));
+        assertTrue(regenerated[0]);
     }
 }

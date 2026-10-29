@@ -11,6 +11,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import mygrant.ai.OpenAiGenerationService;
 import mygrant.user.*;
+import mygrant.impact.ImpactJudgeService;
+import mygrant.impact.JudgeEvaluation;
 
 /** Follow-up answers grounded in one policy and the authenticated user's saved recommendation. */
 @Service
@@ -19,7 +21,7 @@ public class PolicyChatService {
     public enum Role { USER, ASSISTANT }
     public record Question(@NotBlank @Size(max=2000) String question,
             @NotNull @Size(max=10) List<@NotNull @Valid Turn> history) {}
-    public record Answer(String answer, String sourceTitle, String sourceUrl, boolean requiresReview) {}
+    public record Answer(String answer, String sourceTitle, String sourceUrl, boolean requiresReview, JudgeEvaluation evaluation) {}
 
     private final PolicyService policies;
     private final PolicyRecommendationStore recommendations;
@@ -27,11 +29,13 @@ public class PolicyChatService {
     private final UserProfileRepository profiles;
     private final OpenAiGenerationService generator;
     private final ObjectMapper mapper;
+    private final ImpactJudgeService judge;
 
     public PolicyChatService(PolicyService policies, PolicyRecommendationStore recommendations,
-            UserRepository users, UserProfileRepository profiles, OpenAiGenerationService generator, ObjectMapper mapper) {
+            UserRepository users, UserProfileRepository profiles, OpenAiGenerationService generator, ObjectMapper mapper, ImpactJudgeService judge) {
         this.policies=policies; this.recommendations=recommendations; this.users=users;
         this.profiles=profiles; this.generator=generator; this.mapper=mapper;
+        this.judge=judge;
     }
 
     public Answer ask(Long id, String email, Question request) {
@@ -39,7 +43,7 @@ public class PolicyChatService {
         var user=users.findByEmail(email).orElseThrow(()->new IllegalStateException("User not found"));
         var profile=profiles.findById(user.getId()).orElseGet(()->UserProfile.fromUser(user));
         String content=Jsoup.parse(policy.getContent()==null?"":policy.getContent()).text();
-        if(content.isBlank()) return new Answer("There is no source text available to answer this question. Please read the original source or contact the support team.",policy.getTitle(),policy.getSourceUrl(),true);
+        if(content.isBlank()) return new Answer("There is no source text available to answer this question. Please read the original source or contact the support team.",policy.getTitle(),policy.getSourceUrl(),true,null);
         ObjectNode profileFacts=mapper.valueToTree(profile);
         profileFacts.remove(List.of("userId","createdAt","updatedAt","version"));
         var recommendation=recommendations.findCurrent(email,policy);
@@ -78,7 +82,14 @@ public class PolicyChatService {
             var response=mapper.readTree(json);
             String answer=response.path("answer").asText();
             if(answer.isBlank() || answer.length()>6000 || !response.path("requiresReview").isBoolean()) throw new IllegalStateException("Invalid answer");
-            return new Answer(answer,policy.getTitle(),policy.getSourceUrl(),response.path("requiresReview").asBoolean());
+            JudgeEvaluation evaluation=judge.evaluateAnswer(context,answer);
+            if(evaluation.verdict()!=JudgeEvaluation.Verdict.YES) {
+                String notice=evaluation.verdict()==JudgeEvaluation.Verdict.NO
+                        ? "The independent review could not verify an answer to this question. Please consult the original source or ask the support team."
+                        : "The independent review is temporarily unavailable. Please try again or ask the support team.";
+                return new Answer(notice,policy.getTitle(),policy.getSourceUrl(),true,evaluation);
+            }
+            return new Answer(answer,policy.getTitle(),policy.getSourceUrl(),response.path("requiresReview").asBoolean(),evaluation);
         } catch(Exception exception) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "The policy assistant is temporarily unavailable. Please try again or contact support.");

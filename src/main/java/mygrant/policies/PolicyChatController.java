@@ -15,7 +15,7 @@ public class PolicyChatController {
     public PolicyChatController(PolicyChatService service) { this.service=service; }
 
     @PostMapping("/{id}/questions")
-    @Operation(summary="Ask a follow-up question about a policy",description="Uses the stored source, your current profile and saved recommendation. Includes a source link and a human review indicator. History is limited to ten messages. Not legal advice.")
+    @Operation(summary="Ask a follow-up question about a policy",description="Uses the stored source, your current profile and saved recommendation. Generated answers must pass independent review. Includes source, evaluation and human review metadata. History is limited to ten messages. Not legal advice.")
     @ApiResponse(responseCode="200",description="Answer grounded in the selected policy, or an explanation that evidence is missing")
     @ApiResponse(responseCode="400",description="Invalid policy id, empty or oversized question, or invalid conversation history")
     @ApiResponse(responseCode="404",description="Policy not found")
