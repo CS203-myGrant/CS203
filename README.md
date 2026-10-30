@@ -832,6 +832,75 @@ produce F-1 and J-1 matches, while `affectsH1b` is false. The saved policy store
 full source text; only the opening 6,000 characters are searchable in pgvector for this
 demo. RAG retrieves those chunks after classification.
 
+## Published impact feed
+
+The applicant dashboard now shows published per-user policy assessments above the
+notification inbox. An independently approved recommendation created by **See how
+this impacts me** appears in this feed. An assessment that needs review is saved
+as `PENDING_REVIEW` and is not returned by the applicant feed or detail APIs;
+temporary AI failures are not saved. Managers and admins can correct and publish
+held assessments with `/api/v1/review/impacts`. Corrections retain previous
+versions and show a **Reviewed by a human** marker. `HIGH` assessment urgency is
+shown as `CRITICAL` severity so the dashboard presents it as a warning.
+
+`GET /api/v1/impacts` returns the signed-in user's published assessments, 20 per
+page by default, sorted by severity then date. Use `sort=date,desc` or
+`sort=severity,asc`, `severity=CRITICAL`, and `archived=true` for archived items.
+`GET /api/v1/impacts/{id}` shows the analysis, source citation, action items and
+disclaimer. `PATCH /api/v1/impacts/{id}` with `{"archived":true}` archives the
+record; use `false` to unarchive it. A missing, pending, or another user's id
+returns 404. Repeating the same archive request is safe. A changed profile or
+policy gets a new assessment row, leaving an older archived row untouched.
+
+Until CS203-4 provides a separate action-item entity, the checklist shown here
+comes from the assessment's saved `recommendedActions`. The source citation links
+to the stored policy document. There is no bulk archive or automatic unarchive.
+
+To try the UI, start the app with PostgreSQL and valid `OPENAI_API_KEY` and
+`ANTHROPIC_API_KEY`, sign in as an applicant with a complete profile, and have an
+admin import a matching Federal Register policy. On the applicant dashboard,
+open that policy and select **See how this impacts me**. If the independent
+review approves it, return to **Your alerts** to see its impact card. Click
+**Read details**, then **Archive this assessment**; switch to **Archived** to
+find it and unarchive it. If the AI services are unavailable, run the offline
+integration test below to verify this workflow with saved assessment data.
+
+With an applicant access token in `$TOKEN`, these requests exercise the API:
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  'http://localhost:8080/api/v1/impacts?page=0&size=20&sort=severity,desc'
+curl -s -H "Authorization: Bearer $TOKEN" \
+  'http://localhost:8080/api/v1/impacts/IMPACT_ID'
+curl -s -X PATCH -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"archived":true}' \
+  'http://localhost:8080/api/v1/impacts/IMPACT_ID'
+curl -s -H "Authorization: Bearer $TOKEN" \
+  'http://localhost:8080/api/v1/impacts?archived=true'
+```
+
+To check the human-review marker, sign in as a manager or admin and use that
+role's token in `$MANAGER_TOKEN`. The pending-list response supplies the id:
+
+```bash
+curl -s -H "Authorization: Bearer $MANAGER_TOKEN" \
+  'http://localhost:8080/api/v1/review/impacts'
+curl -s -X PATCH -H "Authorization: Bearer $MANAGER_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"severity":"CRITICAL","confidence":85,"summary":"Corrected impact summary", "analysis":["Why the source applies"],"actionItems":["Check the official source"],"missingInformation":[]}' \
+  'http://localhost:8080/api/v1/review/impacts/IMPACT_ID'
+```
+
+Refetch `/api/v1/impacts/IMPACT_ID` with the owner applicant's token; it will
+show the corrected summary, `reviewedByHuman: true`, and a higher version.
+
+For an offline check against a local PostgreSQL test database, run
+`mvn -Dtest=ImpactFeedIntegrationTest test` with `DATABASE_URL` and `JWT_SECRET`
+set as in the regular test setup. It covers sorting, filters, citations, archive
+history, account isolation, pending-review visibility and manager corrections.
+`node --test src/test/js/impact-feed.test.cjs` checks the dashboard rendering and
+archive requests without calling AI services.
+
 ## Test policy change notifications
 
 Importing a policy alerts every applicant whose visa category it affects. An alert is
