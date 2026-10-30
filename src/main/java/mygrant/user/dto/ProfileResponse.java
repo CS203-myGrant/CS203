@@ -1,6 +1,8 @@
 package mygrant.user.dto;
 
 import java.time.LocalDate;
+import java.time.Instant;
+import java.util.Map;
 
 import mygrant.user.UserProfile;
 
@@ -22,9 +24,10 @@ public record ProfileResponse(
         LocalDate priorityDate,
         String academicLevel,
         LocalDate programEndDate,
-        LocalDate upcomingTravelDate
+        LocalDate upcomingTravelDate,
+        Map<String, Instant> consents
 ) {
-    public static ProfileResponse from(UserProfile profile) {
+    public static ProfileResponse from(UserProfile profile, Map<String, Instant> consents) {
         return new ProfileResponse(
                 profile.getUserId(),
                 profile.getVersion(),
@@ -43,7 +46,8 @@ public record ProfileResponse(
                 profile.getPriorityDate(),
                 profile.getAcademicLevel(),
                 profile.getProgramEndDate(),
-                profile.getUpcomingTravelDate()
+                profile.getUpcomingTravelDate(),
+                Map.copyOf(consents)
         );
     }
 }

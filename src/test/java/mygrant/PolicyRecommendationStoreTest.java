@@ -27,7 +27,7 @@ class PolicyRecommendationStoreTest {
     final PolicyDocument policy = new PolicyDocument("doc", "Policy", "Agency", "F-1", PolicyStatus.FINAL,
             SourceType.PRIMARY, LocalDate.of(2026, 7, 17), null, "https://example.org", "Text", "hash");
     final ProfileImpactAssessment result = new ProfileImpactAssessment(ImpactUrgency.LOW, 90, "Summary",
-            List.of("Reason"), List.of("Next step"), false, "OpenAI", "model", new JudgeEvaluation(JudgeEvaluation.Verdict.YES,"Supported","judge"), 1);
+            List.of("Reason"), List.of("Next step"), List.of(), false, "OpenAI", "model", new JudgeEvaluation(JudgeEvaluation.Verdict.YES,"Supported","judge"), 1);
     String savedHash;
     String savedJson;
 
@@ -73,7 +73,7 @@ class PolicyRecommendationStoreTest {
     @Test
     void temporaryFailureIsNotSaved() {
         var unavailable = new ProfileImpactAssessment(ImpactUrgency.UNAVAILABLE, 0, "Try later",
-                List.of(), List.of(), true, "OpenAI", "model", null, 0);
+                List.of(), List.of(), List.of(), true, "OpenAI", "model", null, 0);
         store().getOrGenerate("user", policy, () -> unavailable);
         assertNull(savedJson);
         assertEquals(result, store().getOrGenerate("user", policy, () -> result));
@@ -95,7 +95,7 @@ class PolicyRecommendationStoreTest {
     void legacyUnverifiedCacheEntryIsNeitherReturnedNorUsedAsChatContext() throws Exception {
         store().getOrGenerate("user",policy,()->result);
         savedJson=mapper.writeValueAsString(new ProfileImpactAssessment(ImpactUrgency.LOW,90,"Unchecked old result",
-                List.of(),List.of(),true,"OpenAI","model",null,1));
+                List.of(),List.of(),List.of(),true,"OpenAI","model",null,1));
         assertTrue(store().findCurrent("user",policy).isEmpty());
         boolean[] regenerated={false};
         assertEquals(result,store().getOrGenerate("user",policy,()->{regenerated[0]=true;return result;}));

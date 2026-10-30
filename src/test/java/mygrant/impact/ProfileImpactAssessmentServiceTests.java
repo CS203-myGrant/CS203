@@ -1,13 +1,19 @@
 package mygrant.impact;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -28,6 +34,10 @@ import mygrant.user.User;
 import mygrant.user.UserProfile;
 import mygrant.user.UserProfileRepository;
 import mygrant.user.UserRepository;
+import mygrant.user.ProfileFieldConsent;
+import mygrant.user.ProfileFieldConsentRepository;
+import mygrant.user.ProfileFieldDefinition;
+
 
 class ProfileImpactAssessmentServiceTests {
 
@@ -105,8 +115,19 @@ class ProfileImpactAssessmentServiceTests {
         user.setVisaType("F-1");
         when(users.findByEmail("student@example.com")).thenReturn(Optional.of(user));
         when(profiles.findById(7L)).thenReturn(Optional.of(UserProfile.fromUser(user)));
-        return new Harness(server, judge, new ProfileImpactAssessmentService(builder, new ObjectMapper(),
-                users, profiles, judge, "secret", "test-model", "https://api.openai.test"));
+        ProfileFieldConsentRepository consents = mock(ProfileFieldConsentRepository.class);
+        when(consents.findByUserId(7L)).thenReturn(List.of());
+        return new Harness(server, judge, new ProfileImpactAssessmentService(
+                builder,
+                new ObjectMapper(),
+                users,
+                profiles,
+                consents,
+                judge,
+                "secret",
+                "test-model",
+                "https://api.openai.test"
+        ));
     }
 
     private record Harness(MockRestServiceServer server, ImpactJudgeService judge,
@@ -122,8 +143,21 @@ class ProfileImpactAssessmentServiceTests {
         String candidateJson(String summary) throws Exception {
             return new ObjectMapper().writeValueAsString(Map.of("urgency", "HIGH", "confidence", 80,
                     "summary", summary, "reasons", List.of("Reason"),
-                    "recommendedActions", List.of("Review source"), "requiresHumanReview", false));
+                    "recommendedActions", List.of("Review source"), "missingInformation", List.of(),
+                    "requiresHumanReview", false));
         }
+    }
+
+    private String candidateJson(String summary) throws Exception {
+        return new ObjectMapper().writeValueAsString(Map.of(
+                "urgency", "HIGH",
+                "confidence", 80,
+                "summary", summary,
+                "reasons", List.of("Reason"),
+                "recommendedActions", List.of("Review source"),
+                "missingInformation", List.of(),
+                "requiresHumanReview", false
+        ));
     }
 
     @Test
@@ -134,7 +168,8 @@ class ProfileImpactAssessmentServiceTests {
         when(users.findByEmail("student@example.com")).thenReturn(Optional.of(user));
         ProfileImpactAssessmentService service = new ProfileImpactAssessmentService(
                 RestClient.builder(), new ObjectMapper(), users,
-                mock(UserProfileRepository.class), mock(ImpactJudgeService.class), "", "test-model", "https://example.test");
+                mock(UserProfileRepository.class), mock(ProfileFieldConsentRepository.class),
+                mock(ImpactJudgeService.class), "", "test-model", "https://example.test");
 
         ProfileImpactAssessment result = service.assess("student@example.com", document(),
                 "DHS", "policy content", classification());
@@ -149,6 +184,7 @@ class ProfileImpactAssessmentServiceTests {
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         UserRepository users = mock(UserRepository.class);
         UserProfileRepository profiles = mock(UserProfileRepository.class);
+        ProfileFieldConsentRepository consents = mock(ProfileFieldConsentRepository.class);
         User user = new User();
         user.setId(7L);
         user.setEmail("student@example.com");
@@ -157,18 +193,19 @@ class ProfileImpactAssessmentServiceTests {
         profile.setUpcomingTravelDate(LocalDate.of(2026, 10, 1));
         when(users.findByEmail("student@example.com")).thenReturn(Optional.of(user));
         when(profiles.findById(7L)).thenReturn(Optional.of(profile));
+        when(consents.findByUserId(7L)).thenReturn(List.of());
 
         server.expect(requestTo("https://api.openai.test/chat/completions"))
                 .andExpect(header("Authorization", "Bearer secret"))
                 .andRespond(withSuccess("""
-                        {"choices":[{"message":{"content":"{\\"urgency\\":\\"HIGH\\",\\"confidence\\":92,\\"summary\\":\\"Travel may be affected.\\",\\"reasons\\":[\\"Upcoming travel overlaps the effective period.\\"],\\"recommendedActions\\":[\\"Review the primary source.\\"],\\"requiresHumanReview\\":true}"}}]}
+                        {"choices":[{"message":{"content":"{\\"urgency\\":\\"HIGH\\",\\"confidence\\":92,\\"summary\\":\\"Travel may be affected.\\",\\"reasons\\":[\\"Upcoming travel overlaps the effective period.\\"],\\"recommendedActions\\":[\\"Review the primary source.\\"],\\"missingInformation\\":[],\\"requiresHumanReview\\":true}"}}]}
                         """, MediaType.APPLICATION_JSON));
 
         ImpactJudgeService judge = mock(ImpactJudgeService.class);
         when(judge.evaluate(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(new JudgeEvaluation(JudgeEvaluation.Verdict.YES, "Supported", "claude-test"));
         ProfileImpactAssessmentService service = new ProfileImpactAssessmentService(builder,
-                new ObjectMapper(), users, profiles, judge, "secret", "test-model", "https://api.openai.test");
+                new ObjectMapper(), users, profiles, consents, judge, "secret", "test-model", "https://api.openai.test");
         ProfileImpactAssessment result = service.assess("student@example.com", document(),
                 "DHS", "policy content", classification());
 
@@ -191,4 +228,72 @@ class ProfileImpactAssessmentServiceTests {
         return new VisaClassification(true, true, false, List.of("F-1", "J-1"),
                 List.of("F-1:academic student"));
     }
+
+    @Test
+    void sendsOnlyPopulatedAndConsentedProfileFieldsToTheModel() throws Exception {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+
+        UserRepository users = mock(UserRepository.class);
+        UserProfileRepository profiles = mock(UserProfileRepository.class);
+        ProfileFieldConsentRepository consents = mock(ProfileFieldConsentRepository.class);
+        ImpactJudgeService judge = mock(ImpactJudgeService.class);
+
+        User user = new User();
+        user.setId(7L);
+        user.setVisaType("F-1");
+
+        UserProfile profile = UserProfile.fromUser(user);
+        profile.setCountryOfCitizenship("Malaysia");
+        profile.setEmployer("Secret Employer");
+
+        when(users.findByEmail("student@example.com")).thenReturn(Optional.of(user));
+        when(profiles.findById(7L)).thenReturn(Optional.of(profile));
+        when(consents.findByUserId(7L)).thenReturn(List.of(
+                new ProfileFieldConsent(7L, ProfileFieldDefinition.VISA_TYPE, Instant.now()),
+                new ProfileFieldConsent(
+                        7L,
+                        ProfileFieldDefinition.COUNTRY_OF_CITIZENSHIP,
+                        Instant.now()
+                )
+        ));
+        when(judge.evaluate(anyString(), any()))
+                .thenReturn(new JudgeEvaluation(
+                        JudgeEvaluation.Verdict.YES,
+                        "Supported",
+                        "claude-test"
+                ));
+
+        server.expect(requestTo("https://api.openai.test/chat/completions"))
+                .andExpect(content().string(containsString("Malaysia")))
+                .andExpect(content().string(not(containsString("Secret Employer"))))
+                .andRespond(withSuccess(
+                        new ObjectMapper().writeValueAsString(Map.of(
+                                "choices", List.of(Map.of(
+                                        "message", Map.of(
+                                                "content",
+                                                candidateJson("Profile-specific result")
+                                        )
+                                ))
+                        )),
+                        MediaType.APPLICATION_JSON
+                ));
+
+        ProfileImpactAssessmentService service = new ProfileImpactAssessmentService(
+                builder,
+                new ObjectMapper(),
+                users,
+                profiles,
+                consents,
+                judge,
+                "secret",
+                "test-model",
+                "https://api.openai.test"
+        );
+
+        service.assess("student@example.com", document(), "DHS", "policy content", classification());
+
+        server.verify();
+    }
+
 }

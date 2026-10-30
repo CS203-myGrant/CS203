@@ -195,12 +195,22 @@
   .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px 28px;background:var(--panel);border:1px solid var(--base-lighter);padding:28px;}
   .field{display:flex;flex-direction:column;gap:6px;}
   .field label{font-size:16px;color:var(--text);}
-  .field:has(input[required]) label::after,.field:has(select[required]) label::after{content:" (*Required)";color:var(--urgent);}
+  .field:has(> input[required]) > label[for]::after,.field:has(> select[required]) > label[for]::after{content:" (*Required)";color:var(--urgent);}
   .field input, .field select, .field textarea{
     font-family:var(--sans);font-size:17px;padding:8px 10px;height:42px;border:1px solid var(--field-border);border-radius:0;background:#fff;color:var(--text);
   }
   .field input[type="file"]{height:auto;padding:10px;border-style:dashed;}
   .field input:focus, .field select:focus, .field textarea:focus{outline:4px solid var(--focus);outline-offset:0;}
+  .consent-panel{grid-column:1/-1;border-top:1px solid var(--base-lighter);padding-top:24px;margin-top:4px;}
+  .consent-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;}
+  .consent-card{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--base-lighter);border-radius:6px;padding:12px;background:#fff;line-height:1.4;}
+  .consent-entry{display:flex;flex-direction:column;gap:10px;border:1px solid var(--base-lighter);border-radius:6px;padding:12px;background:#fff;}
+  .consent-entry .consent-card{border:0;border-radius:0;padding:0;background:transparent;}
+  .consent-card input{width:auto;min-height:0;margin:3px 0 0;accent-color:var(--primary);}
+  .consent-card__name{display:block;font-weight:700;color:var(--text);font-size:14px;}
+  .consent-card__meta{font-weight:600;color:var(--muted);font-size:12px;}
+  .consent-card__purpose{display:block;margin-top:3px;color:var(--muted);font-size:13px;}
+  .consent-card__remove{align-self:flex-start;margin:0;border-color:var(--urgent);color:var(--urgent);font-size:12px;}
   .form-actions{grid-column:1/-1;display:flex;justify-content:flex-start;gap:10px;margin-top:6px;}
 
   /* ---------- TABLE (manager/admin) ---------- */
@@ -321,6 +331,7 @@
     .login-left{order:2;}
     .login-title{font-size:30px;}
     .form-grid{grid-template-columns:1fr;}
+    .consent-list{grid-template-columns:1fr;}
     .stat-row,.rag-query-form,.rag-import-form,.proof-grid{grid-template-columns:1fr;}
     .entry{grid-template-columns:6px 1fr;}
     .entry-case{display:none;}
@@ -811,17 +822,24 @@ function startWorkosLogin(){
 function renderProfileCompletion(){
   return `<div class="page-head"><h1>Complete your profile</h1><p class="sub">Add your visa details before using myGRANT.</p></div>
     <form class="form-grid" onsubmit="submitProfileCompletion(event)">
-      <div class="field"><label for="workos-visa">Visa category</label><select id="workos-visa" required><option>F-1</option><option>J-1</option><option>H-1B</option></select></div>
-      <div class="field"><label for="workos-origin">Country of origin</label><input id="workos-origin" list="workos-country-options" autocomplete="country-name" placeholder="Start typing a country"></div>
-      <div class="field"><label for="workos-citizenship">Country of citizenship</label><input id="workos-citizenship" list="workos-country-options" autocomplete="country-name" placeholder="Start typing a country"></div>
-      <div class="field"><label for="workos-level">Academic level</label><select id="workos-level"><option value="">Not specified</option><option>Undergraduate</option><option>Master's</option><option>PhD</option><option>Other</option></select></div>
-      <div class="field"><label for="workos-end-date">Program end date</label><input id="workos-end-date" type="date"></div>
-      <div class="field"><label for="workos-location">Current location</label><select id="workos-location"><option value="">Not specified</option><option value="US">US</option><option value="ABROAD">Abroad</option></select></div>
-      <div class="field"><label for="workos-travel-date">Upcoming travel date</label><input id="workos-travel-date" type="date"></div>
-      <div class="field"><label for="workos-immigrant-category">Immigrant category (if applicable)</label><input id="workos-immigrant-category" placeholder="e.g. EB-2"></div>
-      <div class="field"><label for="workos-chargeability">Chargeability area (if applicable)</label><input id="workos-chargeability" placeholder="Country of chargeability"></div>
-      <div class="field"><label for="workos-priority-date">Priority date (if applicable)</label><input id="workos-priority-date" type="date"></div>
+      <div class="field"><label for="workos-visa">Visa category (Required)</label><select id="workos-visa" required><option>F-1</option><option>J-1</option><option>H-1B</option></select></div>
+      <div class="field"><label for="workos-origin">Country of origin (Optional)</label><input id="workos-origin" list="workos-country-options" autocomplete="country-name" placeholder="Start typing a country"></div>
+      <div class="field"><label for="workos-citizenship">Country of citizenship (Optional)</label><input id="workos-citizenship" list="workos-country-options" autocomplete="country-name" placeholder="Start typing a country"></div>
+      <div class="field"><label for="workos-level">Academic level (Optional)</label><select id="workos-level"><option value="">Not specified</option><option>Undergraduate</option><option>Master's</option><option>PhD</option><option>Other</option></select></div>
+      <div class="field"><label for="workos-end-date">Program end date (Optional)</label><input id="workos-end-date" type="date"></div>
+      <div class="field"><label for="workos-location">Current location (Optional)</label><select id="workos-location"><option value="">Not specified</option><option value="US">US</option><option value="ABROAD">Abroad</option></select></div>
+      <div class="field"><label for="workos-employment-status">Employment status (Optional)</label><input id="workos-employment-status"></div>
+      <div class="field"><label for="workos-employer">Employer (Optional)</label><input id="workos-employer"></div>
+      <div class="field"><label for="workos-visa-start">Visa start date (Optional)</label><input id="workos-visa-start" type="date"></div>
+      <div class="field"><label for="workos-visa-expiry">Visa expiry date (Optional)</label><input id="workos-visa-expiry" type="date"></div>
+      <div class="field"><label for="workos-opt-start">OPT start date (Optional)</label><input id="workos-opt-start" type="date"></div>
+      <div class="field"><label for="workos-i140-date">I-140 filing date (Optional)</label><input id="workos-i140-date" type="date"></div>
+      <div class="field"><label for="workos-travel-date">Upcoming travel date (Optional)</label><input id="workos-travel-date" type="date"></div>
+      <div class="field"><label for="workos-immigrant-category">Immigrant category (Optional)</label><input id="workos-immigrant-category" placeholder="e.g. EB-2"></div>
+      <div class="field"><label for="workos-chargeability">Chargeability area (Optional)</label><input id="workos-chargeability" placeholder="Country of chargeability"></div>
+      <div class="field"><label for="workos-priority-date">Priority date (Optional)</label><input id="workos-priority-date" type="date"></div>
       <datalist id="workos-country-options">${countryOptions()}</datalist>
+      ${onboardingConsentControls()}
       <div class="form-actions"><button class="btn" type="submit">Save profile</button></div>
       <div id="profile-error" class="auth-error" style="display:none;grid-column:1/-1;"></div>
     </form>`;
@@ -831,6 +849,7 @@ async function submitProfileCompletion(event){
   const error=document.getElementById('profile-error');
   error.style.display='none';
   try{
+    const consentedFields = selectedConsentFields();
     const response=await apiFetch('/api/v1/profiles/me',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       visaType:document.getElementById('workos-visa').value,
       countryOfOrigin:document.getElementById('workos-origin').value.trim() || null,
@@ -841,7 +860,15 @@ async function submitProfileCompletion(event){
       upcomingTravelDate:document.getElementById('workos-travel-date').value || null,
       priorityDate:document.getElementById('workos-priority-date').value || null,
       immigrantCategory:document.getElementById('workos-immigrant-category').value.trim() || null,
-      chargeabilityArea:document.getElementById('workos-chargeability').value.trim() || null
+      chargeabilityArea:document.getElementById('workos-chargeability').value.trim() || null,
+      clearFields: [],
+      employmentStatus: document.getElementById('workos-employment-status').value.trim() || null,
+      employer: document.getElementById('workos-employer').value.trim() || null,
+      visaStartDate: document.getElementById('workos-visa-start').value || null,
+      visaExpiryDate: document.getElementById('workos-visa-expiry').value || null,
+      optStartDate: document.getElementById('workos-opt-start').value || null,
+      i140FilingDate: document.getElementById('workos-i140-date').value || null,
+      consentedFields
     })});
     state.profile = await parseApiResponse(response);
 
@@ -1855,7 +1882,7 @@ function renderProfileForm(){
   return `
     <form class="form-grid" onsubmit="saveProfile(event)">
       <div class="field">
-        <label for="profile-visa-type">Visa category</label>
+        <label for="profile-visa-type">Visa category (Required)</label>
         <select id="profile-visa-type" required>
           <option value="F-1" ${profile.visaType === 'F-1' ? 'selected' : ''}>F-1</option>
           <option value="J-1" ${profile.visaType === 'J-1' ? 'selected' : ''}>J-1</option>
@@ -1929,6 +1956,12 @@ function renderProfileForm(){
         <input id="profile-chargeability" placeholder="Country of chargeability" value="${escapeAttribute(profile.chargeabilityArea || '')}">
       </div>
 
+      <div class="field"><label for="profile-academic-level">Academic level (Optional)</label><input id="profile-academic-level" value="${escapeAttribute(profile.academicLevel || '')}"></div>
+      <div class="field"><label for="profile-program-end">Program end date (Optional)</label><input id="profile-program-end" type="date" value="${escapeAttribute(profile.programEndDate || '')}"></div>
+      <div class="field"><label for="profile-upcoming-travel">Upcoming travel date (Optional)</label><input id="profile-upcoming-travel" type="date" value="${escapeAttribute(profile.upcomingTravelDate || '')}"></div>
+
+      ${profileConsentControls(profile)}
+
       <div class="form-actions">
         <button class="btn" type="submit">Save profile</button>
       </div>
@@ -1952,8 +1985,13 @@ async function saveProfile(event){
     optStartDate: value('profile-opt-start') || null,
     i140FilingDate: value('profile-i140-date') || null,
     priorityDate: value('profile-priority-date') || null,
+    academicLevel: value('profile-academic-level') || null,
+    programEndDate: value('profile-program-end') || null,
+    upcomingTravelDate: value('profile-upcoming-travel') || null,
     immigrantCategory: value('profile-immigrant-category') || null,
-    chargeabilityArea: value('profile-chargeability') || null
+    chargeabilityArea: value('profile-chargeability') || null,
+    clearFields: [],
+    consentedFields: selectedConsentFields()
   };
 
   try{
@@ -1968,6 +2006,109 @@ async function saveProfile(event){
     state.ragVisaType = state.profile.visaType || 'F-1';
 
     showToast(`Profile saved (version ${state.profile.version}).`);
+    render();
+  }catch(error){
+    showToast(error.message);
+  }
+}
+
+function selectedConsentFields(){
+  return [...document.querySelectorAll('input[data-consent-field]:checked')]
+    .map(input => input.dataset.consentField);
+}
+
+const consentFieldLabels = {
+  VISA_TYPE: 'Visa category',
+  COUNTRY_OF_ORIGIN: 'Country of origin',
+  COUNTRY_OF_CITIZENSHIP: 'Country of citizenship',
+  CURRENT_LOCATION: 'Current location',
+  EMPLOYMENT_STATUS: 'Employment status',
+  EMPLOYER: 'Employer',
+  VISA_START_DATE: 'Visa start date',
+  VISA_EXPIRY_DATE: 'Visa expiry date',
+  OPT_START_DATE: 'OPT start date',
+  I140_FILING_DATE: 'I-140 filing date',
+  PRIORITY_DATE: 'Priority date',
+  ACADEMIC_LEVEL: 'Academic level',
+  PROGRAM_END_DATE: 'Program end date',
+  UPCOMING_TRAVEL_DATE: 'Upcoming travel date',
+  IMMIGRANT_CATEGORY: 'Immigrant category',
+  CHARGEABILITY_AREA: 'Chargeability area'
+};
+
+function consentControl(field, purpose, required, checked){
+  const label = consentFieldLabels[field] || field;
+  return `<label class="consent-card">
+    <input type="checkbox" data-consent-field="${field}" ${checked ? 'checked' : ''} ${required ? 'required' : ''}>
+    <span><span class="consent-card__name">${escapeHtml(label)} <span class="consent-card__meta">${required ? 'Required' : 'Optional'}</span></span>
+    <span class="consent-card__purpose">${escapeHtml(purpose)}</span></span>
+  </label>`;
+}
+
+function onboardingConsentControls(){
+  return `<section class="consent-panel">
+    <h2>How we use your information</h2>
+    <p class="sub">Visa category is required. Every other field is optional. We use only fields you enter and consent to use.</p>
+    <div class="consent-list">
+    ${consentControl('VISA_TYPE', 'Used to identify immigration rules that may apply to your current status.', true, false)}
+    ${consentControl('COUNTRY_OF_ORIGIN', 'Used only where a policy depends on country of birth or origin.', false, false)}
+    ${consentControl('COUNTRY_OF_CITIZENSHIP', 'Used only where a policy depends on nationality or citizenship.', false, false)}
+    ${consentControl('ACADEMIC_LEVEL', 'Used to assess education-level rules and student eligibility.', false, false)}
+    ${consentControl('PROGRAM_END_DATE', 'Used to identify program-completion deadlines.', false, false)}
+    ${consentControl('CURRENT_LOCATION', 'Used to identify rules affected by whether you are in the United States.', false, false)}
+    ${consentControl('UPCOMING_TRAVEL_DATE', 'Used to assess travel-related immigration changes.', false, false)}
+    ${consentControl('IMMIGRANT_CATEGORY', 'Used to assess employment-based immigrant-visa rules.', false, false)}
+    ${consentControl('CHARGEABILITY_AREA', 'Used to assess Visa Bulletin chargeability rules.', false, false)}
+    ${consentControl('PRIORITY_DATE', 'Used to assess Visa Bulletin and immigrant-visa changes.', false, false)}
+    ${consentControl('EMPLOYMENT_STATUS', 'Used to assess employment-related immigration changes.', false, false)}
+    ${consentControl('EMPLOYER', 'Used to assess employer-specific immigration implications.', false, false)}
+    ${consentControl('VISA_START_DATE', 'Used to assess dates and time spent in a visa category.', false, false)}
+    ${consentControl('VISA_EXPIRY_DATE', 'Used to identify approaching visa-expiry deadlines.', false, false)}
+    ${consentControl('OPT_START_DATE', 'Used to assess OPT and STEM OPT timing.', false, false)}
+    ${consentControl('I140_FILING_DATE', 'Used to assess employment-based immigrant-petition timing.', false, false)}
+    </div>
+    </section>`;
+}
+
+function profileConsentControls(profile){
+  const consents = profile.consents || {};
+  const fields = [
+    ['VISA_TYPE', 'visaType', 'Used to identify immigration rules that may apply to your current status.', true],
+    ['COUNTRY_OF_ORIGIN', 'countryOfOrigin', 'Used only where a policy depends on country of birth or origin.', false],
+    ['COUNTRY_OF_CITIZENSHIP', 'countryOfCitizenship', 'Used only where a policy depends on nationality or citizenship.', false],
+    ['CURRENT_LOCATION', 'currentLocation', 'Used to identify rules affected by whether you are in the United States.', false],
+    ['EMPLOYMENT_STATUS', 'employmentStatus', 'Used to assess employment-related immigration changes.', false],
+    ['EMPLOYER', 'employer', 'Used to assess employer-specific immigration implications.', false],
+    ['VISA_START_DATE', 'visaStartDate', 'Used to assess dates and time spent in a visa category.', false],
+    ['VISA_EXPIRY_DATE', 'visaExpiryDate', 'Used to identify approaching visa-expiry deadlines.', false],
+    ['OPT_START_DATE', 'optStartDate', 'Used to assess OPT and STEM OPT timing.', false],
+    ['I140_FILING_DATE', 'i140FilingDate', 'Used to assess employment-based immigrant-petition timing.', false],
+    ['PRIORITY_DATE', 'priorityDate', 'Used to assess Visa Bulletin and immigrant-visa changes.', false],
+    ['ACADEMIC_LEVEL', 'academicLevel', 'Used to assess education-level rules and student eligibility.', false],
+    ['PROGRAM_END_DATE', 'programEndDate', 'Used to identify program-completion deadlines.', false],
+    ['UPCOMING_TRAVEL_DATE', 'upcomingTravelDate', 'Used to assess travel-related immigration changes.', false],
+    ['IMMIGRANT_CATEGORY', 'immigrantCategory', 'Used to assess employment-based immigrant-visa rules.', false],
+    ['CHARGEABILITY_AREA', 'chargeabilityArea', 'Used to assess Visa Bulletin chargeability rules.', false]
+  ];
+  return `<section class="consent-panel">
+    <h2>Consent and removal</h2>
+    <p class="sub">Only populated fields with your consent are included in future assessments. Remove a saved optional field to withdraw it.</p>
+    <div class="consent-list">
+    ${fields.map(([name, key, purpose, required]) => `<div class="consent-entry">${consentControl(name, purpose, required, Boolean(consents[name]))}
+      ${!required && profile[key] ? `<button class="btn ghost small consent-card__remove" type="button" onclick="withdrawProfileField('${name}')">Remove</button>` : ''}</div>`).join('')}
+    </div>
+  </section>`;
+}
+
+async function withdrawProfileField(field){
+  try{
+    const response = await apiFetch('/api/v1/profiles/me', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({clearFields: [field], consentedFields: []})
+    });
+    state.profile = await parseApiResponse(response);
+    showToast('Information removed. It will not be used in future assessments.');
     render();
   }catch(error){
     showToast(error.message);
@@ -2784,6 +2925,7 @@ function renderProfileImpact(impact){
   if(!impact) return '';
   const reasons = (impact.reasons || []).map(item=>`<li>${escapeHtml(item)}</li>`).join('');
   const actions = (impact.recommendedActions || []).map(item=>`<li>${escapeHtml(item)}</li>`).join('');
+  const missing = (impact.missingInformation || []).map(item=>`<li>${escapeHtml(item)}</li>`).join('');
   const ready = impact.urgency !== 'UNAVAILABLE';
   const independentlyChecked = impact.evaluation?.verdict === 'YES';
   const unverifiedNotice = ready && !independentlyChecked
@@ -2801,6 +2943,7 @@ function renderProfileImpact(impact){
     <p style="font-size:14.5px;line-height:1.65;margin:12px 0;">${escapeHtml(impact.summary)}</p>
     ${impact.evaluation?`<p class="rag-status">Independent review: ${escapeHtml(impact.evaluation.reason)} (${escapeHtml(impact.attempts)} attempt(s))</p>`:''}
     ${reasons?`<div class="block-label">Why this urgency was assigned</div><ul class="warning-list">${reasons}</ul>`:''}
+    ${missing?`<div class="block-label">Information needed for a more confident assessment</div><p class="rag-status">Please provide the following rather than relying on an inference:</p><ul class="warning-list">${missing}</ul>`:''}
     ${actions?`<div class="block-label">Recommended next steps</div><ul class="warning-list">${actions}</ul>`:''}
     ${unverifiedNotice}
     ${ready?'<p class="rag-status">Automated triage based on a policy excerpt; judge approval is not a guarantee. Not legal advice.</p>':''}
