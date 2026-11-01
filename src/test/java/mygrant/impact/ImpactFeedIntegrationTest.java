@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import mygrant.actions.ActionItemService;
 import mygrant.auth.JwtService;
 import mygrant.policies.PolicyDocument;
 import mygrant.policies.PolicyDocumentRepository;
@@ -42,6 +43,7 @@ class ImpactFeedIntegrationTest {
     @Autowired UserRepository users;
     @Autowired PolicyDocumentRepository policies;
     @Autowired PolicyRecommendationStore recommendations;
+    @Autowired ActionItemService actionItems;
 
     @Test
     void listDetailArchiveAndAccountIsolation() throws Exception {
@@ -178,14 +180,17 @@ class ImpactFeedIntegrationTest {
                 "Official source text", "hash"));
     }
 
+    /** Saves the row directly, then generates its checklist as the two publish points do. */
     private long insert(User owner, PolicyDocument policy, String severity, String status,
             ProfileImpactAssessment assessment) throws Exception {
-        return jdbc.queryForObject("""
+        long id = jdbc.queryForObject("""
                 INSERT INTO policy_recommendations
                     (user_id, policy_id, input_hash, assessment_json, publication_status, severity)
                 VALUES (?, ?, ?, ?, ?, ?) RETURNING id
                 """, Long.class, owner.getId(), policy.getId(), UUID.randomUUID().toString(),
                 mapper.writeValueAsString(assessment), status, severity);
+        actionItems.syncForAssessment(id);
+        return id;
     }
 
     private ProfileImpactAssessment approved(ImpactUrgency urgency, String summary) {

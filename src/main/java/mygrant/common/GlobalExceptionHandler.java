@@ -28,6 +28,8 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import mygrant.actions.ActionItemAccessDeniedException;
+import mygrant.actions.ActionItemNotFoundException;
 import mygrant.email.EmailNotConfiguredException;
 import mygrant.impact.ImpactNotFoundException;
 import mygrant.ingestion.PolicyAlreadyExistsException;
@@ -70,6 +72,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(ImpactNotFoundException.class)
     public ResponseEntity<ApiError> handleImpactNotFound(ImpactNotFoundException exception) {
         return response(HttpStatus.NOT_FOUND, exception.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(ActionItemNotFoundException.class)
+    public ResponseEntity<ApiError> handleActionItemNotFound(ActionItemNotFoundException exception) {
+        return response(HttpStatus.NOT_FOUND, exception.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(ActionItemAccessDeniedException.class)
+    public ResponseEntity<ApiError> handleActionItemAccessDenied(ActionItemAccessDeniedException exception) {
+        return response(HttpStatus.FORBIDDEN, exception.getMessage(), Map.of());
     }
 
     @ExceptionHandler(PolicySourceNotFoundException.class)

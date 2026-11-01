@@ -13,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import mygrant.actions.ActionItemService;
 import mygrant.email.EmailDeliveryRepository;
 import mygrant.email.EmailPreferenceRepository;
 import mygrant.feedback.FeedbackConversationRepository;
@@ -62,6 +63,9 @@ class AccountPurgeServiceTests {
     @Mock
     private EmailDeliveryRepository emailDeliveryRepository;
 
+    @Mock
+    private ActionItemService actionItemService;
+
     private User user;
     private AccountPurgeService purgeService;
 
@@ -86,7 +90,8 @@ class AccountPurgeServiceTests {
                 feedbackConversationRepository,
                 feedbackMessageRepository,
                 emailPreferenceRepository,
-                emailDeliveryRepository);
+                emailDeliveryRepository,
+                actionItemService);
     }
 
     @Test
@@ -104,6 +109,10 @@ class AccountPurgeServiceTests {
         notificationsBeforeEmails.verify(notificationRepository).deleteAllByUserId(USER_ID);
         notificationsBeforeEmails.verify(emailDeliveryRepository).deleteAllByUserId(USER_ID);
         verify(userProfileRepository).deleteRecommendationsByUserId(USER_ID);
+        org.mockito.InOrder actionItemsBeforeAssessments = org.mockito.Mockito.inOrder(
+                actionItemService, userProfileRepository);
+        actionItemsBeforeAssessments.verify(actionItemService).deleteAllByUserId(USER_ID);
+        actionItemsBeforeAssessments.verify(userProfileRepository).deleteRecommendationsByUserId(USER_ID);
         verify(userProfileRepository).deleteApplicationProgressByUserId(USER_ID);
         verify(userProfileRepository).deleteQuestionHistoryByUserId(USER_ID);
         verify(userProfileRepository).deleteById(USER_ID);
@@ -144,6 +153,7 @@ class AccountPurgeServiceTests {
                 .save(org.mockito.ArgumentMatchers.any(AccountDeletionAudit.class));
         verify(notificationStreamRegistry, times(2)).closeAll(USER_ID);
         verify(notificationRepository, times(2)).deleteAllByUserId(USER_ID);
+        verify(actionItemService, times(2)).deleteAllByUserId(USER_ID);
         verify(feedbackMessageRepository, times(2)).deleteAllBySenderId(USER_ID);
         verify(feedbackConversationRepository, times(2)).deleteAllByUserId(USER_ID);
         verify(userRepository, times(2)).save(user);
@@ -159,6 +169,7 @@ class AccountPurgeServiceTests {
         verify(notificationRepository, org.mockito.Mockito.never()).deleteAllByUserId(USER_ID);
         verify(emailPreferenceRepository, org.mockito.Mockito.never()).deleteById(USER_ID);
         verify(emailDeliveryRepository, org.mockito.Mockito.never()).deleteAllByUserId(USER_ID);
+        verify(actionItemService, org.mockito.Mockito.never()).deleteAllByUserId(USER_ID);
         verify(feedbackMessageRepository, org.mockito.Mockito.never()).deleteAllBySenderId(USER_ID);
         verify(feedbackConversationRepository, org.mockito.Mockito.never()).deleteAllByUserId(USER_ID);
         verify(notificationStreamRegistry, org.mockito.Mockito.never()).closeAll(USER_ID);
