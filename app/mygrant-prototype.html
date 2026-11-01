@@ -660,6 +660,13 @@ const initialState = () => ({
   impactDetail: null,
   impactDetailLoading: false,
   impactDetailError: null,
+  actions: null,
+  actionsError: null,
+  actionsLoading: false,
+  actionsTab: 'active',
+  actionsPage: 0,
+  actionsTotalPages: 0,
+  actionUpdating: null,
   unreadCount: 0,
   view: null,
   openAlert: null,
@@ -1328,7 +1335,7 @@ function goto(view, param){
   updateBreadcrumb(view);
   render();
   // Reload both on every visit so a policy imported since login shows up here.
-  if(view==='dashboard'){ loadPolicies(); loadNotifications(); loadImpacts(); loadTestClock(); }
+  if(view==='dashboard'){ loadPolicies(); loadNotifications(); loadImpacts(); loadActions(); loadTestClock(); }
   if(view==='admin' && state.role==='admin'){ loadAdminUsers(); loadAdminSources(); loadTestClock(); loadPolicies(); }
   if(view==='visaBulletin' && state.role==='admin'){ loadVisaBulletin(); }
   if(view==='feedback') openHumanFeedback();
@@ -1528,6 +1535,7 @@ function renderLiveDashboard(){
     </div>
 
     ${renderImpactFeed()}
+    ${renderActionChecklist()}
     <div class="block-label">Notifications${state.unreadCount ? ` &middot; ${state.unreadCount} unread` : ''}</div>
     ${state.notificationsError ? `<div class="rag-error">${escapeHtml(state.notificationsError)}</div>` : ''}
     ${state.notifications===null
@@ -1576,8 +1584,8 @@ function impactSeverityClass(severity){
 function renderImpactFeed(){
   const rows=(state.impacts || []).map(impact=>{
     const critical=impact.severity==='CRITICAL';
-    const actionPreview=(impact.actionItems || []).slice(0,2)
-      .map(item=>`<li>${escapeHtml(item.text)}</li>`).join('');
+    const actionPreview=(impact.actionItems || []).filter(isActiveAction).slice(0,2)
+      .map(item=>`<li>${escapeHtml(item.title)}${item.urgent?' <span class="tag action">Urgent</span>':''}</li>`).join('');
     return `<article class="entry ${impactSeverityClass(impact.severity)}" aria-label="${escapeAttribute(impact.severity)} impact">
       <div class="flag"></div>
       <div class="entry-case">${escapeHtml(formatTimestamp(impact.createdAt))}<br>${escapeHtml(impact.severity)}</div>
@@ -1638,7 +1646,7 @@ function renderImpactDetail(){
     ${(impact.analysis || []).length?`<ul>${impact.analysis.map(reason=>`<li>${escapeHtml(reason)}</li>`).join('')}</ul>`:'<p>No further analysis was supplied.</p>'}
     ${(impact.missingInformation || []).length?`<p>Missing information: ${impact.missingInformation.map(escapeHtml).join(', ')}</p>`:''}
     <div class="block-label">${critical?'Actions to review now':'Checklist and reminders'}</div>
-    ${(impact.actionItems || []).length?`<ul>${impact.actionItems.map(item=>`<li>${escapeHtml(item.text)}</li>`).join('')}</ul>`:'<p>No action items were supplied.</p>'}
+    ${(impact.actionItems || []).length?impact.actionItems.map(item=>renderActionItem(item,false)).join(''):'<p>No action items were supplied.</p>'}
     <div class="block-label">Source and citations</div>
     ${(impact.citations || []).map(citation=>/^https:\/\//i.test(citation.url || '')
       ? `<p><a href="${escapeAttribute(citation.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(citation.title)}</a></p>`
@@ -1656,6 +1664,112 @@ async function setImpactArchived(id,archived){
     await loadImpacts();
     showToast(archived?'Assessment archived.':'Assessment unarchived.');
   }catch(error){showToast(error.message);}
+}
+
+/* Action checklist (CS203-4). Kept before the beforeunload listener because impact-feed.test.cjs
+   and action-checklist.test.cjs load only the source from loadImpacts up to that listener. */
+const ACTION_TABS={active:{label:'Active',status:''},completed:{label:'Completed',status:'COMPLETED'},
+  dismissed:{label:'Dismissed',status:'DISMISSED'}};
+const ACTION_STATUS_LABELS={PENDING:'To do',IN_PROGRESS:'In progress',COMPLETED:'Completed',DISMISSED:'Dismissed'};
+const ACTION_TOASTS={PENDING:'Item reopened.',IN_PROGRESS:'Item started.',COMPLETED:'Item completed.',
+  DISMISSED:'Item dismissed.'};
+function actionsPath(page){
+  const status=ACTION_TABS[state.actionsTab]?.status;
+  return `/api/v1/actions?page=${page}&size=50${status?`&status=${status}`:''}`;
+}
+async function loadActions(){
+  state.actionsLoading=true; state.actionsError=null; state.actionsPage=0;
+  if(state.view==='dashboard') render();
+  try{
+    const page=await parseApiResponse(await apiFetch(actionsPath(0)));
+    state.actions=page.content || [];
+    state.actionsTotalPages=page.totalPages || 0;
+  }catch(error){ state.actions=[]; state.actionsError=error.message; }
+  finally{ state.actionsLoading=false; if(state.view==='dashboard') render(); }
+}
+async function loadMoreActions(){
+  if(state.actionsLoading || state.actionsPage+1>=state.actionsTotalPages) return;
+  state.actionsLoading=true; render();
+  try{
+    const next=state.actionsPage+1;
+    const page=await parseApiResponse(await apiFetch(actionsPath(next)));
+    state.actions=[...(state.actions || []),...(page.content || [])];
+    state.actionsPage=next;
+  }catch(error){state.actionsError=error.message;}
+  finally{state.actionsLoading=false; if(state.view==='dashboard')render();}
+}
+function showActionTab(tab){
+  state.actionsTab=tab;
+  state.actions=null;
+  loadActions();
+}
+function isActiveAction(item){ return item.status==='PENDING' || item.status==='IN_PROGRESS'; }
+function actionButtons(item){
+  const disabled=state.actionUpdating?' disabled':'';
+  const button=(status,label,primary)=>`<button class="btn ${primary?'':'ghost '}small" type="button"${disabled} onclick="setActionStatus(${Number(item.id)},'${status}')">${label}</button>`;
+  if(!isActiveAction(item)) return button('PENDING','Reopen',false);
+  return `${item.status==='PENDING'?button('IN_PROGRESS','Start',false):''}${button('COMPLETED','Complete',true)}${button('DISMISSED','Dismiss',false)}`;
+}
+/* One checklist row: on the dashboard with its policy, in an impact's detail without. */
+function renderActionItem(item,showPolicy){
+  const priority=String(item.priority || '');
+  const flag=priority==='HIGH'?'urgency-high':priority==='MEDIUM'?'urgency-medium':'urgency-low';
+  const closed=item.status==='COMPLETED'?`Completed ${formatTimestamp(item.completedAt)}`
+    :item.status==='DISMISSED'?`Dismissed ${formatTimestamp(item.dismissedAt)}`:'';
+  return `<div class="entry ${flag}${isActiveAction(item)?'':' read'}" aria-label="${escapeAttribute(item.title)}">
+    <div class="flag"></div>
+    <div class="entry-case">${item.deadline?`Due ${escapeHtml(formatDate(item.deadline))}`:'No deadline'}<br>${escapeHtml(ACTION_STATUS_LABELS[item.status] || item.status)}</div>
+    <div class="entry-body">
+      <div class="tag-row"><span class="tag">${escapeHtml(priority)} priority</span>
+        ${item.urgent?'<span class="tag action">Urgent</span>':''}${item.overdue?'<span class="tag action">Overdue</span>':''}</div>
+      <h3>${escapeHtml(item.title)}</h3>
+      ${item.description?`<p>${escapeHtml(item.description)}</p>`:''}
+      ${showPolicy?`<p class="rag-status">From: ${escapeHtml(item.policyTitle)}</p>`:''}
+      ${closed?`<p class="rag-status">${escapeHtml(closed)}</p>`:''}
+    </div>
+    <div class="entry-action" style="gap:8px;flex-wrap:wrap;">${actionButtons(item)}</div>
+  </div>`;
+}
+function renderActionChecklist(){
+  const tab=ACTION_TABS[state.actionsTab]?state.actionsTab:'active';
+  const tabs=Object.entries(ACTION_TABS).map(([key,{label}])=>
+    `<button class="btn ${key===tab?'':'ghost '}small" type="button" aria-pressed="${key===tab}" onclick="showActionTab('${key}')">${label}</button>`).join('');
+  const rows=(state.actions || []).map(item=>renderActionItem(item,true)).join('');
+  const empty=tab==='completed'?'You have not completed any checklist items yet.'
+    :tab==='dismissed'?'You have not dismissed any checklist items.'
+    :'Nothing to do right now. Steps from your published impact assessments appear here.';
+  return `<section aria-label="Your checklist">
+    <div class="block-label">Your checklist</div>
+    <div class="tag-row" style="margin-bottom:12px;" role="group" aria-label="Checklist status">${tabs}</div>
+    ${state.actionsError?`<div class="rag-error" role="alert">${escapeHtml(state.actionsError)} <button class="btn ghost small" type="button" onclick="loadActions()">Try again</button></div>`:''}
+    ${state.actions===null?'<div class="empty" role="status">Loading your checklist...</div>':rows || (state.actionsError?'':`<div class="empty">${empty}</div>`)}
+    ${state.actionsLoading && state.actions!==null?'<p role="status">Updating your checklist...</p>':''}
+    ${state.actionsPage+1<state.actionsTotalPages?'<button class="btn ghost small" type="button" onclick="loadMoreActions()">Load more</button>':''}
+  </section>`;
+}
+async function setActionStatus(id,status){
+  if(state.actionUpdating) return;
+  state.actionUpdating=id; render();
+  try{
+    await parseApiResponse(await apiFetch(`/api/v1/actions/${id}`,{
+      method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})
+    }));
+    showToast(ACTION_TOASTS[status] || 'Checklist updated.');
+  }catch(error){showToast(error.message);}
+  finally{
+    state.actionUpdating=null;
+    // The checklist, the impact cards and an open detail all show the item, so all are refetched.
+    await Promise.all([loadActions(),loadImpacts(),refreshImpactDetail()]);
+  }
+}
+async function refreshImpactDetail(){
+  const id=state.impactDetail?.id;
+  if(state.view!=='impactDetail' || id===undefined) return;
+  try{
+    state.impactDetail=await parseApiResponse(await apiFetch(`/api/v1/impacts/${id}`));
+    state.impactDetailError=null;
+  }catch(error){state.impactDetailError=error.message;}
+  finally{if(state.view==='impactDetail')render();}
 }
 
 window.addEventListener('beforeunload',event=>{
@@ -2429,7 +2543,8 @@ async function changeTestClock(scope, options){
     state.testClockImportResult = state.testClockImporting ? result : null;
     showToast(`Today is now ${formatDate(result.today)}: ${result.notificationsAdded} alert(s) added, ${result.notificationsRemoved} withdrawn${inboxes}.`);
     // New alerts also arrive on the live stream, but withdrawn ones only leave on a reload.
-    if(state.role==='student') loadNotifications();
+    // Moving the date also changes which checklist items are urgent or overdue.
+    if(state.role==='student'){ loadNotifications(); loadActions(); loadImpacts(); }
     if(state.testClockImporting) loadPolicies();
   }catch(error){ showToast(error.message); }
   finally{ state.testClockBusy = false; state.testClockImporting = false; render(); }

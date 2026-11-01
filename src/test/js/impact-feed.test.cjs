@@ -6,9 +6,12 @@ const vm=require('node:vm');
 const html=fs.readFileSync('app/mygrant-prototype.html','utf8');
 const source=html.slice(html.indexOf('async function loadImpacts(){'),
   html.indexOf("window.addEventListener('beforeunload'"));
+const item=(id,assessmentId,title,status='PENDING')=>({id,assessmentId,policyId:1,
+  policyTitle:`Policy ${assessmentId}`,title,description:null,priority:'HIGH',status,
+  deadline:'2026-11-05',urgent:false,overdue:false,completedAt:null,dismissedAt:null,text:title});
 const impact=(id,severity,summary)=>({id,severity,summary,policyTitle:`Policy ${id}`,
   confidence:85,confidenceLabel:'HIGH',createdAt:'2026-10-30T00:00:00Z',
-  actionItems:[{id:`${id}:1`,text:'Check the official source'}],citations:[],archived:false,
+  actionItems:[item(id*10,id,'Check the official source')],citations:[],archived:false,
   reviewedByHuman:false});
 function page(fetch){
   const state={view:'dashboard',user:{visaType:'F-1',profileComplete:true},
@@ -18,7 +21,7 @@ function page(fetch){
     render(){},showToast(){},goto(view){state.view=view;},
     escapeHtml:x=>String(x).replaceAll('<','&lt;'),
     escapeAttribute:x=>String(x).replaceAll('"','&quot;'),
-    formatTimestamp:x=>x});
+    formatTimestamp:x=>x,formatDate:x=>x});
   vm.runInContext(source,context);
   return context;
 }

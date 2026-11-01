@@ -5,6 +5,7 @@ import java.time.Instant;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import mygrant.actions.ActionItemService;
 import mygrant.email.EmailDeliveryRepository;
 import mygrant.email.EmailPreferenceRepository;
 import mygrant.feedback.FeedbackConversationRepository;
@@ -31,6 +32,7 @@ public class AccountPurgeService {
     private final FeedbackMessageRepository feedbackMessageRepository;
     private final EmailPreferenceRepository emailPreferenceRepository;
     private final EmailDeliveryRepository emailDeliveryRepository;
+    private final ActionItemService actionItemService;
 
     public AccountPurgeService(UserRepository userRepository,
             UserProfileRepository userProfileRepository,
@@ -42,7 +44,8 @@ public class AccountPurgeService {
             FeedbackConversationRepository feedbackConversationRepository,
             FeedbackMessageRepository feedbackMessageRepository,
             EmailPreferenceRepository emailPreferenceRepository,
-            EmailDeliveryRepository emailDeliveryRepository) {
+            EmailDeliveryRepository emailDeliveryRepository,
+            ActionItemService actionItemService) {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
         this.immigrationDocumentRepository = immigrationDocumentRepository;
@@ -54,6 +57,7 @@ public class AccountPurgeService {
         this.feedbackMessageRepository = feedbackMessageRepository;
         this.emailPreferenceRepository = emailPreferenceRepository;
         this.emailDeliveryRepository = emailDeliveryRepository;
+        this.actionItemService = actionItemService;
     }
 
     /**
@@ -73,6 +77,8 @@ public class AccountPurgeService {
         // After the notifications, which reference their email.
         emailDeliveryRepository.deleteAllByUserId(userId);
         emailPreferenceRepository.deleteById(userId);
+        // Before the assessments they were generated from.
+        actionItemService.deleteAllByUserId(userId);
         userProfileRepository.deleteRecommendationsByUserId(userId);
         userProfileRepository.deleteApplicationProgressByUserId(userId);
         userProfileRepository.deleteQuestionHistoryByUserId(userId);

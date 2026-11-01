@@ -51,6 +51,8 @@ public class OpenApiConfig {
             tag("Policy questions", "Questions answered from indexed policy evidence (RAG), with citations."),
             tag("Notifications", "The signed-in user's policy alerts, including a live event stream."),
             tag("Impacts", "Published personal policy assessments, details and archive controls."),
+            tag("Actions", "The signed-in user's checklist: one item per step recommended by a published impact "
+                    + "assessment, with deadlines, urgency and progress."),
             tag("Impact review", "Manager correction and publication of held assessments."),
             tag("Email alerts", "How alerts are emailed to the signed-in user, and an admin trigger for "
                     + "the daily digest."),

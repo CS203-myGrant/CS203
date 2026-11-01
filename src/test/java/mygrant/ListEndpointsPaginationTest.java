@@ -50,6 +50,7 @@ class ListEndpointsPaginationTest {
         String[][] lists = {
                 {"/api/v1/policies", applicant},
                 {"/api/v1/notifications", applicant},
+                {"/api/v1/actions", applicant},
                 {"/api/v1/profiles/me/documents", applicant},
                 {"/api/v1/feedback/messages", applicant},
                 {"/api/v1/feedback/admin/conversations", admin},

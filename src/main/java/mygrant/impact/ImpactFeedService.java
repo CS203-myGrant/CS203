@@ -4,7 +4,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -18,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import mygrant.actions.ActionItemService;
+import mygrant.actions.ActionItemView;
 import mygrant.user.UserRepository;
 
 /** Published, owner-scoped impact assessments built on existing policy recommendations. */
@@ -25,17 +26,18 @@ import mygrant.user.UserRepository;
 public class ImpactFeedService {
     private static final String VISIBLE = """
             FROM policy_recommendations r JOIN policy_documents p ON p.id = r.policy_id
-            WHERE r.user_id = :userId AND r.publication_status = 'PUBLISHED'
-              AND (r.reviewed_by_human OR r.assessment_json::jsonb #>> '{evaluation,verdict}' = 'YES')
-            """;
+            WHERE r.user_id = :userId AND """ + ImpactVisibility.VISIBLE + "\n";
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
     private final UserRepository users;
+    private final ActionItemService actionItems;
 
-    public ImpactFeedService(NamedParameterJdbcTemplate jdbc, ObjectMapper mapper, UserRepository users) {
+    public ImpactFeedService(NamedParameterJdbcTemplate jdbc, ObjectMapper mapper, UserRepository users,
+            ActionItemService actionItems) {
         this.jdbc = jdbc;
         this.mapper = mapper;
         this.users = users;
+        this.actionItems = actionItems;
     }
 
     @Transactional(readOnly = true)
@@ -45,28 +47,32 @@ public class ImpactFeedService {
         }
         String order = orderBy(pageable);
         String where = VISIBLE + (archived ? " AND r.archived_at IS NOT NULL" : " AND r.archived_at IS NULL");
-        MapSqlParameterSource params = new MapSqlParameterSource("userId", userId(email))
+        long userId = userId(email);
+        MapSqlParameterSource params = new MapSqlParameterSource("userId", userId)
                 .addValue("limit", pageable.getPageSize()).addValue("offset", pageable.getOffset());
         if (severity != null && !severity.isBlank()) {
             params.addValue("severity", parseSeverity(severity));
             where += " AND r.severity = :severity";
         }
         Long total = jdbc.queryForObject("SELECT count(*) " + where, params, Long.class);
-        List<ImpactView> rows = jdbc.query("SELECT r.*, p.title AS policy_title, p.agency AS policy_agency, "
+        List<ImpactView> rows = withActionItems(userId, jdbc.query(
+                "SELECT r.*, p.title AS policy_title, p.agency AS policy_agency, "
                 + "p.source_url AS policy_source_url " + where + " ORDER BY " + order
-                + " LIMIT :limit OFFSET :offset", params, (rs, row) -> map(rs));
+                + " LIMIT :limit OFFSET :offset", params, (rs, row) -> map(rs)));
         return new PageImpl<>(rows, PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
                 pageable.getSort()), total == null ? 0 : total);
     }
 
     @Transactional(readOnly = true)
     public ImpactView get(String email, long id) {
-        return visible(email, id);
+        long userId = userId(email);
+        return withActionItems(userId, List.of(visible(userId, id))).getFirst();
     }
 
     @Transactional
     public ImpactView archive(String email, long id, boolean archived) {
-        visible(email, id);
+        long userId = userId(email);
+        visible(userId, id);
         jdbc.update("""
                 UPDATE policy_recommendations SET archived_at =
                     CASE WHEN :archived THEN CURRENT_TIMESTAMP ELSE NULL END,
@@ -75,16 +81,23 @@ public class ImpactFeedService {
                   AND ((:archived = TRUE AND archived_at IS NULL)
                     OR (:archived = FALSE AND archived_at IS NOT NULL))
                 """, new MapSqlParameterSource("archived", archived)
-                .addValue("id", id).addValue("userId", userId(email)));
-        return visible(email, id);
+                .addValue("id", id).addValue("userId", userId));
+        return withActionItems(userId, List.of(visible(userId, id))).getFirst();
     }
 
-    private ImpactView visible(String email, long id) {
-        MapSqlParameterSource params = new MapSqlParameterSource("userId", userId(email))
+    private ImpactView visible(long userId, long id) {
+        MapSqlParameterSource params = new MapSqlParameterSource("userId", userId)
                 .addValue("id", id);
         return jdbc.query("SELECT r.*, p.title AS policy_title, p.agency AS policy_agency, "
                 + "p.source_url AS policy_source_url " + VISIBLE + " AND r.id = :id", params,
                 (rs, row) -> map(rs)).stream().findFirst().orElseThrow(ImpactNotFoundException::new);
+    }
+
+    /** The persisted checklist of every assessment on the page, in one query. */
+    private List<ImpactView> withActionItems(long userId, List<ImpactView> impacts) {
+        var items = actionItems.itemsForAssessments(userId, impacts.stream().map(ImpactView::id).toList());
+        return impacts.stream().map(impact -> impact.withActionItems(items.getOrDefault(impact.id(), List.of())))
+                .toList();
     }
 
     private ImpactView map(ResultSet rs) throws SQLException {
@@ -94,16 +107,12 @@ public class ImpactFeedService {
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Stored impact assessment is unreadable", exception);
         }
-        long id = rs.getLong("id");
-        List<ActionItem> actions = java.util.stream.IntStream.range(0, assessment.recommendedActions().size())
-                .mapToObj(index -> new ActionItem(id + ":" + (index + 1),
-                        assessment.recommendedActions().get(index))).toList();
-        return new ImpactView(id, rs.getLong("policy_id"), rs.getString("policy_title"),
+        return new ImpactView(rs.getLong("id"), rs.getLong("policy_id"), rs.getString("policy_title"),
                 rs.getString("policy_agency"), rs.getString("severity"), assessment.summary(),
                 assessment.confidence(), confidenceLabel(assessment.confidence()),
                 assessment.reasons(), assessment.missingInformation(),
                 List.of(new Citation(rs.getString("policy_title"), rs.getString("policy_source_url"))),
-                actions, rs.getBoolean("reviewed_by_human"), instant(rs, "reviewed_at"),
+                List.of(), rs.getBoolean("reviewed_by_human"), instant(rs, "reviewed_at"),
                 instant(rs, "archived_at") != null, instant(rs, "generated_at"),
                 instant(rs, "updated_at"), rs.getInt("version"),
                 "This information is not legal advice. Check the original source and a qualified adviser.");
@@ -147,10 +156,15 @@ public class ImpactFeedService {
     }
 
     public record Citation(String title, String url) {}
-    public record ActionItem(String id, String text) {}
     public record ImpactView(long id, long policyId, String policyTitle, String policyAgency,
             String severity, String summary, int confidence, String confidenceLabel,
             List<String> analysis, List<String> missingInformation, List<Citation> citations,
-            List<ActionItem> actionItems, boolean reviewedByHuman, Instant reviewedAt,
-            boolean archived, Instant createdAt, Instant updatedAt, int version, String disclaimer) {}
+            List<ActionItemView> actionItems, boolean reviewedByHuman, Instant reviewedAt,
+            boolean archived, Instant createdAt, Instant updatedAt, int version, String disclaimer) {
+        ImpactView withActionItems(List<ActionItemView> items) {
+            return new ImpactView(id, policyId, policyTitle, policyAgency, severity, summary, confidence,
+                    confidenceLabel, analysis, missingInformation, citations, items, reviewedByHuman,
+                    reviewedAt, archived, createdAt, updatedAt, version, disclaimer);
+        }
+    }
 }
