@@ -43,6 +43,7 @@ public class PolicyRecommendationStore {
         List<String> saved = jdbc.queryForList("""
                 SELECT assessment_json FROM policy_recommendations
                 WHERE user_id = ? AND policy_id = ? AND input_hash = ?
+                  AND publication_status = 'PUBLISHED'
                 """, String.class, user.getId(), policy.getId(), hash);
         if (!saved.isEmpty()) {
             try {
@@ -53,14 +54,27 @@ public class PolicyRecommendationStore {
             }
         }
         ProfileImpactAssessment result = generate.get();
-        // Transient provider failures must remain retryable on the next visit.
-        if (approved(result)) {
+        // Provider outages are retryable and are never persisted. Unapproved model
+        // output is stored for review but never returned to an applicant.
+        if (result.urgency() != ImpactUrgency.UNAVAILABLE) {
+            boolean published = approved(result);
             jdbc.update("""
-                    INSERT INTO policy_recommendations (user_id, policy_id, input_hash, assessment_json)
-                    VALUES (?, ?, ?, ?)
-                    ON CONFLICT (user_id, policy_id) DO UPDATE SET input_hash = EXCLUDED.input_hash,
-                    assessment_json = EXCLUDED.assessment_json, generated_at = CURRENT_TIMESTAMP
-                    """, user.getId(), policy.getId(), hash, json(result));
+                    INSERT INTO policy_recommendations
+                        (user_id, policy_id, input_hash, assessment_json, publication_status, severity)
+                    VALUES (?, ?, ?, ?, '%s', '%s')
+                    ON CONFLICT (user_id, policy_id, input_hash) DO UPDATE SET
+                        assessment_json = EXCLUDED.assessment_json,
+                        publication_status = EXCLUDED.publication_status,
+                        severity = EXCLUDED.severity,
+                        version = policy_recommendations.version + 1,
+                        updated_at = CURRENT_TIMESTAMP
+                    """.formatted(published ? "PUBLISHED" : "PENDING_REVIEW", severity(result)),
+                    user.getId(), policy.getId(), hash, json(result));
+            if (!published) {
+                return new ProfileImpactAssessment(ImpactUrgency.UNAVAILABLE, 0,
+                        "This assessment is awaiting review.", List.of(), List.of(), List.of(),
+                        true, "Review queue", "", null, result.attempts());
+            }
         }
         return result;
     }
@@ -81,6 +95,7 @@ public class PolicyRecommendationStore {
         List<String> saved = jdbc.queryForList("""
                 SELECT assessment_json FROM policy_recommendations
                 WHERE user_id = ? AND policy_id = ? AND input_hash = ?
+                  AND publication_status = 'PUBLISHED'
                 """, String.class, user.getId(), policy.getId(), fingerprint(profile, policy));
         if (saved.isEmpty()) return java.util.Optional.empty();
         try {
@@ -101,5 +116,14 @@ public class PolicyRecommendationStore {
     private static boolean approved(ProfileImpactAssessment assessment) {
         return assessment.urgency() != ImpactUrgency.UNAVAILABLE && assessment.evaluation() != null
                 && assessment.evaluation().verdict() == mygrant.impact.JudgeEvaluation.Verdict.YES;
+    }
+
+    private static String severity(ProfileImpactAssessment assessment) {
+        return switch (assessment.urgency()) {
+            case HIGH -> "CRITICAL";
+            case MEDIUM -> "MEDIUM";
+            case LOW -> "LOW";
+            case NOT_APPLICABLE, UNAVAILABLE -> "INFO";
+        };
     }
 }

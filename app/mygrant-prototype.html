@@ -157,6 +157,10 @@
   .entry.urgency-high .flag{background:var(--urgent);}
   .entry.urgency-medium .flag{background:#E5A000;}
   .entry.urgency-low .flag{background:var(--calm);}
+  .entry.impact-critical .flag{background:var(--urgent);}
+  .entry.impact-medium .flag{background:#E5A000;}
+  .entry.impact-low .flag{background:var(--calm);}
+  .entry.impact-critical{background:var(--urgent-bg);}
   .entry.read{opacity:0.72;}
   .entry-case{font-family:var(--mono);font-size:12px;color:var(--muted);padding:18px 0 18px 16px;}
   .entry-body{padding:16px 18px;}
@@ -647,6 +651,15 @@ const initialState = () => ({
   policyError: null,
   notifications: null,
   notificationsError: null,
+  impacts: null,
+  impactsError: null,
+  impactsLoading: false,
+  impactsArchived: false,
+  impactsPage: 0,
+  impactsTotalPages: 0,
+  impactDetail: null,
+  impactDetailLoading: false,
+  impactDetailError: null,
   unreadCount: 0,
   view: null,
   openAlert: null,
@@ -820,7 +833,7 @@ function startWorkosLogin(){
   window.location.href = `${API_BASE}/api/v1/auth/workos/login`;
 }
 function renderProfileCompletion(){
-  return `<div class="page-head"><h1>Complete your profile</h1><p class="sub">Add your visa details before using myGRANT.</p></div>
+  return `<div class="page-head"><h1>Complete your profile</h1><p class="sub">Add your visa details before using myGRANT. Your impact feed will be empty until your profile is complete.</p></div>
     <form class="form-grid" onsubmit="submitProfileCompletion(event)">
       <div class="field"><label for="workos-visa">Visa category (Required)</label><select id="workos-visa" required><option>F-1</option><option>J-1</option><option>H-1B</option></select></div>
       <div class="field"><label for="workos-origin">Country of origin (Optional)</label><input id="workos-origin" list="workos-country-options" autocomplete="country-name" placeholder="Start typing a country"></div>
@@ -1315,7 +1328,7 @@ function goto(view, param){
   updateBreadcrumb(view);
   render();
   // Reload both on every visit so a policy imported since login shows up here.
-  if(view==='dashboard'){ loadPolicies(); loadNotifications(); loadTestClock(); }
+  if(view==='dashboard'){ loadPolicies(); loadNotifications(); loadImpacts(); loadTestClock(); }
   if(view==='admin' && state.role==='admin'){ loadAdminUsers(); loadAdminSources(); loadTestClock(); loadPolicies(); }
   if(view==='visaBulletin' && state.role==='admin'){ loadVisaBulletin(); }
   if(view==='feedback') openHumanFeedback();
@@ -1377,9 +1390,10 @@ const VIEW_LABELS = {
   profile:'Your profile', manager:'Team impact', queue:'Review queue', admin:'Monitored sources', visaBulletin:'Visa Bulletin',
   rag:'RAG inspector', feedback:'Get feedback', feedbackInbox:'Feedback inbox', profileCompletion:'Complete your profile'
 };
+VIEW_LABELS.impactDetail='Impact detail';
 VIEW_LABELS.policyDetail='Policy details';
 VIEW_LABELS.applicationProgress='Application tracker';
-const VIEW_PARENTS = {notificationDetail:'dashboard', alertDetail:'dashboard', policyDetail:'dashboard'};
+const VIEW_PARENTS = {notificationDetail:'dashboard', alertDetail:'dashboard', policyDetail:'dashboard', impactDetail:'dashboard'};
 function homeView(){ return state.role==='manager' ? 'manager' : state.role==='admin' ? 'admin' : 'dashboard'; }
 function updateBreadcrumb(view){
   const crumb = document.getElementById('breadcrumb');
@@ -1403,6 +1417,7 @@ function showToast(msg){
 function render(){
   const main = document.getElementById('main');
   if(state.view==='dashboard') main.innerHTML = renderLiveDashboard();
+  else if(state.view==='impactDetail') main.innerHTML = renderImpactDetail();
   else if(state.view==='notifications') main.innerHTML = renderNotifications();
   else if(state.view==='notificationDetail') main.innerHTML = renderNotificationDetail(state.openAlert);
   else if(state.view==='alertDetail') main.innerHTML = renderAlertDetail(state.openAlert);
@@ -1512,6 +1527,7 @@ function renderLiveDashboard(){
       ${'Notification' in window && Notification.permission==='granted' ? '<span class="tag">Browser notifications enabled</span>' : ('Notification' in window && Notification.permission==='denied' ? '<span class="tag">Browser notifications blocked</span>' : (permissionPromptedThisSession ? '<span class="tag">Permission request sent</span>' : '<button class="btn ghost small" onclick="requestBrowserNotifications()">Enable browser notifications</button>'))}
     </div>
 
+    ${renderImpactFeed()}
     <div class="block-label">Notifications${state.unreadCount ? ` &middot; ${state.unreadCount} unread` : ''}</div>
     ${state.notificationsError ? `<div class="rag-error">${escapeHtml(state.notificationsError)}</div>` : ''}
     ${state.notifications===null
@@ -1523,6 +1539,123 @@ function renderLiveDashboard(){
     ${state.policyRecords===null
       ? (state.policyError ? '' : '<div class="empty">Loading policies...</div>')
       : policyRows || '<div class="empty"><div class="big">No matching policies yet</div>Import a Federal Register document from the RAG inspector.</div>'}`;
+}
+
+async function loadImpacts(){
+  state.impactsLoading=true; state.impactsError=null; state.impactsPage=0;
+  if(state.view==='dashboard') render();
+  try{
+    const archived=state.impactsArchived ? 'true' : 'false';
+    const page=await parseApiResponse(await apiFetch(`/api/v1/impacts?page=0&size=20&sort=severity,desc&archived=${archived}`));
+    state.impacts=page.content || [];
+    state.impactsTotalPages=page.totalPages || 0;
+  }catch(error){ state.impacts=[]; state.impactsError=error.message; }
+  finally{ state.impactsLoading=false; if(state.view==='dashboard') render(); }
+}
+async function loadMoreImpacts(){
+  if(state.impactsLoading || state.impactsPage+1>=state.impactsTotalPages) return;
+  state.impactsLoading=true; render();
+  try{
+    const next=state.impactsPage+1;
+    const archived=state.impactsArchived ? 'true' : 'false';
+    const page=await parseApiResponse(await apiFetch(`/api/v1/impacts?page=${next}&size=20&sort=severity,desc&archived=${archived}`));
+    state.impacts=[...(state.impacts || []),...(page.content || [])];
+    state.impactsPage=next;
+  }catch(error){state.impactsError=error.message;}
+  finally{state.impactsLoading=false; if(state.view==='dashboard')render();}
+}
+function showArchivedImpacts(archived){
+  state.impactsArchived=archived;
+  state.impacts=null;
+  loadImpacts();
+}
+function impactSeverityClass(severity){
+  return severity==='CRITICAL' || severity==='HIGH' ? 'impact-critical'
+    : severity==='MEDIUM' ? 'impact-medium' : 'impact-low';
+}
+function renderImpactFeed(){
+  const rows=(state.impacts || []).map(impact=>{
+    const critical=impact.severity==='CRITICAL';
+    const actionPreview=(impact.actionItems || []).slice(0,2)
+      .map(item=>`<li>${escapeHtml(item.text)}</li>`).join('');
+    return `<article class="entry ${impactSeverityClass(impact.severity)}" aria-label="${escapeAttribute(impact.severity)} impact">
+      <div class="flag"></div>
+      <div class="entry-case">${escapeHtml(formatTimestamp(impact.createdAt))}<br>${escapeHtml(impact.severity)}</div>
+      <div class="entry-body">
+        <div class="tag-row"><span class="tag ${critical?'action':''}">${critical?'WARNING: CRITICAL':escapeHtml(impact.severity)}</span>
+          <span class="tag confidence-${escapeAttribute(impact.confidenceLabel.toLowerCase())}">${escapeHtml(impact.confidenceLabel)} confidence</span>
+          ${impact.reviewedByHuman?'<span class="tag">Reviewed by a human</span>':''}</div>
+        <h3>${escapeHtml(impact.policyTitle)}</h3>
+        <p>${escapeHtml(impact.summary)}</p>
+        ${actionPreview?`<div><strong>${critical?'Act on these steps:':'Checklist or reminder:'}</strong><ul>${actionPreview}</ul></div>`:''}
+      </div>
+      <div class="entry-action" style="gap:8px;flex-wrap:wrap;">
+        <button class="btn small" type="button" onclick="openImpact(${Number(impact.id)})">Read details</button>
+        <button class="btn ghost small" type="button" onclick="setImpactArchived(${Number(impact.id)},${!impact.archived})">${impact.archived?'Unarchive':'Archive'}</button>
+      </div>
+    </article>`;
+  }).join('');
+  let empty='No assessments have been published yet. Open a matching policy below and select “See how this impacts me” to create one.';
+  if(state.user?.profileComplete===false) empty='Complete your profile to see how policy changes affect you.';
+  else if(state.impactsArchived) empty='You have no archived assessments.';
+  else if(state.policyRecords && !state.policyRecords.some(policy=>String(policy.visaType || '').includes(state.user?.visaType || ''))) {
+    empty='No matching policies have been imported for your visa category yet.';
+  }
+  return `<section aria-label="Your impact assessments">
+    <div class="block-label">What this means for you</div>
+    <div class="tag-row" style="margin-bottom:12px;">
+      <button class="btn ${state.impactsArchived?'ghost':''} small" type="button" onclick="showArchivedImpacts(false)">Current</button>
+      <button class="btn ${state.impactsArchived?'':'ghost'} small" type="button" onclick="showArchivedImpacts(true)">Archived</button>
+    </div>
+    ${state.impactsError?`<div class="rag-error" role="alert">${escapeHtml(state.impactsError)} <button class="btn ghost small" onclick="loadImpacts()">Try again</button></div>`:''}
+    ${state.impacts===null?'<div class="empty" role="status">Loading your assessments...</div>':rows || `<div class="empty">${empty}</div>`}
+    ${state.impactsLoading && state.impacts!==null?'<p role="status">Loading more assessments...</p>':''}
+    ${state.impactsPage+1<state.impactsTotalPages?'<button class="btn ghost small" type="button" onclick="loadMoreImpacts()">Load more</button>':''}
+  </section>`;
+}
+async function openImpact(id){
+  state.impactDetail=null; state.impactDetailError=null; state.impactDetailLoading=true;
+  goto('impactDetail'); render();
+  try{
+    state.impactDetail=await parseApiResponse(await apiFetch(`/api/v1/impacts/${id}`));
+  }catch(error){state.impactDetailError=error.message;}
+  finally{state.impactDetailLoading=false; if(state.view==='impactDetail')render();}
+}
+function renderImpactDetail(){
+  const back='<button class="back-link" type="button" onclick="goto(\'dashboard\')">&larr; Back to your impacts</button>';
+  if(state.impactDetailLoading) return back+'<p role="status">Loading assessment...</p>';
+  if(state.impactDetailError) return back+`<div class="rag-error" role="alert">${escapeHtml(state.impactDetailError)}</div>`;
+  const impact=state.impactDetail;
+  if(!impact) return back+'<div class="empty">Assessment unavailable.</div>';
+  const critical=impact.severity==='CRITICAL';
+  return `${back}<article class="detail-card ${impactSeverityClass(impact.severity)}">
+    <div class="tag-row"><span class="tag ${critical?'action':''}">${critical?'WARNING: CRITICAL':escapeHtml(impact.severity)}</span>
+      <span class="tag">${escapeHtml(impact.confidenceLabel)} confidence (${Number(impact.confidence)}%)</span>
+      ${impact.reviewedByHuman?'<span class="tag">Reviewed by a human</span>':''}</div>
+    <h1>${escapeHtml(impact.policyTitle)}</h1><p>${escapeHtml(impact.summary)}</p>
+    <p>${escapeHtml(impact.policyAgency)} · ${escapeHtml(formatTimestamp(impact.createdAt))}</p>
+    <div class="block-label">Why this affects you</div>
+    ${(impact.analysis || []).length?`<ul>${impact.analysis.map(reason=>`<li>${escapeHtml(reason)}</li>`).join('')}</ul>`:'<p>No further analysis was supplied.</p>'}
+    ${(impact.missingInformation || []).length?`<p>Missing information: ${impact.missingInformation.map(escapeHtml).join(', ')}</p>`:''}
+    <div class="block-label">${critical?'Actions to review now':'Checklist and reminders'}</div>
+    ${(impact.actionItems || []).length?`<ul>${impact.actionItems.map(item=>`<li>${escapeHtml(item.text)}</li>`).join('')}</ul>`:'<p>No action items were supplied.</p>'}
+    <div class="block-label">Source and citations</div>
+    ${(impact.citations || []).map(citation=>/^https:\/\//i.test(citation.url || '')
+      ? `<p><a href="${escapeAttribute(citation.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(citation.title)}</a></p>`
+      : `<p>${escapeHtml(citation.title)}</p>`).join('')}
+    <p class="rag-status">${escapeHtml(impact.disclaimer)}</p>
+    <button class="btn ghost small" type="button" onclick="setImpactArchived(${Number(impact.id)},${!impact.archived})">${impact.archived?'Unarchive':'Archive this assessment'}</button>
+  </article>`;
+}
+async function setImpactArchived(id,archived){
+  try{
+    const result=await parseApiResponse(await apiFetch(`/api/v1/impacts/${id}`,{
+      method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({archived})
+    }));
+    if(state.impactDetail?.id===id){state.impactDetail=result;render();}
+    await loadImpacts();
+    showToast(archived?'Assessment archived.':'Assessment unarchived.');
+  }catch(error){showToast(error.message);}
 }
 
 window.addEventListener('beforeunload',event=>{
