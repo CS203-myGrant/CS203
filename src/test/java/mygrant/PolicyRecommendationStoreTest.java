@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import mygrant.actions.ActionItemService;
 import mygrant.impact.*;
 import mygrant.policies.*;
 import mygrant.user.*;
@@ -21,6 +22,7 @@ class PolicyRecommendationStoreTest {
     final JdbcTemplate jdbc = mock(JdbcTemplate.class);
     final UserRepository users = mock(UserRepository.class);
     final UserProfileRepository profiles = mock(UserProfileRepository.class);
+    final ActionItemService actions = mock(ActionItemService.class);
     final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
     final User user = new User();
     final UserProfile profile = UserProfile.fromUser(user);
@@ -31,7 +33,7 @@ class PolicyRecommendationStoreTest {
     String savedHash;
     String savedJson;
 
-    PolicyRecommendationStore store() { return new PolicyRecommendationStore(jdbc, mapper, users, profiles); }
+    PolicyRecommendationStore store() { return new PolicyRecommendationStore(jdbc, mapper, users, profiles, actions); }
 
     @BeforeEach
     void setup() {
@@ -43,19 +45,32 @@ class PolicyRecommendationStoreTest {
         when(profiles.findById(1L)).thenReturn(Optional.of(profile));
         when(jdbc.queryForList(anyString(), eq(String.class), eq(1L), eq(21L), anyString()))
                 .thenAnswer(call -> call.getArgument(4).equals(savedHash) ? List.of(savedJson) : List.of());
-        when(jdbc.update(anyString(), eq(1L), eq(21L), anyString(), anyString())).thenAnswer(call -> {
-            savedHash = call.getArgument(3);
-            savedJson = call.getArgument(4);
-            return 1;
-        });
+        when(jdbc.queryForObject(anyString(), eq(Long.class), anyLong(), eq(21L), anyString(), anyString()))
+                .thenAnswer(call -> {
+                    savedHash = call.getArgument(4);
+                    savedJson = call.getArgument(5);
+                    return 31L;
+                });
     }
 
     @Test
     void persistsResultAndReusesItFromAnotherServiceInstance() {
         assertEquals(result, store().getOrGenerate("user", policy, () -> result));
         assertEquals(result, store().getOrGenerate("user", policy, () -> { throw new AssertionError("AI called twice"); }));
-        verify(jdbc, times(1)).update(anyString(), eq(1L), eq(21L), anyString(), anyString());
+        verify(jdbc, times(1)).queryForObject(anyString(), eq(Long.class), eq(1L), eq(21L), anyString(), anyString());
         assertEquals(result, store().findCurrent("user", policy).orElseThrow());
+    }
+
+    @Test
+    void publishingGeneratesTheChecklistButAHeldDraftDoesNot() {
+        store().getOrGenerate("user", policy, () -> result);
+        verify(actions).syncForAssessment(31L);
+
+        var rejected = new ProfileImpactAssessment(ImpactUrgency.LOW, 60, "Draft", List.of(), List.of("Draft step"),
+                List.of(), true, "OpenAI", "model", new JudgeEvaluation(JudgeEvaluation.Verdict.NO, "Unsupported", "judge"), 1);
+        profile.setVisaType("J-1");
+        store().getOrGenerate("user", policy, () -> rejected);
+        verify(actions, times(1)).syncForAssessment(anyLong());
     }
 
     @Test

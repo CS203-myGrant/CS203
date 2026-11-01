@@ -10,6 +10,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import mygrant.actions.ActionItemService;
 import mygrant.impact.ImpactUrgency;
 import mygrant.impact.ProfileImpactAssessment;
 import mygrant.user.UserProfile;
@@ -23,13 +24,15 @@ public class PolicyRecommendationStore {
     private final ObjectMapper mapper;
     private final UserRepository users;
     private final UserProfileRepository profiles;
+    private final ActionItemService actionItems;
 
     public PolicyRecommendationStore(JdbcTemplate jdbc, ObjectMapper mapper,
-            UserRepository users, UserProfileRepository profiles) {
+            UserRepository users, UserProfileRepository profiles, ActionItemService actionItems) {
         this.jdbc = jdbc;
         this.mapper = mapper;
         this.users = users;
         this.profiles = profiles;
+        this.actionItems = actionItems;
     }
 
     @Transactional
@@ -58,7 +61,7 @@ public class PolicyRecommendationStore {
         // output is stored for review but never returned to an applicant.
         if (result.urgency() != ImpactUrgency.UNAVAILABLE) {
             boolean published = approved(result);
-            jdbc.update("""
+            Long id = jdbc.queryForObject("""
                     INSERT INTO policy_recommendations
                         (user_id, policy_id, input_hash, assessment_json, publication_status, severity)
                     VALUES (?, ?, ?, ?, '%s', '%s')
@@ -68,9 +71,12 @@ public class PolicyRecommendationStore {
                         severity = EXCLUDED.severity,
                         version = policy_recommendations.version + 1,
                         updated_at = CURRENT_TIMESTAMP
+                    RETURNING id
                     """.formatted(published ? "PUBLISHED" : "PENDING_REVIEW", severity(result)),
-                    user.getId(), policy.getId(), hash, json(result));
-            if (!published) {
+                    Long.class, user.getId(), policy.getId(), hash, json(result));
+            if (published) {
+                actionItems.syncForAssessment(id);
+            } else {
                 return new ProfileImpactAssessment(ImpactUrgency.UNAVAILABLE, 0,
                         "This assessment is awaiting review.", List.of(), List.of(), List.of(),
                         true, "Review queue", "", null, result.attempts());

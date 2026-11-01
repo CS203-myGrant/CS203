@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import mygrant.actions.ActionItemService;
 import mygrant.user.UserRepository;
 import mygrant.impact.ImpactReviewController.Correction;
 
@@ -21,11 +22,14 @@ public class ImpactReviewService {
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
     private final UserRepository users;
+    private final ActionItemService actionItems;
 
-    public ImpactReviewService(JdbcTemplate jdbc, ObjectMapper mapper, UserRepository users) {
+    public ImpactReviewService(JdbcTemplate jdbc, ObjectMapper mapper, UserRepository users,
+            ActionItemService actionItems) {
         this.jdbc = jdbc;
         this.mapper = mapper;
         this.users = users;
+        this.actionItems = actionItems;
     }
 
     @Transactional(readOnly = true)
@@ -73,6 +77,8 @@ public class ImpactReviewService {
                     version = version + 1, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """, json, severity, reviewerId, id);
+        // The correction's actions replace the old ones; the owner's progress on kept items stays.
+        actionItems.syncForAssessment(id);
         return new ReviewResult(id, versions.getFirst() + 1, true, "PUBLISHED", Instant.now());
     }
 

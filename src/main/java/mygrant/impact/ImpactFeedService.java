@@ -25,9 +25,7 @@ import mygrant.user.UserRepository;
 public class ImpactFeedService {
     private static final String VISIBLE = """
             FROM policy_recommendations r JOIN policy_documents p ON p.id = r.policy_id
-            WHERE r.user_id = :userId AND r.publication_status = 'PUBLISHED'
-              AND (r.reviewed_by_human OR r.assessment_json::jsonb #>> '{evaluation,verdict}' = 'YES')
-            """;
+            WHERE r.user_id = :userId AND """ + ImpactVisibility.VISIBLE + "\n";
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
     private final UserRepository users;
