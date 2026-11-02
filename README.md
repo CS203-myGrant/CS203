@@ -157,7 +157,9 @@ For the broader acceptance demo, use a disposable staging account and run the
 acceptance script from the repository root. It creates the account on the first run
 (or logs into it if it already exists), saves and reads a known profile, runs an F-1
 RAG query, and checks the notification inbox and unread-count APIs. It does not print
-the account password or bearer token.
+the account password or bearer token. Before saving profile fields, it asks you to
+confirm consent for the disposable test profile; answer `yes` only if you agree to the
+listed purposes.
 
 Set `APP_BASE_URL`, `STAGING_ACCEPTANCE_EMAIL`, and `STAGING_ACCEPTANCE_PASSWORD`
 in your terminal session using a unique email and a password used only for this
