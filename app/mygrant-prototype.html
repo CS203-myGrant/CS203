@@ -460,7 +460,7 @@
     <nav class="site-nav" aria-label="Main">
     <div id="nav-student" class="nav-group" style="display:none;">
       <div class="nav-label">Case</div>
-      <a class="nav-link" data-view="dashboard" onclick="goto('dashboard')">Your alerts<span id="nav-unread" class="nav-badge" style="display:none;">0</span></a>
+      <a class="nav-link" data-view="dashboard" onclick="goto('dashboard')">Impact dashboard<span id="nav-unread" class="nav-badge" style="display:none;">0</span></a>
       <button class="nav-link" data-view="applicationProgress" type="button" onclick="goto('applicationProgress')">Application tracker</button>
     </div>
 
@@ -1386,7 +1386,7 @@ async function updateAdminUserRole(userId, role){
   }
 }
 const VIEW_LABELS = {
-  dashboard:'Your alerts', notifications:'Notifications', notificationDetail:'Alert detail', alertDetail:'Alert detail',
+  dashboard:'Impact dashboard', notifications:'Notifications', notificationDetail:'Alert detail', alertDetail:'Alert detail',
   profile:'Your profile', manager:'Team impact', queue:'Review queue', admin:'Monitored sources', visaBulletin:'Visa Bulletin',
   rag:'RAG inspector', feedback:'Get feedback', feedbackInbox:'Feedback inbox', profileCompletion:'Complete your profile'
 };
@@ -1521,8 +1521,8 @@ function renderLiveDashboard(){
 
   return `
     <div class="page-head">
-      <h1>Notifications</h1>
-      <p class="sub">Policy changes matched to your visa category${visaType ? ` (${escapeHtml(visaType)})` : ''}. Flagged items touch information you have already entered in your profile.</p>
+      <h1>Your policy impact dashboard</h1>
+      <p class="sub">Published assessments for your profile, with the most urgent first. Archive an assessment once you have handled it.</p>
       ${clockToday && clockToday!==state.testClock.realToday ? `<span class="tag action">Test clock: today is ${escapeHtml(formatDate(clockToday))}</span>` : ''}
       ${'Notification' in window && Notification.permission==='granted' ? '<span class="tag">Browser notifications enabled</span>' : ('Notification' in window && Notification.permission==='denied' ? '<span class="tag">Browser notifications blocked</span>' : (permissionPromptedThisSession ? '<span class="tag">Permission request sent</span>' : '<button class="btn ghost small" onclick="requestBrowserNotifications()">Enable browser notifications</button>'))}
     </div>

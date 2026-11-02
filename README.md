@@ -860,7 +860,7 @@ To try the UI, start the app with PostgreSQL and valid `OPENAI_API_KEY` and
 `ANTHROPIC_API_KEY`, sign in as an applicant with a complete profile, and have an
 admin import a matching Federal Register policy. On the applicant dashboard,
 open that policy and select **See how this impacts me**. If the independent
-review approves it, return to **Your alerts** to see its impact card. Click
+review approves it, return to **Impact dashboard** to see its impact card. Click
 **Read details**, then **Archive this assessment**; switch to **Archived** to
 find it and unarchive it. If the AI services are unavailable, run the offline
 integration test below to verify this workflow with saved assessment data.
