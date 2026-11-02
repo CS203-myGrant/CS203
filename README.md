@@ -12,9 +12,11 @@ Java/Spring Boot backend for profile-aware immigration policy retrieval and impa
 
 ### Recorded choices
 
-- **App hosting:** Render Docker web service. The app is a stateless Java 21
-  Spring Boot HTTP service and already serves the checked-in frontend. Render
-  builds from the repository Dockerfile and exposes a public HTTPS URL.
+- **App hosting:** Render image-backed Docker web service. The app is a stateless
+  Java 21 Spring Boot HTTP service and already serves the checked-in frontend.
+  GitHub Actions builds the repository Dockerfile, publishes a commit-tagged image
+  to GHCR, and asks Render to deploy that exact image. Render exposes the service
+  over a public HTTPS URL.
 - **Database:** Render managed PostgreSQL, with a separate database for staging
   and production. The existing Flyway migrations manage relational schema;
   `V22__enable_pgvector.sql` enables pgvector after the current V1–V21 schema,
@@ -55,8 +57,10 @@ otherwise secured endpoint reachable from the app service.
 
 ### Staging and production
 
-Create one Render Docker web service and one managed PostgreSQL database per
-environment. Set `SPRING_PROFILES_ACTIVE=staging` or `production` on its service
+Create one Render image-backed web service and one managed PostgreSQL database
+per environment. The workflows expect image-backed services using the GHCR image
+described below; do not connect these services to the Git repository's automatic
+build/deploy path. Set `SPRING_PROFILES_ACTIVE=staging` or `production` on its service
 and only that environment's database credentials. Each first deployment applies
 Flyway migrations at startup; pgvector must be available to the database role.
 If the app database role cannot create extensions, have the database administrator
@@ -131,7 +135,8 @@ require at least one reviewer for the `production` environment and restrict its
 deployment branch to `main`. The production workflow only runs from `main`; it
 accepts a full commit SHA and checks that the SHA is on `main` and has a successful
 staging workflow before waiting for the environment approval. Protect `main` with
-pull requests, required review, and the `PR build and test / Maven tests` check;
+pull requests, required review, and the **Maven tests** status check from the
+`PR build and test` workflow;
 the staging workflow only deploys after a commit reaches that protected branch.
 
 The frontend and API currently ship from the same Spring Boot service. The frontend
@@ -149,6 +154,39 @@ After staging deploys, CI checks health, signs in with the staging smoke account
 calls the authenticated profile and notification APIs, and opens the authenticated
 notification event stream. Also check browser notification permission and delivery
 manually in a real staging browser as part of CS203-69 release review.
+
+#### Staging acceptance demo (CS203-128)
+
+The deployment smoke check above verifies availability and authenticated endpoints.
+For the broader acceptance demo, use a disposable staging account and run the
+acceptance script from the repository root. It creates the account on the first run
+(or logs into it if it already exists), saves and reads a known profile, runs an F-1
+RAG query, and checks the notification inbox and unread-count APIs. It does not print
+the account password or bearer token.
+
+Set `APP_BASE_URL`, `STAGING_ACCEPTANCE_EMAIL`, and `STAGING_ACCEPTANCE_PASSWORD`
+in your terminal session using a unique email and a password used only for this
+disposable account. Do not put these values in the repository. Ensure staging has at
+least one indexed policy and reachable embedding and answer-generation providers,
+then run:
+
+```bash
+bash .github/scripts/staging-acceptance.sh
+```
+
+To check profile persistence, restart or redeploy the staging service in Render,
+then run the same script with `VERIFY_PERSISTENCE_ONLY=true`. This mode logs into the
+same account and checks the saved profile before it writes anything; it will fail if
+the profile was lost. Keep the same account variables in the terminal session.
+
+The script checks that the notification APIs respond, but a new disposable account
+may have an empty inbox. To verify notification creation and delivery, sign up the
+account before importing an F-1 policy using the staging admin flow, then confirm the
+alert appears in its inbox. The [notification demo](#test-policy-change-notifications)
+documents the expected behavior. Review RAG citations and warnings against the source;
+a successful HTTP response alone does not establish answer accuracy. The script needs
+an indexed F-1 policy and working AI services, so it will fail when those prerequisites
+are unavailable.
 
 To roll back, open **Actions → Promote known-good build to production**, select the
 `main` branch, and enter the full SHA of the last known-good staging deployment.
