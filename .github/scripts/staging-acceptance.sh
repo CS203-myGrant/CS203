@@ -39,7 +39,13 @@ if [[ "$login_status" != '200' ]]; then
     --header 'Content-Type: application/json' --data "$register_payload" \
     "$APP_BASE_URL/api/v1/auth/register")
   if [[ "$register_status" != '200' ]]; then
-    echo "Signup failed with HTTP $register_status; check the disposable account settings." >&2
+    error_detail=$(jq -r '
+      if (.validationErrors // {} | length) > 0 then
+        "Request validation failed: " + ((.validationErrors | to_entries | map("\(.key) \(.value)") | join(", ")))
+      else
+        (.message // "Request rejected")
+      end' "$tmpdir/register.json" 2>/dev/null || echo 'Request rejected')
+    echo "Signup failed with HTTP $register_status: $error_detail" >&2
     exit 1
   fi
   cp "$tmpdir/register.json" "$tmpdir/login.json"
@@ -51,12 +57,29 @@ echo 'Signup/login passed.'
 
 # The first run writes a known profile. After a restart/redeploy, run with
 # VERIFY_PERSISTENCE_ONLY=true so the saved value is checked before any write.
-profile_payload='{"visaType":"F-1","academicLevel":"Undergraduate","programEndDate":"2028-05-31","upcomingTravelDate":"2027-01-15"}'
+profile_payload='{"visaType":"F-1","academicLevel":"Undergraduate","programEndDate":"2028-05-31","upcomingTravelDate":"2027-01-15","consentedFields":["VISA_TYPE","ACADEMIC_LEVEL","PROGRAM_END_DATE","UPCOMING_TRAVEL_DATE"]}'
 if [[ "${VERIFY_PERSISTENCE_ONLY:-false}" != 'true' ]]; then
-  curl --fail --silent --show-error --max-time 20 \
-    --output "$tmpdir/profile-save.json" \
+  echo 'The staging test profile will include visa type, academic level, program end date, and upcoming travel date.'
+  echo 'The app uses these to identify relevant immigration rules, education-level eligibility, program deadlines, and travel-related changes.'
+  read -r -p 'Do you consent to using these disposable test fields for this staging check? Type yes to continue: ' consent_answer
+  if [[ "$consent_answer" != 'yes' ]]; then
+    echo 'Profile check stopped; no profile fields were submitted.' >&2
+    exit 1
+  fi
+  profile_save_status=$(curl --silent --show-error --max-time 20 \
+    --output "$tmpdir/profile-save.json" --write-out '%{http_code}' \
     --header "$auth_header" --header 'Content-Type: application/json' \
-    --data "$profile_payload" --request PUT "$APP_BASE_URL/api/v1/profiles/me" >/dev/null
+    --data "$profile_payload" --request PUT "$APP_BASE_URL/api/v1/profiles/me")
+  if [[ "$profile_save_status" != '200' ]]; then
+    error_detail=$(jq -r '
+      if (.validationErrors // {} | length) > 0 then
+        "Request validation failed: " + ((.validationErrors | to_entries | map("\(.key) \(.value)") | join(", ")))
+      else
+        (.message // "Request rejected")
+      end' "$tmpdir/profile-save.json" 2>/dev/null || echo 'Request rejected')
+    echo "Profile save failed with HTTP $profile_save_status: $error_detail" >&2
+    exit 1
+  fi
 fi
 profile=$(curl --fail --silent --show-error --max-time 20 \
   --header "$auth_header" "$APP_BASE_URL/api/v1/profiles/me")
@@ -70,8 +93,11 @@ rag_payload='{"question":"What does the indexed policy say about F-1 students?",
 rag=$(curl --fail --silent --show-error --max-time 90 \
   --header "$auth_header" --header 'Content-Type: application/json' \
   --data "$rag_payload" "$APP_BASE_URL/api/v1/rag/query")
-jq -e '(.answer | type == "string" and length > 0) and (.citations | type == "array") and (.retrievedEvidence | type == "array")' \
-  <<< "$rag" >/dev/null
+if ! jq -e '(.answer | type == "string" and length > 0) and (.citations | type == "array" and length > 0) and (.retrievedEvidence | type == "array" and length > 0)' \
+  <<< "$rag" >/dev/null; then
+  echo 'RAG returned no grounded evidence. Index an F-1 policy in staging and retry.' >&2
+  exit 1
+fi
 echo 'RAG query passed. Review its citations and warnings as part of the demo.'
 
 notifications=$(curl --fail --silent --show-error --max-time 20 \
