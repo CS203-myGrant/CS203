@@ -150,6 +150,39 @@ calls the authenticated profile and notification APIs, and opens the authenticat
 notification event stream. Also check browser notification permission and delivery
 manually in a real staging browser as part of CS203-69 release review.
 
+#### Staging acceptance demo (CS203-128)
+
+The deployment smoke check above verifies availability and authenticated endpoints.
+For the broader acceptance demo, use a disposable staging account and run the
+acceptance script from the repository root. It creates the account on the first run
+(or logs into it if it already exists), saves and reads a known profile, runs an F-1
+RAG query, and checks the notification inbox and unread-count APIs. It does not print
+the account password or bearer token.
+
+Set `APP_BASE_URL`, `STAGING_ACCEPTANCE_EMAIL`, and `STAGING_ACCEPTANCE_PASSWORD`
+in your terminal session using a unique email and a password used only for this
+disposable account. Do not put these values in the repository. Ensure staging has at
+least one indexed policy and reachable embedding and answer-generation providers,
+then run:
+
+```bash
+bash .github/scripts/staging-acceptance.sh
+```
+
+To check profile persistence, restart or redeploy the staging service in Render,
+then run the same script with `VERIFY_PERSISTENCE_ONLY=true`. This mode logs into the
+same account and checks the saved profile before it writes anything; it will fail if
+the profile was lost. Keep the same account variables in the terminal session.
+
+The script checks that the notification APIs respond, but a new disposable account
+may have an empty inbox. To verify notification creation and delivery, sign up the
+account before importing an F-1 policy using the staging admin flow, then confirm the
+alert appears in its inbox. The [notification demo](#test-policy-change-notifications)
+documents the expected behavior. Review RAG citations and warnings against the source;
+a successful HTTP response alone does not establish answer accuracy. The script needs
+an indexed F-1 policy and working AI services, so it will fail when those prerequisites
+are unavailable.
+
 To roll back, open **Actions → Promote known-good build to production**, select the
 `main` branch, and enter the full SHA of the last known-good staging deployment.
 The workflow verifies that SHA and deploys its existing GHCR image after production
