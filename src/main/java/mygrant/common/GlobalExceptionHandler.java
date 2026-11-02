@@ -36,6 +36,8 @@ import mygrant.ingestion.PolicyAlreadyExistsException;
 import mygrant.feedback.FeedbackAccessDeniedException;
 import mygrant.feedback.FeedbackNotFoundException;
 import mygrant.notifications.NotificationNotFoundException;
+import mygrant.manager.ManagerMembershipConflictException;
+import mygrant.manager.ManagerMembershipNotFoundException;
 import mygrant.policies.PolicyNotFoundException;
 import mygrant.sources.PolicySourceNotFoundException;
 import mygrant.user.UserNotFoundException;
@@ -107,6 +109,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(FeedbackAccessDeniedException.class)
     public ResponseEntity<ApiError> handleFeedbackAccessDenied(FeedbackAccessDeniedException exception) {
         return response(HttpStatus.FORBIDDEN, exception.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(ManagerMembershipNotFoundException.class)
+    public ResponseEntity<ApiError> handleManagerMembershipNotFound(ManagerMembershipNotFoundException exception) {
+        return response(HttpStatus.NOT_FOUND, exception.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(ManagerMembershipConflictException.class)
+    public ResponseEntity<ApiError> handleManagerMembershipConflict(ManagerMembershipConflictException exception) {
+        return response(HttpStatus.CONFLICT, exception.getMessage(), Map.of());
     }
 
     @ExceptionHandler(PolicyAlreadyExistsException.class)

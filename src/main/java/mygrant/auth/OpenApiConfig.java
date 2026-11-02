@@ -54,6 +54,7 @@ public class OpenApiConfig {
             tag("Actions", "The signed-in user's checklist: one item per step recommended by a published impact "
                     + "assessment, with deadlines, urgency and progress."),
             tag("Impact review", "Manager correction and publication of held assessments."),
+            tag("Manager", "Manager-to-applicant memberships and team scope."),
             tag("Email alerts", "How alerts are emailed to the signed-in user, and an admin trigger for "
                     + "the daily digest."),
             tag("Support chat", "Messages between applicants and the support team. The staff inbox needs "

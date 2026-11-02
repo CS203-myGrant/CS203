@@ -234,6 +234,10 @@
   .stat-box{background:var(--base-lightest);border-top:4px solid var(--primary);padding:20px;}
   .stat-box .num{font-family:var(--serif);font-size:36px;font-weight:700;color:var(--ink);}
   .stat-box .lbl{font-size:15px;color:var(--text);margin-top:4px;}
+  .manager-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;}
+  .manager-add-form{display:flex;align-items:end;gap:12px;margin:12px 0 20px;}
+  .manager-add-form .field{min-width:min(280px,100%);margin:0;}
+  @media(max-width:700px){.manager-grid{grid-template-columns:1fr;}.manager-add-form{align-items:stretch;flex-direction:column;}}
 
   .toast{
     position:fixed;bottom:24px;left:50%;transform:translate(-50%,8px);background:var(--ink);color:#fff;padding:12px 20px;border-radius:4px;
@@ -522,14 +526,17 @@
 
 <div class="modal-bg" id="review-modal-bg">
   <div class="modal">
-    <h3>Edit review item before publishing</h3>
+    <h3>Review and publish assessment</h3>
     <input id="review-edit-id" type="hidden">
-    <div class="field"><label for="review-edit-title">Published title</label><input id="review-edit-title" maxlength="1000"></div>
-    <div class="field"><label for="review-edit-detail">Published explanation</label><textarea id="review-edit-detail" rows="6" maxlength="2000"></textarea></div>
-    <div class="field"><label for="review-edit-flag">Review label</label><input id="review-edit-flag" maxlength="100"></div>
+    <div class="field"><label for="review-edit-severity">Severity</label><select id="review-edit-severity"><option>CRITICAL</option><option>HIGH</option><option selected>MEDIUM</option><option>LOW</option><option>INFO</option></select></div>
+    <div class="field"><label for="review-edit-confidence">Confidence (0–100)</label><input id="review-edit-confidence" type="number" min="0" max="100" value="80"></div>
+    <div class="field"><label for="review-edit-summary">Summary</label><input id="review-edit-summary" maxlength="1500" required></div>
+    <div class="field"><label for="review-edit-analysis">Analysis (one point per line)</label><textarea id="review-edit-analysis" rows="3"></textarea></div>
+    <div class="field"><label for="review-edit-actions">Recommended actions (one per line)</label><textarea id="review-edit-actions" rows="3"></textarea></div>
+    <div class="field"><label for="review-edit-missing">Missing information (one point per line)</label><textarea id="review-edit-missing" rows="3"></textarea></div>
     <div class="form-actions">
       <button class="btn ghost small" onclick="closeQueueEditor()">Cancel</button>
-      <button class="btn small" onclick="publishEditedQueue()">Publish edited item</button>
+      <button class="btn small" onclick="publishEditedQueue()">Publish correction</button>
     </div>
   </div>
 </div>
@@ -710,6 +717,15 @@ const initialState = () => ({
   adminSourcesLoading: false,
   adminSourcesError: null,
   editingSource: null,
+  managerDashboard: null,
+  managerDashboardLoading: false,
+  managerDashboardError: null,
+  managerMembers: [],
+  managerMembersError: null,
+  managerMembersBusy: false,
+  reviewQueue: [],
+  reviewQueueLoading: false,
+  reviewQueueError: null,
   bulletinMonth: null,
   bulletinHealth: null,
   bulletinEntries: [],
@@ -1336,6 +1352,8 @@ function goto(view, param){
   render();
   // Reload both on every visit so a policy imported since login shows up here.
   if(view==='dashboard'){ loadPolicies(); loadNotifications(); loadImpacts(); loadActions(); loadTestClock(); }
+  if(view==='manager' && state.role==='manager') loadManagerDashboard();
+  if(view==='queue' && state.role==='manager') loadReviewQueue();
   if(view==='admin' && state.role==='admin'){ loadAdminUsers(); loadAdminSources(); loadTestClock(); loadPolicies(); }
   if(view==='visaBulletin' && state.role==='admin'){ loadVisaBulletin(); }
   if(view==='feedback') openHumanFeedback();
@@ -2699,82 +2717,176 @@ function renderAccountProfile(){
   `;
 }
 
+async function loadManagerDashboard(){
+  state.managerDashboardLoading = true;
+  state.managerDashboardError = null;
+  state.managerMembersError = null;
+  render();
+  const [dashboardResult, membersResult] = await Promise.allSettled([
+    apiFetch('/api/v1/manager/dashboard').then(parseApiResponse),
+    apiFetch('/api/v1/manager/members').then(parseApiResponse)
+  ]);
+  if(dashboardResult.status==='fulfilled') state.managerDashboard = dashboardResult.value;
+  else { state.managerDashboard = null; state.managerDashboardError = dashboardResult.reason.message; }
+  if(membersResult.status==='fulfilled') state.managerMembers = membersResult.value || [];
+  else { state.managerMembers = []; state.managerMembersError = membersResult.reason.message; }
+  state.managerDashboardLoading = false;
+  if(state.view==='manager') render();
+}
+
+async function loadReviewQueue(){
+  state.reviewQueueLoading = true;
+  state.reviewQueueError = null;
+  render();
+  try{
+    state.reviewQueue = await parseApiResponse(await apiFetch('/api/v1/review/impacts'));
+  }catch(error){
+    state.reviewQueue = [];
+    state.reviewQueueError = error.message;
+  }finally{
+    state.reviewQueueLoading = false;
+    if(state.view==='queue') render();
+  }
+}
+
 function renderManager(){
+  const dashboard = state.managerDashboard;
+  const visaRows = Object.entries(dashboard?.usersByVisaType || {}).map(([visaType,count])=>
+    `<tr><th scope="row">${escapeHtml(visaType)}</th><td>${count}</td></tr>`).join('');
+  const severityRows = Object.entries(dashboard?.openImpactsBySeverity || {}).map(([severity,count])=>
+    `<tr><th scope="row">${escapeHtml(severity)}</th><td>${count}</td></tr>`).join('');
+  const memberRows = (state.managerMembers || []).map(member=>`
+    <tr><th scope="row">${escapeHtml(member.fullName || 'Applicant')}</th>
+      <td>${escapeHtml(member.email || '')}</td><td>${escapeHtml(member.visaType || 'Unknown')}</td>
+      <td><button class="btn ghost small" type="button" onclick="removeManagerMember(${member.id})">Remove</button></td></tr>
+  `).join('');
+  const pending = dashboard?.pendingReports || [];
+  const pendingRows = pending.map(report=>`
+    <tr><th scope="row">${escapeHtml(report.policyTitle || 'Policy report')}</th>
+      <td>${escapeHtml(report.draftSummary || '')}</td><td>${escapeHtml(formatTimestamp(report.createdAt))}</td>
+      <td><button class="btn ghost small" type="button" onclick="goto('queue')">Review</button></td></tr>
+  `).join('');
   return `
-    <div class="page-head">
-      <h1>Team impact</h1>
-      <p class="sub">Same rules, aggregated across your sponsored employees.</p>
-    </div>
-    <div class="stat-row">
-      <div class="stat-box"><div class="num">34</div><div class="lbl">Employees affected by wage-weighted H-1B selection</div></div>
-      <div class="stat-box"><div class="num">12</div><div class="lbl">Pending filings hit by the $100,000 petition fee</div></div>
-      <div class="stat-box"><div class="num">6</div><div class="lbl">Employees who now need Form I-539</div></div>
-    </div>
-    <div class="block-label">By policy</div>
-    <table>
-      <tr><th>Policy</th><th>Status</th><th>Employees touched</th><th></th></tr>
-      <tr><td>Wage-weighted H-1B selection</td><td>${policies.p2.status}</td><td>34</td><td><button class="btn ghost small" onclick="goto('queue')">Details</button></td></tr>
-      <tr><td>Prevailing wage floor</td><td>${policies.p3.status}</td><td>19 (estimate)</td><td><button class="btn ghost small" onclick="goto('queue')">Details</button></td></tr>
-      <tr><td>Entry restriction expansion</td><td>${policies.p4.status}</td><td>3</td><td><button class="btn ghost small" onclick="goto('queue')">Details</button></td></tr>
-    </table>
+    <div class="page-head"><h1>Team impact</h1>
+      <p class="sub">Policy assessments for applicants linked to your manager account.</p></div>
+    ${state.managerDashboardLoading ? '<p role="status">Loading team dashboard…</p>' : ''}
+    ${state.managerDashboardError ? `<div class="empty" role="alert">${escapeHtml(state.managerDashboardError)}</div>` : ''}
+    ${dashboard ? `
+      <div class="stat-row">
+        <div class="stat-box"><div class="num">${dashboard.linkedUserCount}</div><div class="lbl">Linked applicants</div></div>
+        <div class="stat-box"><div class="num">${Object.values(dashboard.openImpactsBySeverity || {}).reduce((sum,count)=>sum+count,0)}</div><div class="lbl">Open impact assessments</div></div>
+        <div class="stat-box"><div class="num">${pending.length}</div><div class="lbl">Pending reports</div></div>
+      </div>
+      <div class="manager-grid">
+        <section><div class="block-label">Linked applicants by visa type</div>
+          ${visaRows ? `<table><thead><tr><th scope="col">Visa type</th><th scope="col">Applicants</th></tr></thead><tbody>${visaRows}</tbody></table>` : '<p class="empty">No linked applicants yet.</p>'}
+        </section>
+        <section><div class="block-label">Open impacts by severity</div>
+          ${severityRows ? `<table><thead><tr><th scope="col">Severity</th><th scope="col">Assessments</th></tr></thead><tbody>${severityRows}</tbody></table>` : '<p class="empty">No open impact assessments.</p>'}
+        </section>
+      </div>
+      <div class="block-label" style="margin-top:28px;">Pending reports</div>
+      ${pendingRows ? `<table><thead><tr><th scope="col">Policy</th><th scope="col">Draft summary</th><th scope="col">Created</th><th scope="col">Action</th></tr></thead><tbody>${pendingRows}</tbody></table>
+        <p><button class="btn ghost small" type="button" onclick="goto('queue')">Open review queue (${pending.length})</button></p>`
+        : '<p class="empty">No pending reports for your linked applicants.</p>'}
+    ` : ''}
+    <section style="margin-top:32px;">
+      <div class="page-head"><h2>Managed applicants</h2><p class="sub">Add an applicant using their user ID, or remove an existing link.</p></div>
+      <form class="manager-add-form" onsubmit="addManagerMember(event)">
+        <div class="field"><label for="manager-member-id">Applicant user ID</label><input id="manager-member-id" inputmode="numeric" pattern="[1-9][0-9]*" required></div>
+        <button class="btn small" type="submit" ${state.managerMembersBusy ? 'disabled' : ''}>Add applicant</button>
+      </form>
+      ${state.managerMembersError ? `<p role="alert">${escapeHtml(state.managerMembersError)}</p>` : ''}
+      ${memberRows ? `<table><thead><tr><th scope="col">Applicant</th><th scope="col">Email</th><th scope="col">Visa type</th><th scope="col">Action</th></tr></thead><tbody>${memberRows}</tbody></table>` : '<p class="empty">No applicants are linked to your account.</p>'}
+    </section>
   `;
 }
 
-function renderQueue(){
-  if(queueItems.length===0){
-    return `
-      <div class="page-head"><h1>Review queue</h1><p class="sub">Cases the system wasn't confident enough to publish on its own.</p></div>
-      <div class="empty"><div class="big">Queue is clear</div>Nothing is waiting on a human read right now.</div>`;
+async function addManagerMember(event){
+  event.preventDefault();
+  const input = document.getElementById('manager-member-id');
+  const userId = input?.value.trim();
+  if(!userId || !/^[1-9][0-9]*$/.test(userId)) return;
+  state.managerMembersBusy = true;
+  render();
+  try{
+    await parseApiResponse(await apiFetch(`/api/v1/manager/members/${userId}`,{method:'POST'}));
+    showToast('Applicant linked to your team.');
+    await loadManagerDashboard();
+  }catch(error){
+    state.managerMembersError = error.message;
+    showToast(error.message);
+  }finally{
+    state.managerMembersBusy = false;
+    if(state.view==='manager') render();
   }
-  const rows = queueItems.map(q=>`
-    <div class="entry urgency-medium">
-      <div class="flag"></div>
-      <div class="entry-case">${q.case}</div>
-      <div class="entry-body">
-        <h3>${q.title}</h3>
-        <p>${q.detail}</p>
-        <div class="tag-row"><span class="tag">${q.flag}</span></div>
-      </div>
-      <div class="entry-action" style="flex-direction:column;gap:8px;">
-        <button class="btn small" onclick="resolveQueue('${q.id}','approve')">Approve</button>
-        <button class="btn ghost small" onclick="openQueueEditor('${q.id}')">Edit &amp; publish</button>
-      </div>
-    </div>`).join('');
-  return `
-    <div class="page-head"><h1>Review queue</h1><p class="sub">Cases the system wasn't confident enough to publish on its own.</p></div>
-    ${rows}
-  `;
 }
-function resolveQueue(id, action){
-  queueItems = queueItems.filter(q=>q.id!==id);
-  showToast(action==='approve' ? 'Approved and published to the user.' : 'Published.');
-  goto('queue');
+
+async function removeManagerMember(userId){
+  if(!confirm('Remove this applicant from your team?')) return;
+  state.managerMembersBusy = true;
+  try{
+    await parseApiResponse(await apiFetch(`/api/v1/manager/members/${userId}`,{method:'DELETE'}));
+    showToast('Applicant removed from your team.');
+    await loadManagerDashboard();
+  }catch(error){
+    state.managerMembersError = error.message;
+    showToast(error.message);
+  }finally{
+    state.managerMembersBusy = false;
+    if(state.view==='manager') render();
+  }
 }
+
+function renderQueue(){
+  const title = '<div class="page-head"><h1>Review queue</h1><p class="sub">Pending assessments for applicants linked to your manager account.</p></div>';
+  if(state.reviewQueueLoading) return `${title}<p role="status">Loading review queue…</p>`;
+  if(state.reviewQueueError) return `${title}<div class="empty" role="alert">${escapeHtml(state.reviewQueueError)}</div>`;
+  if(!state.reviewQueue.length) return `${title}<div class="empty"><div class="big">Queue is clear</div>No reports are waiting for review for your linked applicants.</div>`;
+  const rows = state.reviewQueue.map(report=>`
+    <tr><th scope="row">${escapeHtml(report.policyTitle || 'Policy report')}</th>
+      <td>${escapeHtml(report.draftSummary || '')}</td><td>${report.userId}</td>
+      <td><button class="btn small" type="button" onclick="openQueueEditor(${report.id})">Review</button></td></tr>
+  `).join('');
+  return `${title}<table><thead><tr><th scope="col">Policy</th><th scope="col">Draft summary</th><th scope="col">Applicant ID</th><th scope="col">Action</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
 function openQueueEditor(id){
-  const item = queueItems.find(q=>q.id===id);
+  const item = state.reviewQueue.find(report=>Number(report.id)===Number(id));
   if(!item) return;
   document.getElementById('review-edit-id').value = item.id;
-  document.getElementById('review-edit-title').value = item.title;
-  document.getElementById('review-edit-detail').value = item.detail;
-  document.getElementById('review-edit-flag').value = item.flag;
+  document.getElementById('review-edit-severity').value = 'MEDIUM';
+  document.getElementById('review-edit-confidence').value = 80;
+  document.getElementById('review-edit-summary').value = item.draftSummary || '';
+  document.getElementById('review-edit-analysis').value = '';
+  document.getElementById('review-edit-actions').value = '';
+  document.getElementById('review-edit-missing').value = '';
   document.getElementById('review-modal-bg').classList.add('show');
 }
 function closeQueueEditor(){ document.getElementById('review-modal-bg').classList.remove('show'); }
-function publishEditedQueue(){
+async function publishEditedQueue(){
   const id = document.getElementById('review-edit-id').value;
-  const item = queueItems.find(q=>q.id===id);
-  if(!item) return;
-  const title = document.getElementById('review-edit-title').value.trim();
-  const detail = document.getElementById('review-edit-detail').value.trim();
-  const flag = document.getElementById('review-edit-flag').value.trim();
-  if(!title || !detail || !flag){ showToast('Complete all review fields before publishing.'); return; }
-  item.title = title;
-  item.detail = detail;
-  item.flag = flag;
-  queueItems = queueItems.filter(q=>q.id!==id);
-  closeQueueEditor();
-  showToast('Your edits were published to the user.');
-  goto('queue');
+  const lines = fieldId=>document.getElementById(fieldId).value.split('\n').map(value=>value.trim()).filter(Boolean);
+  const correction = {
+    severity:document.getElementById('review-edit-severity').value,
+    confidence:Number(document.getElementById('review-edit-confidence').value),
+    summary:document.getElementById('review-edit-summary').value.trim(),
+    analysis:lines('review-edit-analysis'),
+    actionItems:lines('review-edit-actions'),
+    missingInformation:lines('review-edit-missing')
+  };
+  if(!correction.summary || !Number.isInteger(correction.confidence) || correction.confidence<0 || correction.confidence>100){
+    showToast('Enter a summary and a confidence from 0 to 100.'); return;
+  }
+  try{
+    await parseApiResponse(await apiFetch(`/api/v1/review/impacts/${id}`,{
+      method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(correction)
+    }));
+    closeQueueEditor();
+    showToast('Corrected assessment published.');
+    await loadReviewQueue();
+    if(state.view==='manager') await loadManagerDashboard();
+  }catch(error){ showToast(error.message); }
 }
 
 function bulletinCurrentMonth(){
