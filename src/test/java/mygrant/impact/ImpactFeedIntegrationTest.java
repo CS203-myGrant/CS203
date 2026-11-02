@@ -106,6 +106,7 @@ class ImpactFeedIntegrationTest {
     void managerCorrectionPublishesHiddenDraftAndKeepsBothVersions() throws Exception {
         User owner = account(UserRole.APPLICANT);
         User manager = account(UserRole.MANAGER);
+        link(manager, owner);
         PolicyDocument policy = policy();
         long id = insert(owner, policy, "MEDIUM", "PENDING_REVIEW",
                 pending(ImpactUrgency.MEDIUM, "Unreviewed model draft"));
@@ -167,6 +168,11 @@ class ImpactFeedIntegrationTest {
                 "unused", "F-1", null, null);
         user.setRole(role);
         return users.saveAndFlush(user);
+    }
+
+    private void link(User manager, User applicant) {
+        jdbc.update("INSERT INTO manager_user_memberships (manager_id, user_id) VALUES (?, ?)",
+                manager.getId(), applicant.getId());
     }
 
     private String token(User user) {

@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.List;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,6 +15,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import mygrant.actions.ActionItemService;
 import mygrant.user.UserRepository;
+import mygrant.user.User;
+import mygrant.user.UserRole;
 import mygrant.impact.ImpactReviewController.Correction;
 
 /** Manager correction and publication, with revisions retained by the database trigger. */
@@ -33,22 +36,51 @@ public class ImpactReviewService {
     }
 
     @Transactional(readOnly = true)
-    public List<PendingImpact> pending() {
-        return jdbc.query("""
+    public List<PendingImpact> pending(String reviewerEmail) {
+        User reviewer = reviewer(reviewerEmail);
+        String scope = "";
+        if (reviewer.getRole() != UserRole.ADMIN) {
+            scope = """
+                  AND EXISTS (
+                      SELECT 1 FROM manager_user_memberships m
+                      JOIN users owner ON owner.id = m.user_id
+                      WHERE m.manager_id = ? AND m.user_id = r.user_id
+                        AND owner.role = 'APPLICANT' AND owner.active = TRUE
+                  )
+                """;
+        }
+        String sql = """
                 SELECT r.id, r.user_id, r.policy_id, p.title, r.assessment_json, r.generated_at
                 FROM policy_recommendations r JOIN policy_documents p ON p.id = r.policy_id
                 WHERE r.publication_status = 'PENDING_REVIEW'
+                """ + scope + """
                 ORDER BY r.generated_at, r.id LIMIT 100
-                """, (rs, row) -> pendingRow(rs));
+                """;
+        return reviewer.getRole() == UserRole.ADMIN
+                ? jdbc.query(sql, (rs, row) -> pendingRow(rs))
+                : jdbc.query(sql, (rs, row) -> pendingRow(rs), reviewer.getId());
     }
 
     @Transactional
     public ReviewResult publishCorrection(long id, String reviewerEmail, Correction correction) {
-        Long reviewerId = users.findByEmail(reviewerEmail)
-                .orElseThrow(() -> new IllegalStateException("Reviewer no longer exists")).getId();
-        List<Integer> versions = jdbc.query("""
-                SELECT version FROM policy_recommendations WHERE id = ? FOR UPDATE
-                """, (rs, row) -> rs.getInt(1), id);
+        User reviewer = reviewer(reviewerEmail);
+        Long reviewerId = reviewer.getId();
+        String scope = "";
+        if (reviewer.getRole() != UserRole.ADMIN) {
+            scope = """
+                  AND EXISTS (
+                      SELECT 1 FROM manager_user_memberships m
+                      JOIN users owner ON owner.id = m.user_id
+                      WHERE m.manager_id = ? AND m.user_id = r.user_id
+                        AND owner.role = 'APPLICANT' AND owner.active = TRUE
+                  )
+                """;
+        }
+        String sql = "SELECT r.version FROM policy_recommendations r WHERE r.id = ? "
+                + scope + " FOR UPDATE";
+        List<Integer> versions = reviewer.getRole() == UserRole.ADMIN
+                ? jdbc.query(sql, (rs, row) -> rs.getInt(1), id)
+                : jdbc.query(sql, (rs, row) -> rs.getInt(1), id, reviewerId);
         if (versions.isEmpty()) throw new ImpactNotFoundException();
         String severity = correction.severity().toUpperCase(java.util.Locale.ROOT);
         ImpactUrgency urgency = switch (severity) {
@@ -80,6 +112,15 @@ public class ImpactReviewService {
         // The correction's actions replace the old ones; the owner's progress on kept items stays.
         actionItems.syncForAssessment(id);
         return new ReviewResult(id, versions.getFirst() + 1, true, "PUBLISHED", Instant.now());
+    }
+
+    private User reviewer(String email) {
+        User reviewer = users.findByEmail(email)
+                .orElseThrow(() -> new IllegalStateException("Reviewer no longer exists"));
+        if (reviewer.getRole() != UserRole.MANAGER && reviewer.getRole() != UserRole.ADMIN) {
+            throw new AccessDeniedException("Reviewer role required");
+        }
+        return reviewer;
     }
 
     private PendingImpact pendingRow(ResultSet rs) throws SQLException {

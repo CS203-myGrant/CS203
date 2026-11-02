@@ -322,6 +322,7 @@ class ActionItemIntegrationTest {
     void aCorrectionKeepsProgressDropsUntouchedItemsAndAddsNewOnes() throws Exception {
         User owner = account(UserRole.APPLICANT);
         User manager = account(UserRole.MANAGER);
+        link(manager, owner);
         recommendations.getOrGenerate(owner.getEmail(), policy(LocalDate.of(2027, 1, 15)),
                 () -> approved(ImpactUrgency.HIGH, List.of("Keep your passport valid",
                         "Book a biometrics appointment", "Ask your DSO about travel", "Update your address",
@@ -372,6 +373,7 @@ class ActionItemIntegrationTest {
     void aCorrectionPublishesTheChecklistOfAHeldDraft() throws Exception {
         User owner = account(UserRole.APPLICANT);
         User manager = account(UserRole.MANAGER);
+        link(manager, owner);
         recommendations.getOrGenerate(owner.getEmail(), policy(null), () -> rejected(List.of("Draft step")));
         long assessment = jdbc.queryForObject("SELECT id FROM policy_recommendations WHERE user_id = ?",
                 Long.class, owner.getId());
@@ -421,6 +423,11 @@ class ActionItemIntegrationTest {
                 "unused", "F-1", null, null);
         user.setRole(role);
         return users.saveAndFlush(user);
+    }
+
+    private void link(User manager, User applicant) {
+        jdbc.update("INSERT INTO manager_user_memberships (manager_id, user_id) VALUES (?, ?)",
+                manager.getId(), applicant.getId());
     }
 
     private String token(User user) {

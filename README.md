@@ -300,6 +300,33 @@ curl -s http://localhost:8080/api/v1/profiles/me \
   -H "Authorization: Bearer $TOKEN"
 ```
 
+#### Find your app user ID
+
+The manager dashboard's **Applicant user ID** field expects the numeric `userId` from the
+app's `users` table. An applicant can get their own ID while signed in; it is not admin-only.
+
+In the browser where you are signed in, open Developer Tools (`F12`), select **Console**,
+and run:
+
+```javascript
+fetch('/api/v1/users/me', {
+  headers: { Authorization: `Bearer ${sessionStorage.getItem('mygrantToken')}` }
+}).then(response => response.json())
+  .then(user => console.log(user.userId, user.userEmail));
+```
+
+The first value printed is the user ID. Paste this JavaScript into the browser console, not
+into Bash or a terminal. Keep the bearer token private; the command prints only the ID and
+email.
+
+From a terminal, if `$TOKEN` already contains your access token, use:
+
+```bash
+curl -s http://localhost:8080/api/v1/users/me \
+  -H "Authorization: Bearer $TOKEN" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['userId'])"
+```
+
 New email/password and WorkOS accounts start with `profileComplete = false`.
 Until onboarding is saved, the account can access only profile/onboarding,
 current-user, and account-deletion endpoints; everything else answers 403 "Complete your

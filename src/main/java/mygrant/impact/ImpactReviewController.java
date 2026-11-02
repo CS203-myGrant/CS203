@@ -37,8 +37,8 @@ public class ImpactReviewController {
     @GetMapping
     @Operation(summary = "List pending impact drafts for a reviewer")
     @ApiResponse(responseCode = "200", description = "Up to 100 pending drafts")
-    public List<ImpactReviewService.PendingImpact> pending() {
-        return service.pending();
+    public List<ImpactReviewService.PendingImpact> pending(Principal principal) {
+        return service.pending(principal.getName());
     }
 
     @PatchMapping("/{id}")
