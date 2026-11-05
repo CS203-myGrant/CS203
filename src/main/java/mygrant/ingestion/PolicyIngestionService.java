@@ -20,6 +20,7 @@ import mygrant.policies.PolicyDocument;
 import mygrant.policies.PolicyDocumentRepository;
 import mygrant.policies.PolicyIndexedEvent;
 import mygrant.policies.SourceType;
+import mygrant.policies.CountryIdentifiers;
 
 /** Stores complete policy records and their searchable, visa-tagged vector chunks. */
 @Service
@@ -50,6 +51,14 @@ public class PolicyIngestionService {
         if (indexedContent == null || indexedContent.isBlank()) {
             throw new IllegalArgumentException("Indexed policy content must not be blank");
         }
+        var affectedCountries = request.affectedCountries() == null ? List.<String>of()
+                : request.affectedCountries().stream().map(CountryIdentifiers::normalize).distinct().toList();
+        var restrictionCategories = request.restrictionCategories() == null
+                ? java.util.Set.<mygrant.policies.RestrictionCategory>of()
+                : java.util.Set.copyOf(request.restrictionCategories());
+        var sourceReferences = request.sourceReferences() == null ? List.<String>of()
+                : request.sourceReferences().stream().map(PolicyIngestionService::validateSourceReference)
+                        .distinct().toList();
         String contentHash = ContentHash.sha256(request.content());
         var existing = policyRepository.findByExternalId(request.externalId());
 
@@ -65,7 +74,8 @@ public class PolicyIngestionService {
         PolicyDocument policy = new PolicyDocument(
                 request.externalId(), request.title(), request.agency(), normalizeVisaType(request.visaType()),
                 request.status(), request.sourceType(), request.publicationDate(), request.effectiveDate(),
-                request.sourceUrl(), request.content(), contentHash);
+                request.sourceUrl(), request.content(), contentHash, new java.util.LinkedHashSet<>(affectedCountries),
+                restrictionCategories, sourceReferences);
 
         PolicyDocument saved = policyRepository.save(policy);
         List<Document> sources = Arrays.stream(saved.getVisaType().split(","))
@@ -101,6 +111,10 @@ public class PolicyIngestionService {
         metadata.put("sourceType", policy.getSourceType().name());
         metadata.put("publicationDate", policy.getPublicationDate().toString());
         metadata.put("sourceUrl", policy.getSourceUrl());
+        metadata.put("affectedCountries", policy.getAffectedCountries());
+        metadata.put("restrictionCategories", policy.getRestrictionCategories().stream()
+                .map(Enum::name).toList());
+        metadata.put("sourceReferences", policy.getSourceReferences());
         if (policy.getEffectiveDate() != null) {
             metadata.put("effectiveDate", policy.getEffectiveDate().toString());
         }
@@ -113,6 +127,19 @@ public class PolicyIngestionService {
                 .map(String::toUpperCase)
                 .distinct()
                 .collect(java.util.stream.Collectors.joining(","));
+    }
+
+    private static String validateSourceReference(String reference) {
+        try {
+            var uri = java.net.URI.create(reference.trim());
+            if (!("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme()))
+                    || uri.getHost() == null) {
+                throw new IllegalArgumentException("Source references must be absolute HTTP(S) URLs");
+            }
+            return uri.toASCIIString();
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("Invalid source reference URL", exception);
+        }
     }
 
 }
