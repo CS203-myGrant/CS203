@@ -1106,7 +1106,9 @@ How documents are linked:
   `regulation_id_numbers`. Every document's header is read as well, so documents stored earlier
   and the saved fixtures link the same way offline: `[DHS Docket No. ICEB-2025-0001]` and
   `RIN 1653-AA95`. Only the text before `SUMMARY:` is read, because the body of a long rule cites
-  other rulemakings. A docket is kept without its agency label, as `ICEB-2025-0001`.
+  other rulemakings. A docket is kept without its agency label, as `ICEB-2025-0001`. An agency
+  code written apart from its number, `Docket No: USCIS 2020-0019` as in the delay notice
+  `2021-02665`, is read as `USCIS-2020-0019`.
 - **News and other secondary sources.** Articles rarely quote a docket, so the links in an
   article's description count: `federalregister.gov/d/<number>`,
   `federalregister.gov/documents/<date>/<number>/…` and `regulations.gov/docket/<id>`. A labelled
@@ -1156,6 +1158,20 @@ Stages:
   2025, the rest. The second is recorded as its own `ADDITIONAL_FINAL_RULE` step with its own
   date, the rule keeps 4 Mar 2024, and applicants get its usual "New policy" alert, not a date
   move.
+- A document about the date gives its **new date in its `DATES:` paragraph**, after `SUMMARY:`,
+  and that is where it is read. The Federal Register's `effective_on` is never used for it: for
+  the real delay notice `2021-02665` it is 8 Jan 2021, the date the delayed rule was published,
+  while `DATES` says "the effective date of the final rule published January 8, 2021 … is
+  delayed to December 31, 2021". The wordings read are "delayed to" or "until", "postponed to" or
+  "until", and "new effective date is", "will be" or "of", followed by a date such as
+  `December 31, 2021`, across line breaks. The noun is not read, because the same paragraph says
+  "comments on this delay until March 10, 2021". A paragraph with no such date, or with two
+  different ones, gives none.
+- When a delay, postponement or change-of-date notice gives no new date that can be read, its
+  step is recorded, the rule's date stays, no date alert is sent, and the document is flagged
+  for review with its `DATES` text as the reason. A correction that gives none leaves the date
+  alone without a flag, because most corrections fix text, not the date. The generic "New
+  policy" alert never states `effective_on` for a document about the date.
 - A document published before the one behind the current state, such as the proposal imported
   after the final rule, is recorded in the history in date order but changes nothing.
 - `EFFECTIVE` is never stored. The timeline reports it once the rule is `FINAL`, not disputed,
@@ -1169,7 +1185,8 @@ Stages:
   the full list is `LitigationSignal.PHRASES`. "Court" or "judge" followed, within the next three
   words, by blocks, halts, pauses, postpones, stays or enjoins (or blocked, halted, paused,
   postponed, stayed, enjoined) counts too, so "Court Temporarily Blocks …" and "Federal Court
-  Postpones …" match but "DHS postpones the effective date" does not. Matching ignores case, so
+  Postpones …" match but "DHS postpones the effective date" and "Supreme Court stays out of
+  student visa fight" do not. Matching ignores case, so
   "sue" is not on the list: it would hit the name Sue. A stay otherwise counts only as "stay of
   the rule", "stayed the rule" or "court stay", because "stay" alone is everywhere in immigration
   text ("length of stay"). A report on a `MEDIUM` or `LOW` link is flagged for review and not
@@ -1391,6 +1408,11 @@ Then:
   proposed to final, effective 4 Mar 2024, with one "Rule update" alert. The second final rule
   adds an `ADDITIONAL_FINAL_RULE` step with `"ownEffectiveDate": "2025-01-17"`, the rule keeps
   4 Mar 2024, and H-1B and F-1 applicants get its "New policy" alert.
+- Import `2020-24259`, `2021-00183`, `2021-02665` and `2021-27714` in that order, the 2020 H-1B
+  registration rulemaking (RIN 1615-AC61). H-1B applicants get "New policy …" for the proposal,
+  then "moved from proposed to final, effective 9 Mar 2021", "effective date moved from 9 Mar
+  2021 to 31 Dec 2021" (read from the delay notice's `DATES`) and "moved from final to
+  withdrawn". The timeline ends `WITHDRAWN`, with no `TOOK_EFFECT` step.
 - To see a dispute from news, import the synthetic news feed the tests use. Its articles are
   made up, so do this only on a local database:
 
@@ -1405,11 +1427,13 @@ Then:
   alert. The explainer article joins the rule without changing it, and the third article
   matches no rule.
 
-The effective-date move is tested with a synthetic delay notice,
-`src/test/resources/federal-register/synthetic-2026-99950-delay.txt`, because no real one
-exists for this rule. `RuleLifecycleIntegrationTest` runs the whole sequence, the three H-1B
-documents and the court order below. It needs a database that does not already hold these
-documents, as in CI, and is skipped otherwise.
+The effective-date move is tested with the real delay notice `2021-02665` and, for the D/S
+rule, which has no real one, a synthetic delay notice,
+`src/test/resources/federal-register/synthetic-2026-99950-delay.txt`. Like a real one, it
+gives its new date only in `DATES`; its stubbed `effective_on` is its own publication date.
+`RuleLifecycleIntegrationTest` runs the whole sequence, the three H-1B documents, the RIN
+1615-AC61 rulemaking and the court order below. It needs a database that does not already hold
+these documents, as in CI, and is skipped otherwise.
 
 ### Record a court order
 
@@ -1470,6 +1494,10 @@ Import `2025-16554` and `2026-14439` first, or the source has no rule to join.
 - Whether a final document is about the date is read from its `ACTION:` line and title. A
   manually ingested primary document without an `ACTION:` line or a `; …` suffix counts as a
   separate final rule, not a date move.
+- A new date is read from `DATES` only in the wordings above. A delay notice worded otherwise
+  ("the effective date is now …") moves nothing and is flagged for review. A correction that
+  changes the date in other words, such as "is corrected to read", moves nothing and is not
+  flagged.
 - If the second of two final rules is imported before the first, the rule's `effectiveDate` stays
   the second one's, because an older document arriving late changes nothing. The steps are still
   worked out in publication order, so they show the first final rule setting the date and the
