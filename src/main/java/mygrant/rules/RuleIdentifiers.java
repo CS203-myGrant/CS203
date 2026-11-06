@@ -29,6 +29,13 @@ public final class RuleIdentifiers {
     private static final Pattern DOCKET_LABEL =
             Pattern.compile("(?i)\\bdocket\\s+(?:nos?\\.?|numbers?|ids?)?\\s*:?\\s*");
     private static final Pattern HYPHENATED = Pattern.compile("[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+");
+    /**
+     * An agency code written apart from its number, "USCIS 2020-0019", as in the header and API
+     * docket of the real delay notice 2021-02665 ("Docket No: USCIS 2020-0019"). Upper case only,
+     * so a word such as "and" is never joined.
+     */
+    private static final Pattern SPACED_DOCKET =
+            Pattern.compile("\\b([A-Z][A-Z0-9]{1,15})\\s+(\\d{4}-(?:[A-Z]{1,3}-)?\\d{3,})\\b");
     /** A bare regulations.gov docket id: ICEB-2025-0001, USCIS-2023-0005, FDA-2019-N-1234. */
     private static final Pattern REGULATIONS_GOV_DOCKET =
             Pattern.compile("[A-Z][A-Z0-9]*-\\d{4}-(?:[A-Z]{1,3}-)?\\d{3,}");
@@ -148,13 +155,17 @@ public final class RuleIdentifiers {
         return found;
     }
 
-    /** Every docket after a "Docket No." label, up to the next ";": "Docket Nos. A-2025-1 and A-2025-2". */
+    /**
+     * Every docket after a "Docket No." label, up to the next ";": "Docket Nos. A-2025-1 and
+     * A-2025-2". "USCIS 2020-0019" is read as USCIS-2020-0019.
+     */
     static List<String> docketsIn(String text) {
         List<String> dockets = new java.util.ArrayList<>();
         Matcher label = DOCKET_LABEL.matcher(text);
         while (label.find()) {
             int end = text.indexOf(';', label.end());
-            String rest = text.substring(label.end(), end < 0 ? text.length() : end);
+            String rest = SPACED_DOCKET.matcher(text.substring(label.end(), end < 0 ? text.length() : end))
+                    .replaceAll("$1-$2");
             Matcher token = HYPHENATED.matcher(rest);
             while (token.find()) {
                 if (token.group().chars().anyMatch(Character::isDigit)) {

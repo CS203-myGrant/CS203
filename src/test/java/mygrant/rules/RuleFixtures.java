@@ -18,7 +18,9 @@ import mygrant.policies.SourceType;
  * The real Federal Register pair (DHS Docket ICEB-2025-0001, RIN 1653-AA95): the 2025 proposal
  * and the 2026 final rule, plus the same-titled 2020 proposal on another docket. Also the real
  * 2023 H-1B proposal (DHS Docket USCIS-2023-0005, RIN 1615-AC70), which DHS finalised as two
- * separate final rules. Synthetic fixtures are named synthetic-* and say so in their first line.
+ * separate final rules, and the 2020 H-1B registration rulemaking (RIN 1615-AC61): proposal, final
+ * rule, a delay notice whose new date is only in its DATES text, and the withdrawal. Synthetic
+ * fixtures are named synthetic-* and say so in their first line.
  * The real texts are the documents' raw_text_url downloads, with the NUL bytes removed as
  * FederalRegisterClient does.
  */
@@ -34,7 +36,10 @@ final class RuleFixtures {
     static final LocalDate FINAL_PUBLISHED = LocalDate.of(2026, 7, 17);
     static final LocalDate FINAL_EFFECTIVE = LocalDate.of(2026, 9, 15);
     static final LocalDate OLD_PROPOSAL_PUBLISHED = LocalDate.of(2020, 9, 25);
-    /** Synthetic: a delay notice moving the final rule's effective date from 15 Sep to 1 Nov 2026. */
+    /**
+     * Synthetic: a delay notice moving the final rule's effective date from 15 Sep to 1 Nov 2026.
+     * Like a real one, it gives the new date only in DATES; its effective_on is its own publication date.
+     */
     static final String DATE_MOVE = "2026-99950";
     static final LocalDate DATE_MOVE_PUBLISHED = LocalDate.of(2026, 9, 1);
     static final LocalDate MOVED_EFFECTIVE = LocalDate.of(2026, 11, 1);
@@ -44,7 +49,7 @@ final class RuleFixtures {
     static final List<String> NEWS_HEADLINES = List.of(INJUNCTION_HEADLINE,
             "What the new admission rule means for F-1 students", "Universities sue over F-1 student admission limits");
     static final List<String> IDENTIFIERS = List.of("ICEB-2025-0001", "1653-AA95", "ICEB-2019-0006", "1653-AA78",
-            "USCIS-2023-0005", "1615-AC70");
+            "USCIS-2023-0005", "1615-AC70", "USCIS-2020-0019", "1615-AC61");
 
     static final String H1B_TITLE = "Modernizing H-1B Requirements, Providing Flexibility in the F-1 Program, and "
             + "Program Improvements Affecting Other Nonimmigrant Workers";
@@ -59,6 +64,17 @@ final class RuleFixtures {
     static final String H1B_FINAL_RULE = "2024-29354";
     static final LocalDate H1B_FINAL_PUBLISHED = LocalDate.of(2024, 12, 18);
     static final LocalDate H1B_FINAL_EFFECTIVE = LocalDate.of(2025, 1, 17);
+
+    /** RIN 1615-AC61, DHS Docket USCIS-2020-0019: proposed, final, delayed, then withdrawn. */
+    static final String AC61_TITLE = "Modification of Registration Requirement for Petitioners Seeking To File "
+            + "Cap-Subject H-1B Petitions";
+    static final String AC61_DELAY_TITLE = AC61_TITLE + "; Delay of Effective Date";
+    static final String AC61_WITHDRAWAL_TITLE = AC61_TITLE + ", Implementation of Vacatur";
+    static final String AC61_PROPOSAL = "2020-24259";
+    static final String AC61_FINAL_RULE = "2021-00183";
+    /** Real delay notice. The API's effective_on is 2021-01-08; DATES says "is delayed to December 31, 2021". */
+    static final String AC61_DELAY = "2021-02665";
+    static final String AC61_WITHDRAWAL = "2021-27714";
 
     /**
      * The real court order that postponed the D/S final rule (2026-14439) the day before it was due
@@ -91,7 +107,7 @@ final class RuleFixtures {
 
     static IngestPolicyRequest dateMove() {
         return new IngestPolicyRequest(DATE_MOVE, TITLE + "; Delay of Effective Date", "Homeland Security Department",
-                "F-1,J-1", PolicyStatus.FINAL, SourceType.PRIMARY, DATE_MOVE_PUBLISHED, MOVED_EFFECTIVE,
+                "F-1,J-1", PolicyStatus.FINAL, SourceType.PRIMARY, DATE_MOVE_PUBLISHED, DATE_MOVE_PUBLISHED,
                 "https://www.federalregister.gov/d/" + DATE_MOVE, text("federal-register/synthetic-2026-99950-delay.txt"));
     }
 

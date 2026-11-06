@@ -1,5 +1,10 @@
 package mygrant.rules;
 
+import static mygrant.rules.RuleFixtures.AC61_DELAY;
+import static mygrant.rules.RuleFixtures.AC61_FINAL_RULE;
+import static mygrant.rules.RuleFixtures.AC61_PROPOSAL;
+import static mygrant.rules.RuleFixtures.AC61_TITLE;
+import static mygrant.rules.RuleFixtures.AC61_WITHDRAWAL;
 import static mygrant.rules.RuleFixtures.COURT_ORDER;
 import static mygrant.rules.RuleFixtures.DATE_MOVE;
 import static mygrant.rules.RuleFixtures.FINAL_RULE;
@@ -70,9 +75,10 @@ import mygrant.user.UserRole;
  * delay notice and a synthetic news report of an injunction, through the Federal Register and news
  * connectors, the alerts, email, the live stream, reassessment and the timeline endpoint. Also the
  * real 2023 H-1B proposal and the two final rules DHS issued on it, the second of which is a
- * separate final rule, not an effective-date move. And the real court order postponing the D/S
- * rule, which an admin records through the ingestion endpoint because no Federal Register
- * document reports it.
+ * separate final rule, not an effective-date move. The real 2020 H-1B registration rulemaking,
+ * whose delay notice gives its new date only in its DATES text. And the real court order
+ * postponing the D/S rule, which an admin records through the ingestion endpoint because no
+ * Federal Register document reports it.
  *
  * <p>Not @Transactional, because alerts and reassessment run after commit; every row it creates is
  * removed afterwards. It needs a database where these documents do not exist yet, as in CI, and is
@@ -84,7 +90,8 @@ import mygrant.user.UserRole;
 class RuleLifecycleIntegrationTest {
 
     private static final List<String> DOCUMENTS = List.of(PROPOSAL, FINAL_RULE, DATE_MOVE, H1B_PROPOSAL,
-            H1B_REGISTRATION_RULE, H1B_FINAL_RULE, COURT_ORDER);
+            H1B_REGISTRATION_RULE, H1B_FINAL_RULE, COURT_ORDER, AC61_PROPOSAL, AC61_FINAL_RULE, AC61_DELAY,
+            AC61_WITHDRAWAL);
     private static final List<String> FIXED_TIME_DOCKETS = List.of("DHS Docket No. ICEB-2025-0001");
     private static final List<String> FIXED_TIME_RINS = List.of("1653-AA95");
     private static final String CHANGE_PREFIX = "Rule update for F-1, J-1: ";
@@ -127,8 +134,9 @@ class RuleLifecycleIntegrationTest {
         stubFederalRegister(FINAL_RULE, RuleFixtures.TITLE, "Rule", "Final rule.", RuleFixtures.FINAL_PUBLISHED,
                 RuleFixtures.FINAL_EFFECTIVE, "federal-register/" + FINAL_RULE + ".txt", FIXED_TIME_DOCKETS,
                 FIXED_TIME_RINS);
+        // As for a real delay notice, effective_on is not the new date: that is only in DATES.
         stubFederalRegister(DATE_MOVE, RuleFixtures.TITLE + "; Delay of Effective Date", "Rule",
-                "Final rule; delay of effective date.", RuleFixtures.DATE_MOVE_PUBLISHED, RuleFixtures.MOVED_EFFECTIVE,
+                "Final rule; delay of effective date.", RuleFixtures.DATE_MOVE_PUBLISHED, RuleFixtures.DATE_MOVE_PUBLISHED,
                 "federal-register/synthetic-2026-99950-delay.txt", FIXED_TIME_DOCKETS, FIXED_TIME_RINS);
         // The real Federal Register API metadata of the three H-1B documents.
         stubFederalRegister(H1B_PROPOSAL, RuleFixtures.H1B_TITLE, "Proposed Rule", "Notice of proposed rulemaking.",
@@ -142,6 +150,21 @@ class RuleLifecycleIntegrationTest {
                 RuleFixtures.H1B_FINAL_PUBLISHED, RuleFixtures.H1B_FINAL_EFFECTIVE,
                 "federal-register/" + H1B_FINAL_RULE + ".txt",
                 List.of("CIS No. 2766-24", "DHS Docket No. USCIS-2023-0005"), List.of("1615-AC70"));
+        // The real Federal Register API metadata of RIN 1615-AC61, as returned: the delay notice's
+        // effective_on is 2021-01-08 and its docket has a space; the withdrawal has no docket.
+        stubFederalRegister(AC61_PROPOSAL, AC61_TITLE, "Proposed Rule", "Notice of proposed rulemaking.",
+                LocalDate.of(2020, 11, 2), null, "federal-register/" + AC61_PROPOSAL + ".txt",
+                List.of("CIS No. 2674-20", "DHS Docket No. USCIS-2020-0019"), List.of("1615-AC61"));
+        stubFederalRegister(AC61_FINAL_RULE, AC61_TITLE, "Rule", "Final rule.", LocalDate.of(2021, 1, 8),
+                LocalDate.of(2021, 3, 9), "federal-register/" + AC61_FINAL_RULE + ".txt",
+                List.of("CIS No. 2679-21", "DHS Docket No. USCIS-2020-0019"), List.of("1615-AC61"));
+        stubFederalRegister(AC61_DELAY, RuleFixtures.AC61_DELAY_TITLE, "Rule",
+                "Final rule; delay of effective date; request for comments.", LocalDate.of(2021, 2, 8),
+                LocalDate.of(2021, 1, 8), "federal-register/" + AC61_DELAY + ".txt",
+                List.of("CIS No. 2680-21", "Docket No: USCIS 2020-0019"), List.of("1615-AC61"));
+        stubFederalRegister(AC61_WITHDRAWAL, RuleFixtures.AC61_WITHDRAWAL_TITLE, "Rule", "Final rule; withdrawal.",
+                LocalDate.of(2021, 12, 22), null, "federal-register/" + AC61_WITHDRAWAL + ".txt", List.of(),
+                List.of("1615-AC61"));
         when(assessments.assess(any(), any(), any(), any(), any())).thenAnswer(invocation -> {
             assessmentThreads.add(Thread.currentThread().getName());
             return new ProfileImpactAssessment(ImpactUrgency.MEDIUM, 80, "Your admission period becomes fixed.",
@@ -291,6 +314,59 @@ class RuleLifecycleIntegrationTest {
                 .andExpect(jsonPath("$.steps.length()").value(4))
                 .andExpect(jsonPath("$.steps[*].changes[*]").value(org.hamcrest.Matchers.not(
                         org.hamcrest.Matchers.hasItem("TOOK_EFFECT"))));
+    }
+
+    @Test
+    void aRealDelayNoticeMovesTheDateItsDatesTextGivesAndTheRuleIsThenWithdrawn() throws Exception {
+        User worker = applicant("H-1B");
+        long proposal = importDocument(AC61_PROPOSAL);
+        assertThat(alertsFor(worker, proposal)).containsExactly("New policy affecting H-1B: " + AC61_TITLE);
+        long finalRule = importDocument(AC61_FINAL_RULE);
+        long delay = importDocument(AC61_DELAY);
+        long withdrawal = importDocument(AC61_WITHDRAWAL);
+        long ruleId = store.findLink(finalRule).orElseThrow().ruleId();
+
+        assertThat(List.of(proposal, delay, withdrawal))
+                .allSatisfy(id -> assertThat(store.findLink(id).orElseThrow().ruleId()).isEqualTo(ruleId));
+        // The delay notice's "Docket No: USCIS 2020-0019" is the rulemaking's docket; the withdrawal has only the RIN.
+        assertThat(store.findLink(delay).orElseThrow().method()).isEqualTo(MatchMethod.DOCKET_AND_RIN);
+        assertThat(store.findLink(withdrawal).orElseThrow().method()).isEqualTo(MatchMethod.RIN);
+        assertThat(store.documents(ruleId)).noneMatch(document -> document.link().needsReview());
+        assertThat(store.findRule(ruleId).orElseThrow().state()).isEqualTo(
+                new RuleState(mygrant.policies.PolicyStatus.WITHDRAWN, LocalDate.of(2021, 12, 31), false));
+
+        // One change alert each for the final rule, the delay and the withdrawal.
+        String prefix = "Rule update for H-1B: ";
+        assertThat(alertsFor(worker, finalRule)).containsExactly(
+                prefix + "moved from proposed to final, effective 9 Mar 2021: " + AC61_TITLE);
+        assertThat(alertsFor(worker, delay)).containsExactly(
+                prefix + "effective date moved from 9 Mar 2021 to 31 Dec 2021: " + AC61_TITLE);
+        assertThat(alertsFor(worker, withdrawal)).containsExactly(
+                prefix + "moved from final to withdrawn: " + AC61_TITLE);
+        assertThat(messages(worker)).hasSize(4).noneMatch(message -> message.contains("8 Jan 2021"));
+        assertThat(events.stream(PolicyChangedEvent.class)).extracting(change -> change.source().externalId())
+                .containsExactly(AC61_FINAL_RULE, AC61_DELAY, AC61_WITHDRAWAL);
+
+        clock.setUserDate(worker.getId(), LocalDate.of(2026, 11, 6));
+        mvc.perform(get("/api/v1/policies/{id}/timeline", delay).header("Authorization", token(worker)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.primaryStage").value("WITHDRAWN"))
+                .andExpect(jsonPath("$.currentStage").value("WITHDRAWN"))
+                .andExpect(jsonPath("$.effectiveDate").value("2021-12-31"))
+                .andExpect(jsonPath("$.identifiers[*].value").value(org.hamcrest.Matchers.contains("USCIS-2020-0019",
+                        "1615-AC61")))
+                .andExpect(jsonPath("$.steps.length()").value(4))
+                .andExpect(jsonPath("$.steps[0].primaryStage").value("PROPOSED"))
+                .andExpect(jsonPath("$.steps[1].changes").value(org.hamcrest.Matchers.contains("STAGE", "EFFECTIVE_DATE")))
+                .andExpect(jsonPath("$.steps[1].effectiveDate").value("2021-03-09"))
+                .andExpect(jsonPath("$.steps[2].changes").value(org.hamcrest.Matchers.contains("EFFECTIVE_DATE")))
+                .andExpect(jsonPath("$.steps[2].previousEffectiveDate").value("2021-03-09"))
+                .andExpect(jsonPath("$.steps[2].effectiveDate").value("2021-12-31"))
+                .andExpect(jsonPath("$.steps[2].source.externalId").value(AC61_DELAY))
+                .andExpect(jsonPath("$.steps[3].changes").value(org.hamcrest.Matchers.contains("STAGE")))
+                .andExpect(jsonPath("$.steps[3].previousPrimaryStage").value("FINAL"))
+                .andExpect(jsonPath("$.steps[3].primaryStage").value("WITHDRAWN"))
+                .andExpect(jsonPath("$.steps[3].source.externalId").value(AC61_WITHDRAWAL));
     }
 
     @Test

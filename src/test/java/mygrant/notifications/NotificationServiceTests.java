@@ -366,6 +366,24 @@ class NotificationServiceTests {
     }
 
     @Test
+    void aDelayNoticesGenericAlertLeavesOutTheFederalRegistersEffectiveOn() {
+        // Sent only when its new date could not be read; effective_on is not that date.
+        User worker = user(7L, "worker@example.com");
+        when(userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("H-1B"))).thenReturn(List.of(worker));
+        String title = "Modification of Registration Requirement; Delay of Effective Date";
+
+        service().onPolicyIndexed(new PolicyIndexedEvent(3L, title, List.of("H-1B"), LocalDate.parse("2021-01-08"),
+                "ACTION: Final rule; delay of effective date.\n\nSUMMARY: The rule is delayed."));
+        service().onPolicyIndexed(new PolicyIndexedEvent(4L, "Fee schedule update", List.of("H-1B"),
+                LocalDate.parse("2021-03-09"), "ACTION: Final rule.\n\nSUMMARY: Adjusts filing fees."));
+
+        verify(notificationRepository, org.mockito.Mockito.times(2)).saveAll(saved.capture());
+        assertThat(saved.getAllValues()).extracting(batch -> batch.getFirst().getMessage()).containsExactly(
+                "New policy affecting H-1B: " + title,
+                "New policy affecting H-1B: Fee schedule update (effective 2021-03-09)");
+    }
+
+    @Test
     void doesNotFlagActionWhenTheUserHasNotFilledInTheAffectedField() {
         User student = user(7L, "student@example.com"); // no program end date, no academic level
         student.setAcademicLevel(null);

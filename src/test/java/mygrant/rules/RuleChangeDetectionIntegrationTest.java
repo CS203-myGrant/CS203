@@ -44,6 +44,8 @@ class RuleChangeDetectionIntegrationTest {
 
     /** Synthetic: a notice in the docket, published before the proposal. */
     private static final String NOTICE = "2025-99901";
+    /** Synthetic: a delay notice whose DATES gives no new date. */
+    private static final String UNREAD_DELAY = "2026-99951";
 
     @Autowired PolicyIngestionService ingestion;
     @Autowired NewsRssConnector news;
@@ -54,8 +56,8 @@ class RuleChangeDetectionIntegrationTest {
 
     @BeforeEach
     void isolateFixtures() {
-        RuleFixtures.isolate(jdbc, List.of(PROPOSAL, FINAL_RULE, OLD_PROPOSAL, DATE_MOVE, NOTICE, H1B_PROPOSAL,
-                H1B_REGISTRATION_RULE, H1B_FINAL_RULE));
+        RuleFixtures.isolate(jdbc, List.of(PROPOSAL, FINAL_RULE, OLD_PROPOSAL, DATE_MOVE, NOTICE, UNREAD_DELAY,
+                H1B_PROPOSAL, H1B_REGISTRATION_RULE, H1B_FINAL_RULE));
     }
 
     @Test
@@ -116,6 +118,47 @@ class RuleChangeDetectionIntegrationTest {
             assertThat(change.source().externalId()).isEqualTo(DATE_MOVE);
         });
         assertThat(store.history(store.findLink(delay).orElseThrow().ruleId()).getLast().aboutEffectiveDate()).isTrue();
+    }
+
+    @Test
+    void aDelayNoticeWhoseNewDateCannotBeReadIsRecordedAndFlaggedAndChangesNothing() {
+        ingest(RuleFixtures.proposal());
+        long finalRule = ingest(RuleFixtures.finalRule());
+        long ruleId = store.findLink(finalRule).orElseThrow().ruleId();
+        int history = store.history(ruleId).size();
+        events.clear();
+        String dates = "The effective date of the final rule published July 17, 2026, is delayed pending review.";
+
+        // effective_on is the notice's own date, as for a real delay notice; it must not become the rule's.
+        long notice = ingest(new IngestPolicyRequest(UNREAD_DELAY, RuleFixtures.TITLE + "; Delay of Effective Date",
+                "Homeland Security Department", "F-1,J-1", PolicyStatus.FINAL, SourceType.PRIMARY,
+                RuleFixtures.DATE_MOVE_PUBLISHED, RuleFixtures.DATE_MOVE_PUBLISHED,
+                "https://www.federalregister.gov/d/" + UNREAD_DELAY,
+                "[DHS Docket No. ICEB-2025-0001]\nRIN 1653-AA95\n\nACTION: Final rule; delay of effective date.\n\n"
+                        + "SUMMARY: DHS is delaying the final rule.\n\nDATES: " + dates
+                        + "\n\nFOR FURTHER INFORMATION CONTACT: DHS.\n"));
+
+        assertThat(changes()).isEmpty();
+        assertThat(store.findRule(ruleId).orElseThrow().state())
+                .isEqualTo(new RuleState(PolicyStatus.FINAL, FINAL_EFFECTIVE, false));
+        // Its step is recorded, applied in order but changing nothing.
+        assertThat(store.history(ruleId)).hasSize(history + 1).last().satisfies(row -> {
+            assertThat(row.source().externalId()).isEqualTo(UNREAD_DELAY);
+            assertThat(row.state()).isEqualTo(new RuleState(PolicyStatus.FINAL, FINAL_EFFECTIVE, false));
+            assertThat(row.aboutEffectiveDate()).isTrue();
+            assertThat(row.alerted()).isFalse();
+        });
+        String reason = "Effective date not changed: this document is about the effective date, but no new date "
+                + "could be read from its DATES paragraph. DATES: " + dates;
+        var link = store.findLink(notice).orElseThrow();
+        assertThat(link.ruleId()).isEqualTo(ruleId);
+        assertThat(link.needsReview()).isTrue();
+        assertThat(link.reviewReason()).isEqualTo(reason);
+        assertThat(events.stream(RuleLinkFlaggedEvent.class)).singleElement()
+                .satisfies(flag -> assertThat(flag.reason()).isEqualTo(reason));
+        // No change alert; the generic alert, which then leaves out effective_on, is the only one.
+        assertThat(events.stream(PolicyIndexedEvent.class)).singleElement()
+                .satisfies(indexed -> assertThat(indexed.ruleChanged()).isFalse());
     }
 
     @Test

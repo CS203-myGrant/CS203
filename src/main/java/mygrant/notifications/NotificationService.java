@@ -25,6 +25,7 @@ import mygrant.notifications.dto.NotificationResponse;
 import mygrant.policies.PolicyDocumentRepository;
 import mygrant.policies.PolicyIndexedEvent;
 import mygrant.policies.SourceType;
+import mygrant.rules.DateNotice;
 import mygrant.rules.PolicyChangedEvent;
 import mygrant.rules.PolicyRuleStore;
 import mygrant.rules.RuleChange;
@@ -279,9 +280,14 @@ public class NotificationService {
                 .orElseGet(() -> buildMessage(event));
     }
 
+    /**
+     * The generic alert. A document about a rule's effective date, such as a delay notice, gets
+     * it only when its new date could not be read, and the Federal Register's effective_on is not
+     * that date (for 2021-02665 it is the delayed rule's publication date), so none is stated.
+     */
     private String buildMessage(PolicyIndexedEvent event) {
         String message = "New policy affecting " + String.join(", ", event.visaTypes()) + ": " + event.title();
-        if (event.effectiveDate() != null) {
+        if (event.effectiveDate() != null && !DateNotice.concernsEffectiveDate(event.title(), event.content())) {
             message += " (effective " + event.effectiveDate() + ")";
         }
         return truncate(message);

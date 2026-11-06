@@ -49,7 +49,11 @@ import mygrant.rules.PolicyRuleStore.Rule;
  * <p>On a rule already final, only a document about the effective date ({@link DateNotice}), such as
  * a delay notice, moves the date. Any other final document is a separate final rule in the same
  * rulemaking: it is recorded as its own step with its own effective date, the rule's date stays,
- * and nothing is raised, so it gets the usual new-policy alert.
+ * and nothing is raised, so it gets the usual new-policy alert. A document about the date gives
+ * its new date in its DATES paragraph, not in the API's effective_on. When a delay or
+ * postponement notice gives none that can be read, its step is recorded, the date stays, nothing
+ * is raised, and it is flagged for review with the DATES text as the reason. A correction that
+ * gives none leaves the date alone without a flag.
  */
 @Service
 public class PolicyRuleTracker {
@@ -77,7 +81,10 @@ public class PolicyRuleTracker {
         }
     }
 
-    /** What applying a primary document did: a review reason if it was not applied, and any change to raise. */
+    /**
+     * What applying a primary document did: a review reason if it was not applied, or applied
+     * without its new date, and any change to raise.
+     */
     private record Applied(String reviewReason, Optional<PolicyChangedEvent> change) {
         static final Applied NOTHING = new Applied(null, Optional.empty());
     }
@@ -225,7 +232,7 @@ public class PolicyRuleTracker {
 
     private long startRule(PolicyDocument document, Set<RuleIdentifier> identifiers, RecordedBy recordedBy) {
         PolicyStatus stage = RuleStages.of(document.getStatus());
-        RuleState state = new RuleState(stage, effectiveDate(document, stage), false);
+        RuleState state = new RuleState(stage, effectiveDate(document, stage, aboutEffectiveDate(document)), false);
         long ruleId = store.createRule(document.getTitle(), state, document.getPublicationDate());
         // Without a docket or RIN nothing ties later documents to this one, so starting a rule is a guess.
         store.link(document.getId(), ruleId, MatchMethod.NEW_RULE,
@@ -241,21 +248,27 @@ public class PolicyRuleTracker {
      * only, and a document without an effective date keeps the stored one. A document that would
      * move the stage backwards is not applied and comes back with a review reason. A separate
      * final rule on a rule already final is recorded with its own effective date and changes
-     * neither the stage nor the rule's date.
+     * neither the stage nor the rule's date. A delay notice whose new date cannot be read is
+     * recorded and flagged, and leaves the date alone.
      */
     private Applied applyPrimary(PolicyDocument document, Rule rule, RecordedBy recordedBy) {
         RuleState before = rule.state();
         PolicyStatus docStage = RuleStages.of(document.getStatus());
-        LocalDate docDate = effectiveDate(document, docStage);
-        RuleSource source = RuleSource.of(document);
         boolean aboutDate = aboutEffectiveDate(document);
+        LocalDate docDate = effectiveDate(document, docStage, aboutDate);
+        RuleSource source = RuleSource.of(document);
+        // A delay notice must give a new date, so one that cannot be read is flagged. A correction
+        // that names none fixed something else and changes nothing.
+        String unreadDate = docStage == PolicyStatus.FINAL && aboutDate && docDate == null
+                && DateNotice.announcesNewDate(document.getTitle(), document.getContent())
+                ? unreadDateReason(document) : null;
 
         if (document.getPublicationDate().isBefore(rule.primaryAsOf())) {
             if (RuleStages.isStage(docStage) || docDate != null) {
                 store.appendHistory(new NewHistoryEntry(rule.id(), before, new RuleState(docStage, docDate, false),
                         false, false, aboutDate, source, recordedBy));
             }
-            return Applied.NOTHING;
+            return new Applied(unreadDate, Optional.empty());
         }
         if (RuleStages.isBackward(before.primaryStage(), docStage)) {
             return new Applied("Stage not changed: a " + lower(docStage) + " document published after the rule became "
@@ -274,7 +287,12 @@ public class PolicyRuleTracker {
                 docDate != null ? docDate : before.effectiveDate(), before.disputed());
         store.updateRule(rule.id(), after, document.getPublicationDate());
         if (after.equals(before)) {
-            return Applied.NOTHING;
+            if (unreadDate != null) {
+                // A delay notice whose new date could not be read: its step is kept for the reviewer.
+                store.appendHistory(new NewHistoryEntry(rule.id(), before, after, true, false, aboutDate, source,
+                        recordedBy));
+            }
+            return new Applied(unreadDate, Optional.empty());
         }
         // A rule started by a notice that gets its first real stage is new, not changed: the
         // generic new-policy alert covers it.
@@ -282,9 +300,9 @@ public class PolicyRuleTracker {
         Optional<Long> historyId = store.appendHistory(
                 new NewHistoryEntry(rule.id(), before, after, true, alerted, aboutDate, source, recordedBy));
         if (!alerted || historyId.isEmpty()) {
-            return Applied.NOTHING;
+            return new Applied(unreadDate, Optional.empty());
         }
-        return new Applied(null, Optional.of(event(rule, historyId.get(), before, after, document, document)));
+        return new Applied(unreadDate, Optional.of(event(rule, historyId.get(), before, after, document, document)));
     }
 
     /**
@@ -325,9 +343,22 @@ public class PolicyRuleTracker {
         return DateNotice.concernsEffectiveDate(document.getTitle(), document.getContent());
     }
 
-    /** Only a final rule's effective date is the rule's; a proposal or notice can carry its own. */
-    private static LocalDate effectiveDate(PolicyDocument document, PolicyStatus stage) {
-        return stage == PolicyStatus.FINAL ? document.getEffectiveDate() : null;
+    /**
+     * Only a final rule's effective date is the rule's; a proposal or notice can carry its own. A
+     * final document about the date gives its new date in DATES: the API's effective_on is not it.
+     * Null when that cannot be read.
+     */
+    private static LocalDate effectiveDate(PolicyDocument document, PolicyStatus stage, boolean aboutDate) {
+        if (stage != PolicyStatus.FINAL) {
+            return null;
+        }
+        return aboutDate ? DateNotice.newEffectiveDate(document.getContent()).orElse(null) : document.getEffectiveDate();
+    }
+
+    private static String unreadDateReason(PolicyDocument document) {
+        return "Effective date not changed: this document is about the effective date, but no new date could be "
+                + "read from its DATES paragraph. DATES: "
+                + DateNotice.dates(document.getContent()).orElse("(no DATES paragraph found)");
     }
 
     private static MatchMethod method(Set<RuleIdentifier> matched) {

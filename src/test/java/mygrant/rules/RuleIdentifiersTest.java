@@ -57,6 +57,20 @@ class RuleIdentifiersTest {
     }
 
     @Test
+    void readsAnAgencyDocketWrittenWithASpaceAsOneDocket() throws IOException {
+        // The real delay notice 2021-02665: "[CIS No. 2680-21; Docket No: USCIS 2020-0019]", and the
+        // API's docket_ids say "Docket No: USCIS 2020-0019" too. The rest of its rulemaking says USCIS-2020-0019.
+        var expected = List.of(RuleIdentifier.docket("USCIS-2020-0019"), RuleIdentifier.rin("1615-AC61"));
+        assertThat(RuleIdentifiers.fromHeader(fixture("2021-02665"))).containsExactlyElementsOf(expected);
+        assertThat(RuleIdentifiers.fromHeader(fixture("2021-00183"))).containsExactlyElementsOf(expected);
+        assertThat(RuleIdentifiers.fromFederalRegisterApi(List.of("CIS No. 2680-21", "Docket No: USCIS 2020-0019"),
+                List.of("1615-AC61"))).containsExactlyElementsOf(expected);
+        // A lower-case word before a number is not an agency code.
+        assertThat(RuleIdentifiers.docketsIn("Docket Nos. ICEB-2025-0001 and 2025-0002"))
+                .containsExactly("ICEB-2025-0001", "2025-0002");
+    }
+
+    @Test
     void documentsWithoutAHeaderHaveNoIdentifiers() {
         assertThat(RuleIdentifiers.fromHeader("F-1 students must report changes within 10 days.")).isEmpty();
         assertThat(RuleIdentifiers.fromHeader(null)).isEmpty();
