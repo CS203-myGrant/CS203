@@ -18,6 +18,7 @@ import mygrant.ingestion.connector.SourceIdentity;
 import mygrant.ingestion.dto.IngestPolicyRequest;
 import mygrant.policies.PolicyStatus;
 import mygrant.policies.SourceType;
+import mygrant.rules.RuleIdentifiers;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /** Selects student and work-visa news summaries for secondary evidence. */
@@ -83,12 +84,13 @@ public class NewsRssConnector implements DataConnector<NewsRssConnector.Request,
                 continue;
             }
             try {
+                // Links to the Federal Register or regulations.gov tie the article to a rule.
                 var saved = ingestion.ingest(new IngestPolicyRequest(
                         "rss:guardian:" + ContentHash.sha256(article.url()),
                         article.title(), "The Guardian",
                         String.join(",", classification.visaTypes()),
                         PolicyStatus.UNKNOWN, source().type(), article.publicationDate(),
-                        null, article.url(), content));
+                        null, article.url(), content), content, RuleIdentifiers.fromLinks(article.links()));
                 if (saved.alreadyIndexed()) {
                     duplicates++;
                 } else {

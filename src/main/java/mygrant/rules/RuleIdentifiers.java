@@ -12,7 +12,9 @@ import java.util.regex.Pattern;
  * Finds the docket numbers and RINs that tie the documents of one rulemaking together. Federal
  * Register imports pass the API's {@code docket_ids} and {@code regulation_id_numbers}; the
  * bracketed header of every document is parsed as well, so saved fixtures and documents stored
- * before CS203-86 link the same way offline.
+ * before CS203-86 link the same way offline. News rarely quotes a docket or RIN, so for news the
+ * links matter most: a federalregister.gov document link or a regulations.gov docket link counts
+ * as an identifier.
  */
 public final class RuleIdentifiers {
 
@@ -30,6 +32,17 @@ public final class RuleIdentifiers {
     /** A bare regulations.gov docket id: ICEB-2025-0001, USCIS-2023-0005, FDA-2019-N-1234. */
     private static final Pattern REGULATIONS_GOV_DOCKET =
             Pattern.compile("[A-Z][A-Z0-9]*-\\d{4}-(?:[A-Z]{1,3}-)?\\d{3,}");
+    /** federalregister.gov/d/2026-14439 or federalregister.gov/documents/2026/07/17/2026-14439/slug. */
+    private static final Pattern FEDERAL_REGISTER_LINK = Pattern.compile(
+            "(?i)^https?://(?:www\\.)?federalregister\\.gov/(?:d|documents/\\d{4}/\\d{2}/\\d{2})/([a-z0-9]+-\\d+)(?:[/?#.].*)?$");
+    /** regulations.gov/docket/ICEB-2025-0001. */
+    private static final Pattern REGULATIONS_GOV_LINK =
+            Pattern.compile("(?i)^https?://(?:www\\.)?regulations\\.gov/docket/([a-z0-9-]+)(?:[/?#].*)?$");
+    private static final Pattern URL_IN_TEXT = Pattern.compile("(?i)https?://[^\\s\"'<>()\\[\\]]+");
+    /** In running text only a docket id directly after the label counts; "Docket No. ICEB-2025-0001". */
+    private static final Pattern DOCKET_IN_TEXT = Pattern.compile(
+            "(?i)\\bdocket\\s+(?:nos?\\.?|numbers?|ids?)?\\s*:?\\s*([a-z][a-z0-9]*-\\d{4}-(?:[a-z]{1,3}-)?\\d{3,})");
+    private static final Pattern RIN_IN_TEXT = Pattern.compile("(?i)\\bRIN:?\\s+(\\d{4}-[a-z]{2}\\d{2})\\b");
 
     private RuleIdentifiers() {
     }
@@ -82,6 +95,56 @@ public final class RuleIdentifiers {
                 found.add(RuleIdentifier.rin(matcher.group()));
             }
         }
+        return found;
+    }
+
+    /**
+     * Federal Register document numbers and regulations.gov dockets in links, such as the hrefs in
+     * a news item's description. Other links are ignored.
+     */
+    public static Set<RuleIdentifier> fromLinks(Collection<String> urls) {
+        Set<RuleIdentifier> found = new LinkedHashSet<>();
+        for (String url : urls == null ? List.<String>of() : urls) {
+            if (url == null) {
+                continue;
+            }
+            String trimmed = url.trim();
+            Matcher document = FEDERAL_REGISTER_LINK.matcher(trimmed);
+            if (document.matches()) {
+                found.add(RuleIdentifier.federalRegisterDocument(document.group(1)));
+                continue;
+            }
+            Matcher docket = REGULATIONS_GOV_LINK.matcher(trimmed);
+            if (docket.matches() && REGULATIONS_GOV_DOCKET.matcher(docket.group(1).toUpperCase(Locale.ROOT)).matches()) {
+                found.add(RuleIdentifier.docket(docket.group(1)));
+            }
+        }
+        return found;
+    }
+
+    /**
+     * Identifiers in a news item's text: a labelled docket ("Docket No. ICEB-2025-0001"), a RIN
+     * after "RIN", and links written out in full.
+     */
+    public static Set<RuleIdentifier> fromNewsText(String text) {
+        Set<RuleIdentifier> found = new LinkedHashSet<>();
+        if (text == null || text.isBlank()) {
+            return found;
+        }
+        Matcher docket = DOCKET_IN_TEXT.matcher(text);
+        while (docket.find()) {
+            found.add(RuleIdentifier.docket(docket.group(1)));
+        }
+        Matcher rin = RIN_IN_TEXT.matcher(text);
+        while (rin.find()) {
+            found.add(RuleIdentifier.rin(rin.group(1)));
+        }
+        List<String> urls = new java.util.ArrayList<>();
+        Matcher url = URL_IN_TEXT.matcher(text);
+        while (url.find()) {
+            urls.add(url.group().replaceAll("[.,;:]+$", ""));
+        }
+        found.addAll(fromLinks(urls));
         return found;
     }
 

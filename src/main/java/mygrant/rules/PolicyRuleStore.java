@@ -155,6 +155,48 @@ public class PolicyRuleStore {
         return matches;
     }
 
+    /** A primary document's title and the rule it is in. */
+    record TitleCandidate(long ruleId, String title) {
+    }
+
+    /** The title of every primary document in a rule, for the title fallback. */
+    List<TitleCandidate> primaryTitles() {
+        return jdbc.query("""
+                SELECT d.rule_id, p.title FROM policy_rule_documents d JOIN policy_documents p ON p.id = d.policy_id
+                WHERE p.source_type = 'PRIMARY' ORDER BY d.rule_id, p.id
+                """, Map.of(), (rs, row) -> new TitleCandidate(rs.getLong("rule_id"), rs.getString("title")));
+    }
+
+    /** The dockets and RINs of each rule's primary documents. */
+    Map<Long, Set<RuleIdentifier>> primaryIdentifiers(Collection<Long> ruleIds) {
+        Map<Long, Set<RuleIdentifier>> identifiers = new LinkedHashMap<>();
+        if (ruleIds.isEmpty()) {
+            return identifiers;
+        }
+        jdbc.query("""
+                SELECT DISTINCT d.rule_id, i.kind, i.value
+                FROM policy_rule_documents d
+                JOIN policy_documents p ON p.id = d.policy_id
+                JOIN policy_document_identifiers i ON i.policy_id = d.policy_id
+                WHERE d.rule_id IN (:ids) AND p.source_type = 'PRIMARY' AND i.kind IN ('DOCKET', 'RIN')
+                ORDER BY d.rule_id, i.kind, i.value
+                """, Map.of("ids", ruleIds), rs -> {
+            identifiers.computeIfAbsent(rs.getLong("rule_id"), id -> new LinkedHashSet<>())
+                    .add(new RuleIdentifier(IdentifierKind.valueOf(rs.getString("kind")), rs.getString("value")));
+        });
+        return identifiers;
+    }
+
+    /** Marks a link for review, adding the reason to any it already has. */
+    void flagForReview(long policyId, String reason) {
+        jdbc.update("""
+                UPDATE policy_rule_documents SET needs_review = TRUE,
+                    review_reason = left(CASE WHEN review_reason IS NULL THEN :reason
+                                              ELSE review_reason || ' ' || :reason END, 1000)
+                WHERE policy_id = :id
+                """, Map.of("id", policyId, "reason", reason));
+    }
+
     void link(long policyId, long ruleId, MatchMethod method, Confidence confidence, String matchedOn,
             String reviewReason) {
         jdbc.update("""

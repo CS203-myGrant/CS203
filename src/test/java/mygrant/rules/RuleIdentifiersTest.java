@@ -75,6 +75,30 @@ class RuleIdentifiersTest {
         assertThat(RuleIdentifiers.fromFederalRegisterApi(null, null)).isEmpty();
     }
 
+    @Test
+    void readsFederalRegisterDocumentAndRegulationsGovDocketLinks() {
+        var identifiers = RuleIdentifiers.fromLinks(List.of(
+                "https://www.federalregister.gov/d/2026-14439",
+                "https://www.federalregister.gov/documents/2025/08/28/2025-16554/establishing-a-fixed-time-period",
+                "https://www.regulations.gov/docket/ICEB-2025-0001",
+                "https://www.regulations.gov/document/ICEB-2025-0001-0042",
+                "https://www.theguardian.com/us-news/2026/oct/01/student-visas",
+                "https://www.federalregister.gov/agencies/homeland-security-department"));
+
+        assertThat(identifiers).containsExactly(RuleIdentifier.federalRegisterDocument("2026-14439"),
+                RuleIdentifier.federalRegisterDocument("2025-16554"), RuleIdentifier.docket("ICEB-2025-0001"));
+    }
+
+    @Test
+    void readsLabelledIdentifiersAndWrittenOutLinksFromNewsText() {
+        String text = "The rule (DHS Docket No. ICEB-2025-0001, RIN 1653-AA95) is at "
+                + "https://www.federalregister.gov/d/2026-14439. F-1 and J-1 students, docket 12, rin 5.";
+
+        assertThat(RuleIdentifiers.fromNewsText(text)).containsExactly(RuleIdentifier.docket("ICEB-2025-0001"),
+                RuleIdentifier.rin("1653-AA95"), RuleIdentifier.federalRegisterDocument("2026-14439"));
+        assertThat(RuleIdentifiers.fromNewsText("A report discusses F-1 students.")).isEmpty();
+    }
+
     static String fixture(String documentNumber) throws IOException {
         try (InputStream in = RuleIdentifiersTest.class.getResourceAsStream("/federal-register/" + documentNumber + ".txt")) {
             assertThat(in).as("fixture for %s", documentNumber).isNotNull();
