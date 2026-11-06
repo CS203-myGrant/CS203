@@ -1,8 +1,6 @@
 package mygrant.ingestion;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -84,8 +82,8 @@ class IngestionControllerSecurityTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.policyId").value(1));
         // Marked as the admin's, so a court order posted here can dispute a rule an admin cleared.
-        verify(ingestionService).ingestRecordedByAdmin(any());
-        verify(ingestionService, never()).ingest(any());
+        org.mockito.Mockito.verify(ingestionService).ingestRecordedByAdmin(any());
+        org.mockito.Mockito.verify(ingestionService, org.mockito.Mockito.never()).ingest(any());
     }
 
     @Test
