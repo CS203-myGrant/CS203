@@ -29,7 +29,8 @@ public record RuleTimelineResponse(
         LocalDate effectiveDate,
         @Schema(description = "True once a secondary source linked to the rule by an identifier reported litigation "
                 + "or a stay: a news item, or a court order an admin recorded. Shown alongside primaryStage, never "
-                + "instead of it. False again once an admin clears the dispute after a court lifts the block.")
+                + "instead of it. False again once an admin clears the dispute after a court lifts the block; "
+                + "after that only a court order an admin records sets it again, and news is held for review.")
         boolean disputed,
         @Schema(description = "True when the rule is disputed and asOf has reached effectiveDate: it was scheduled to "
                 + "take effect then, but whether it did is in question, so currentStage stays FINAL and there is no "
@@ -42,7 +43,8 @@ public record RuleTimelineResponse(
         List<RuleIdentifier> identifiers,
         @Schema(description = "Every document in the rule, oldest first, with how it was linked")
         List<Document> documents,
-        @Schema(description = "Stage history, oldest first, by source publication date")
+        @Schema(description = "Stage history, oldest first, by source publication date. A report held for review "
+                + "is not a step: it is in documents with needsReview.")
         List<Step> steps
 ) {
 
@@ -95,9 +97,10 @@ public record RuleTimelineResponse(
             Confidence confidence,
             @Schema(description = "The identifiers or title score behind the match", example = "DOCKET ICEB-2025-0001; RIN 1653-AA95")
             String matchedOn,
-            @Schema(description = "True when a person should check the match")
+            @Schema(description = "True when a person should check the document: how it was matched, or what it "
+                    + "reports that was not applied, such as litigation in the news after an admin cleared the dispute")
             boolean needsReview,
-            @Schema(description = "Why the match needs checking; null when it does not")
+            @Schema(description = "Why it needs checking; null when it does not")
             String reviewReason
     ) {
     }

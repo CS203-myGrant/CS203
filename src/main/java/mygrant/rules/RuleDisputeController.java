@@ -33,9 +33,10 @@ public class RuleDisputeController {
             description = "`{id}` is any document in the rule, as for the timeline. Clears `disputed` and records an "
                     + "append-only step with who cleared it, when, the reason, and the court order or news item that "
                     + "lifted the block. The stage and effective date stay, so the timeline shows the rule EFFECTIVE "
-                    + "again once its date has come. No alert is sent and no other rule changes. A report of "
-                    + "litigation published after the source's date disputes the rule again; one published on or "
-                    + "before it is flagged for review instead.")
+                    + "again once its date has come. No alert is sent and no other rule changes. From then on, "
+                    + "news never disputes the rule again: a report of litigation in the news is flagged for "
+                    + "review and recorded as a step that was not applied. Only a court order an admin records "
+                    + "with `POST /api/v1/ingestion/documents`, dated after the source, disputes it again.")
     @ApiResponse(responseCode = "200", description = "Cleared: the step written and the rule after it")
     @ApiResponse(responseCode = "400", description = "A field is missing, too long or invalid, or the source is dated "
             + "after your test-clock date or before the report that disputed the rule")

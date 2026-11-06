@@ -45,9 +45,11 @@ import mygrant.rules.PolicyRuleStore.Rule;
  * or a secondary source linked by an identifier (HIGH confidence) reporting litigation or a stay,
  * which sets disputed and leaves the stage alone. Nothing is raised for a rule's first document,
  * for a document that changes nothing, for an older document arriving late, or by the backfill.
- * Once an admin has cleared a dispute ({@link RuleDisputeService}), a report published on or before
- * the date of the source that lifted the block is flagged for review instead of disputing the rule
- * again; a later one disputes it as usual.
+ * Once an admin has cleared a dispute ({@link RuleDisputeService}), news never disputes the rule
+ * again: a story about the lift itself reads as litigation too. Such a report is held for review,
+ * flagged and recorded as a step that was not applied, and only a court order an admin records
+ * ({@link DocumentOrigin#ADMIN_RECORDED}), dated after the source that lifted the block, disputes
+ * the rule again.
  *
  * <p>On a rule already final, only a document about the effective date ({@link DateNotice}), such as
  * a delay notice, moves the date. Any other final document is a separate final rule in the same
@@ -99,10 +101,12 @@ public class PolicyRuleTracker {
     /**
      * Links a newly stored document and records what it changed. A document already in a rule is
      * left alone, so tracking it again changes nothing. Runs in the caller's transaction, which
-     * must be the one that stored the document.
+     * must be the one that stored the document. origin matters only for a secondary report of
+     * litigation on a rule whose dispute an admin cleared.
      */
     @Transactional
-    public Result track(PolicyDocument document, Set<RuleIdentifier> knownIdentifiers, RecordedBy recordedBy) {
+    public Result track(PolicyDocument document, Set<RuleIdentifier> knownIdentifiers, RecordedBy recordedBy,
+            DocumentOrigin origin) {
         store.lockLinking();
         var existing = store.findLink(document.getId());
         if (existing.isPresent()) {
@@ -132,9 +136,11 @@ public class PolicyRuleTracker {
         } else if (LitigationSignal.reports(document.getTitle() + "\n" + document.getContent())) {
             // A title-only or ambiguous link is not certain enough to call a rule disputed.
             if (found.confidence() == Confidence.HIGH) {
-                notApplied = reportedBeforeBlockLifted(document, rule);
+                notApplied = heldAfterClearing(document, rule, origin);
                 if (notApplied == null) {
                     change = applyDispute(document, rule, recordedBy);
+                } else {
+                    store.appendHeldReport(rule.id(), rule.state(), RuleSource.of(document), recordedBy, notApplied);
                 }
             } else {
                 notApplied = UNCONFIRMED_LITIGATION;
@@ -336,19 +342,32 @@ public class PolicyRuleTracker {
     }
 
     /**
-     * A report published on or before the date of the source an admin cleared the rule's dispute
-     * with is about the block that was lifted, not a new one, so it does not dispute the rule again:
-     * it comes back as a review reason. Null when the report may dispute the rule.
+     * Whether a report of litigation is held for review because an admin cleared the rule's
+     * dispute: the review reason, or null when the report may dispute the rule. A rule that is
+     * disputed now, or was never cleared, is not held. After a clearing, news is held whatever its
+     * date, because a story about the lift itself ("appeals court lifts injunction") reads as
+     * litigation too. A court order an admin records disputes the rule again unless it is dated on
+     * or before the source that lifted the block: that order is about the block that was lifted,
+     * and the timeline, which orders steps by date, would put it before the clearing.
      */
-    private String reportedBeforeBlockLifted(PolicyDocument report, Rule rule) {
+    private String heldAfterClearing(PolicyDocument report, Rule rule, DocumentOrigin origin) {
         if (rule.state().disputed()) {
             return null;
         }
-        return store.lastDisputeClearedOn(rule.id())
-                .filter(liftedOn -> !report.getPublicationDate().isAfter(liftedOn))
-                .map(liftedOn -> "Litigation reported, but not applied: published on or before " + liftedOn
-                        + ", the date of the source an admin cleared the dispute with.")
-                .orElse(null);
+        Optional<LocalDate> liftedOn = store.lastDisputeClearedOn(rule.id());
+        if (liftedOn.isEmpty()) {
+            return null;
+        }
+        if (origin == DocumentOrigin.AUTOMATIC) {
+            return "Litigation reported, but held for review: an admin cleared this rule's dispute (block lifted "
+                    + liftedOn.get() + "), and news no longer disputes it. If this reports a new block, record the "
+                    + "court order.";
+        }
+        if (!report.getPublicationDate().isAfter(liftedOn.get())) {
+            return "Litigation reported, but not applied: published on or before " + liftedOn.get()
+                    + ", the date of the source an admin cleared the dispute with.";
+        }
+        return null;
     }
 
     private static PolicyChangedEvent event(Rule rule, long historyId, RuleState before, RuleState after,

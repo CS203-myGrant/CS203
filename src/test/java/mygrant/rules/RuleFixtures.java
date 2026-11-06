@@ -46,8 +46,13 @@ final class RuleFixtures {
     /** Synthetic: news items about the rule, one reporting an injunction. */
     static final String NEWS_FEED = "newsrss/synthetic-rule-coverage-feed.xml";
     static final String INJUNCTION_HEADLINE = "Judge blocks rule ending open-ended stays for F-1 students";
+    /** Synthetic: news of an appeals court lifting that injunction, published 3 Nov 2026. */
+    static final String LIFT_FEED = "newsrss/synthetic-lift-feed.xml";
+    static final String LIFT_HEADLINE = "Appeals court lifts injunction on rule ending open-ended stays for F-1 students";
+    static final LocalDate LIFT_NEWS_PUBLISHED = LocalDate.of(2026, 11, 3);
     static final List<String> NEWS_HEADLINES = List.of(INJUNCTION_HEADLINE,
-            "What the new admission rule means for F-1 students", "Universities sue over F-1 student admission limits");
+            "What the new admission rule means for F-1 students", "Universities sue over F-1 student admission limits",
+            LIFT_HEADLINE);
     static final List<String> IDENTIFIERS = List.of("ICEB-2025-0001", "1653-AA95", "ICEB-2019-0006", "1653-AA78",
             "USCIS-2023-0005", "1615-AC70", "USCIS-2020-0019", "1615-AC61");
 

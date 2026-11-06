@@ -120,6 +120,27 @@ class RuleTimelineStepsTest {
     }
 
     @Test
+    void aReportHeldForReviewAfterAClearingIsNotAStep() {
+        RuleState disputed = new RuleState(PolicyStatus.FINAL, SEP_15, true);
+        LocalDate lifted = LocalDate.of(2026, 11, 2);
+        List<HistoryRow> rows = List.of(
+                row(1, PROPOSED, null, true, "2025-16554", SourceType.PRIMARY, LocalDate.of(2025, 8, 28)),
+                row(2, FINAL, PROPOSED, true, "2026-14439", SourceType.PRIMARY, LocalDate.of(2026, 7, 17)),
+                row(3, disputed, FINAL, true, "court-order", SourceType.SECONDARY, LocalDate.of(2026, 9, 14)),
+                cleared(4, FINAL, disputed, lifted),
+                // News about the lift, held as the tracker stores it: not applied, the rule unchanged.
+                row(5, FINAL, FINAL, false, "rss:lift", SourceType.SECONDARY, lifted.plusDays(1)));
+
+        List<Step> steps = RuleTimelineService.steps(rows, FINAL, LocalDate.of(2026, 11, 6));
+
+        assertThat(steps).extracting(step -> step.source().externalId())
+                .containsExactly("2025-16554", "2026-14439", "court-order", "lifting-order-4", "2026-14439");
+        assertThat(steps.getLast().changes()).containsExactly(RuleChange.TOOK_EFFECT);
+        assertThat(steps.getLast().observedOn()).isEqualTo(lifted);
+        assertThat(steps.getLast().disputed()).isFalse();
+    }
+
+    @Test
     void aDisputeClearedBeforeTheDateLetsTheRuleTakeEffectOnTheDate() {
         RuleState disputed = new RuleState(PolicyStatus.FINAL, SEP_15, true);
         List<HistoryRow> rows = List.of(

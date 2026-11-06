@@ -89,9 +89,11 @@ import mygrant.user.UserRole;
 @RecordApplicationEvents
 class RuleLifecycleIntegrationTest {
 
+    /** Synthetic: a court order an admin records after a court lifted the block, blocking the rule again. */
+    private static final String NEW_ORDER = "synthetic-lifecycle-new-block-order-2026-11-04";
     private static final List<String> DOCUMENTS = List.of(PROPOSAL, FINAL_RULE, DATE_MOVE, H1B_PROPOSAL,
             H1B_REGISTRATION_RULE, H1B_FINAL_RULE, COURT_ORDER, AC61_PROPOSAL, AC61_FINAL_RULE, AC61_DELAY,
-            AC61_WITHDRAWAL);
+            AC61_WITHDRAWAL, NEW_ORDER);
     private static final List<String> FIXED_TIME_DOCKETS = List.of("DHS Docket No. ICEB-2025-0001");
     private static final List<String> FIXED_TIME_RINS = List.of("1653-AA95");
     private static final String CHANGE_PREFIX = "Rule update for F-1, J-1: ";
@@ -440,6 +442,62 @@ class RuleLifecycleIntegrationTest {
     }
 
     @Test
+    void newsAfterAnAdminClearedTheDisputeIsHeldAndAlertsNobody() throws Exception {
+        importDocument(PROPOSAL);
+        long finalRule = importDocument(FINAL_RULE);
+        long ruleId = store.findLink(finalRule).orElseThrow().ruleId();
+        User admin = user(null, UserRole.ADMIN);
+        for (User user : List.of(admin, student, reader)) {
+            clock.setUserDate(user.getId(), LocalDate.of(2026, 11, 6));
+        }
+        recordCourtOrder(admin, RuleFixtures.text(RuleFixtures.COURT_ORDER_REQUEST));
+        mvc.perform(post("/api/v1/policies/{id}/dispute/clear", finalRule).header("Authorization", token(admin))
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"reason": "The First Circuit vacated the postponement.",
+                                 "source": {"externalId": "ca1-26-1702-2026-11-02",
+                                            "title": "Appeals court lifts the postponement of the duration of status rule",
+                                            "agency": "U.S. Court of Appeals for the First Circuit",
+                                            "sourceUrl": "https://www.ca1.uscourts.gov/opinions/26-1702",
+                                            "publicationDate": "2026-11-02"}}
+                                """))
+                .andExpect(status().isOk());
+        List<String> studentAlerts = messages(student);
+        List<String> readerAlerts = messages(reader);
+        events.clear();
+        org.mockito.Mockito.clearInvocations(streams);
+
+        // The news feed reports the lift the next day, in litigation words ("lifts injunction").
+        news.importSaved(RuleFixtures.text(RuleFixtures.LIFT_FEED));
+        long lift = newsId(RuleFixtures.LIFT_HEADLINE);
+
+        // Committed and held for review: the rule is not disputed, and nobody gets an alert, a live
+        // event or anything to email.
+        assertThat(store.findRule(ruleId).orElseThrow().state().disputed()).isFalse();
+        assertThat(store.findLink(lift).orElseThrow().needsReview()).isTrue();
+        assertThat(events.stream(PolicyChangedEvent.class)).isEmpty();
+        assertThat(alertsFor(student, lift)).isEmpty();
+        assertThat(alertsFor(reader, lift)).isEmpty();
+        assertThat(messages(student)).isEqualTo(studentAlerts);
+        assertThat(messages(reader)).isEqualTo(readerAlerts);
+        verify(streams, after(500).never()).publish(any(), any());
+
+        // A court order the admin records after the lift disputes the rule again, with one alert each.
+        long order = recordCourtOrder(admin, """
+                {"externalId": "%s", "title": "Federal court blocks the duration of status rule again",
+                 "agency": "%s", "visaType": "F-1,J-1", "status": "CHALLENGED", "sourceType": "SECONDARY",
+                 "publicationDate": "2026-11-04", "sourceUrl": "https://example.org/court-orders/%s",
+                 "sourceReferences": ["https://www.federalregister.gov/d/%s"],
+                 "content": "Synthetic: the court blocked the duration of status rule again."}
+                """.formatted(NEW_ORDER, RuleFixtures.COURT, NEW_ORDER, FINAL_RULE));
+        assertThat(store.findRule(ruleId).orElseThrow().state().disputed()).isTrue();
+        String disputedAgain = CHANGE_PREFIX + "status disputed: litigation or a court stay reported by "
+                + RuleFixtures.COURT + ". The rule is final, but its effective date of 15 Sep 2026 is in question: "
+                + RuleFixtures.TITLE;
+        assertThat(alertsFor(student, order)).containsExactly(disputedAgain);
+        assertThat(alertsFor(reader, order)).containsExactly(disputedAgain);
+    }
+
+    @Test
     void aSecondFinalRuleInTheSameRulemakingIsItsOwnStepNotADateMove() throws Exception {
         User worker = applicant("H-1B");
         long proposal = importDocument(H1B_PROPOSAL);
@@ -582,6 +640,15 @@ class RuleLifecycleIntegrationTest {
                 SELECT count(DISTINCT email_delivery_id) FROM notifications
                 WHERE user_id = :user AND policy_id = :policy AND email_delivery_id IS NOT NULL
                 """, Map.of("user", user.getId(), "policy", policyId), Integer.class);
+    }
+
+    /** Posts a court order as an admin does, to POST /api/v1/ingestion/documents; returns its policy id. */
+    private long recordCourtOrder(User admin, String body) throws Exception {
+        String created = mvc.perform(post("/api/v1/ingestion/documents").header("Authorization", token(admin))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return json.readTree(created).path("policyId").asLong();
     }
 
     private long newsId(String title) {

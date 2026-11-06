@@ -22,6 +22,7 @@ import mygrant.policies.PolicyDocumentRepository;
 import mygrant.policies.PolicyIndexedEvent;
 import mygrant.policies.SourceType;
 import mygrant.policies.CountryIdentifiers;
+import mygrant.rules.DocumentOrigin;
 import mygrant.rules.PolicyRuleTracker;
 import mygrant.rules.RecordedBy;
 import mygrant.rules.RuleIdentifier;
@@ -51,6 +52,16 @@ public class PolicyIngestionService {
         return ingest(request, request.content());
     }
 
+    /**
+     * The same, for a policy an admin posted, such as a court order recorded as a secondary
+     * source. Its rule is told so ({@link DocumentOrigin#ADMIN_RECORDED}): after an admin has
+     * cleared a rule's dispute, only such a source can dispute the rule again, never news.
+     */
+    @Transactional
+    public IngestionResponse ingestRecordedByAdmin(IngestPolicyRequest request) {
+        return ingest(request, request.content(), Set.of(), DocumentOrigin.ADMIN_RECORDED);
+    }
+
     /** Stores the full policy while indexing a selected excerpt for retrieval. */
     @Transactional
     public IngestionResponse ingest(IngestPolicyRequest request, String indexedContent) {
@@ -65,6 +76,11 @@ public class PolicyIngestionService {
     @Transactional
     public IngestionResponse ingest(IngestPolicyRequest request, String indexedContent,
             Set<RuleIdentifier> ruleIdentifiers) {
+        return ingest(request, indexedContent, ruleIdentifiers, DocumentOrigin.AUTOMATIC);
+    }
+
+    private IngestionResponse ingest(IngestPolicyRequest request, String indexedContent,
+            Set<RuleIdentifier> ruleIdentifiers, DocumentOrigin origin) {
         if (indexedContent == null || indexedContent.isBlank()) {
             throw new IllegalArgumentException("Indexed policy content must not be blank");
         }
@@ -110,7 +126,7 @@ public class PolicyIngestionService {
         // In this transaction, so a document is never stored without its rule. Last, so the rule
         // lock is held only until commit, not through the embedding call above. The row is already
         // inserted: IDENTITY ids make Hibernate insert on the first save.
-        PolicyRuleTracker.Result rule = ruleTracker.track(saved, ruleIdentifiers, RecordedBy.INGESTION);
+        PolicyRuleTracker.Result rule = ruleTracker.track(saved, ruleIdentifiers, RecordedBy.INGESTION, origin);
 
         // Profile impact alerts describe official policy changes. News is searchable
         // as secondary evidence but must not create a policy-change notification. A policy that

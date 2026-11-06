@@ -50,7 +50,11 @@ public class IngestionController {
         this.embeddingRebuildService = embeddingRebuildService;
     }
 
-    /** Indexes a policy supplied in the request body. */
+    /**
+     * Indexes a policy supplied in the request body, marked as an admin's: only an admin reaches
+     * this endpoint, and only a court order recorded here can dispute a rule again once an admin
+     * has cleared its dispute.
+     */
     @PostMapping("/documents")
     @PreAuthorize("hasRole('ADMIN')")
     @ResponseStatus(HttpStatus.CREATED)
@@ -60,12 +64,14 @@ public class IngestionController {
                     + "source, such as a court order, joins the rule of any Federal Register document or "
                     + "regulations.gov docket linked in its sourceUrl or sourceReferences; if its title or "
                     + "content reports litigation or a stay, the rule is marked disputed and its applicants "
-                    + "get one alert.")
+                    + "get one alert. That holds for a rule whose dispute an admin cleared, which news no "
+                    + "longer disputes, as long as the source is dated after the one that lifted the block; "
+                    + "an earlier one is flagged for review instead.")
     @ApiResponse(responseCode = "201", description = "Indexed, or reused when unchanged")
     @ApiResponse(responseCode = "400", description = "A field is missing, too long or invalid")
     @ApiResponse(responseCode = "409", description = "A different policy already has this external id")
     public IngestionResponse ingest(@Valid @RequestBody IngestPolicyRequest request) {
-        return ingestionService.ingest(request);
+        return ingestionService.ingestRecordedByAdmin(request);
     }
 
     /** Backwards-compatible health view for the Federal Register connector. */

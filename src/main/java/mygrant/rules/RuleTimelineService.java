@@ -80,9 +80,11 @@ public class RuleTimelineService {
      * The stored history as ordered steps, each against the one before. The stage only moves
      * forward and a step without an effective date keeps the one before; the same rules the tracker
      * applies. Disputed is set by a secondary report and cleared only by an admin's step; a primary
-     * document leaves it as it was. A final document on a rule already final that is not
-     * about the effective date is a separate final rule: an ADDITIONAL_FINAL_RULE step that shows
-     * its own date in ownEffectiveDate and keeps the rule's. This is worked out here, in
+     * document leaves it as it was. A secondary report that was not applied, held for review
+     * because an admin had cleared the dispute, is not a step: the rule's documents list it,
+     * flagged, like every other document held for review. A final document on a rule already final
+     * that is not about the effective date is a separate final rule: an ADDITIONAL_FINAL_RULE step
+     * that shows its own date in ownEffectiveDate and keeps the rule's. This is worked out here, in
      * publication order, so it holds even when the second final rule was imported first. A
      * TOOK_EFFECT step is added when the rule is final, not disputed, and its effective date is on
      * or before asOf, after the step that set that date; if the rule was disputed when the date
@@ -92,6 +94,9 @@ public class RuleTimelineService {
         List<Step> steps = new ArrayList<>();
         RuleState state = null;
         for (HistoryRow row : rows) {
+            if (row.source().sourceType() == SourceType.SECONDARY && !row.applied()) {
+                continue; // Held for review: it changed nothing, and the documents list it, flagged.
+            }
             RuleState stored = row.state();
             // A news row stores the rule's stage, so only a primary row can be a final rule.
             boolean additional = state != null && row.source().sourceType() == SourceType.PRIMARY

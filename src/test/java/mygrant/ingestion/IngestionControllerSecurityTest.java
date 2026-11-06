@@ -1,6 +1,8 @@
 package mygrant.ingestion;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -72,14 +74,18 @@ class IngestionControllerSecurityTest {
     @Test
     void adminCanIngestPolicy() throws Exception {
         stubToken(UserRole.ADMIN);
-        when(ingestionService.ingest(any()))
+        when(ingestionService.ingestRecordedByAdmin(any()))
                 .thenReturn(new IngestionResponse(1L, "policy-1", 1, Instant.now(), false));
 
         mockMvc.perform(post("/api/v1/ingestion/documents")
                         .header("Authorization", "Bearer token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequest()))
-                .andExpect(status().isCreated());
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.policyId").value(1));
+        // Marked as the admin's, so a court order posted here can dispute a rule an admin cleared.
+        verify(ingestionService).ingestRecordedByAdmin(any());
+        verify(ingestionService, never()).ingest(any());
     }
 
     @Test

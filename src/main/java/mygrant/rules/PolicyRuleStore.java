@@ -224,6 +224,20 @@ public class PolicyRuleStore {
      * the new row's id, or empty for a repeat.
      */
     Optional<Long> appendHistory(NewHistoryEntry entry) {
+        return appendHistory(entry, null);
+    }
+
+    /**
+     * Writes the step for a report of litigation held for review because an admin had cleared the
+     * rule's dispute: not applied, not alerted, the rule's state the same before and after, and
+     * why it was held in reason. V36 requires actor_email and reason together only on an ADMIN
+     * step, so this step has a reason and no actor_email.
+     */
+    void appendHeldReport(long ruleId, RuleState state, RuleSource source, RecordedBy recordedBy, String reason) {
+        appendHistory(new NewHistoryEntry(ruleId, state, state, false, false, false, source, recordedBy), reason);
+    }
+
+    private Optional<Long> appendHistory(NewHistoryEntry entry, String reason) {
         RuleState previous = entry.previous();
         RuleSource source = entry.source();
         MapSqlParameterSource params = state(entry.state())
@@ -242,17 +256,18 @@ public class PolicyRuleStore {
                 .addValue("sourceAgency", source.agency())
                 .addValue("observedOn", source.publishedOn(), Types.DATE)
                 .addValue("recordedBy", entry.recordedBy().name())
+                .addValue("reason", truncate(reason, 2000), Types.VARCHAR)
                 .addValue("dedupeKey", dedupeKey(entry));
         return jdbc.query("""
                 INSERT INTO policy_rule_history
                     (rule_id, primary_stage, effective_date, disputed, previous_primary_stage,
                      previous_effective_date, previous_disputed, applied, alerted, about_effective_date,
                      source_policy_id, source_external_id, source_type, source_url, source_title,
-                     source_agency, observed_on, recorded_by, dedupe_key)
+                     source_agency, observed_on, recorded_by, reason, dedupe_key)
                 VALUES (:ruleId, :stage, :effectiveDate, :disputed, :previousStage, :previousDate,
                         :previousDisputed, :applied, :alerted, :aboutEffectiveDate, :sourceId,
                         :sourceExternalId, :sourceType, :sourceUrl, :sourceTitle, :sourceAgency, :observedOn,
-                        :recordedBy, :dedupeKey)
+                        :recordedBy, :reason, :dedupeKey)
                 ON CONFLICT (rule_id, dedupe_key) DO NOTHING
                 RETURNING id
                 """, params, (rs, row) -> rs.getLong(1)).stream().findFirst();

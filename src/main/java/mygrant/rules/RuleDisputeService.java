@@ -15,7 +15,8 @@ import mygrant.user.UserRepository;
 /**
  * Clears a rule's disputed flag once a court lifts the block. Nothing else ever clears it: a
  * report of a lifted block can read like a report of litigation, so the tracker cannot tell the
- * two apart, and an admin decides instead.
+ * two apart, and an admin decides instead. For the same reason, news never disputes a cleared
+ * rule again: only a court order an admin records does.
  */
 @Service
 public class RuleDisputeService {
@@ -37,8 +38,9 @@ public class RuleDisputeService {
      * Clears the dispute of the rule policy document policyId is in, and writes an append-only
      * ADMIN step naming the admin, their reason and the source that lifted the block. The stage and
      * effective date stay, so the timeline shows the rule EFFECTIVE again once its date has come.
-     * Sends no alert, raises no event and changes no other rule. A report of litigation published
-     * after the source's date can dispute the rule again.
+     * Sends no alert, raises no event and changes no other rule. From then on a report of
+     * litigation in the news is held for review; a court order an admin records, dated after the
+     * source, disputes the rule again.
      *
      * @throws RuleNotDisputedException when the rule is not disputed
      * @throws IllegalArgumentException when the source is dated after the admin's test-clock date,
