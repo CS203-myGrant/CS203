@@ -9,7 +9,10 @@ public enum RuleChange {
     STAGE,
     EFFECTIVE_DATE,
     DISPUTED,
-    /** Only in the timeline: the caller's date has reached a final rule's effective date. Never stored. */
+    /**
+     * Only in the timeline: the caller's date has reached a final rule's effective date, and the
+     * rule is not disputed. Never stored.
+     */
     TOOK_EFFECT,
     /**
      * Only in the timeline: a final rule on a rule that was already final, not about the effective

@@ -32,8 +32,10 @@ public class RuleTimelineController {
                     + "comes from primary sources only. `currentStage` is EFFECTIVE once a final rule's effective "
                     + "date is on or before the caller's test-clock date, shown as a derived TOOK_EFFECT step. A "
                     + "second final rule in the same rulemaking is an ADDITIONAL_FINAL_RULE step with its own date "
-                    + "in `ownEffectiveDate`; the rule's `effectiveDate` stays. `disputed` is set by linked news "
-                    + "reporting litigation or a stay, and names that item in `disputedBy`.")
+                    + "in `ownEffectiveDate`; the rule's `effectiveDate` stays. `disputed` is set by a linked "
+                    + "secondary source (news, or a court order an admin recorded) reporting litigation or a stay, "
+                    + "named in `disputedBy`. A disputed rule is never EFFECTIVE and has no TOOK_EFFECT step; "
+                    + "`effectiveDatePassedWhileDisputed` says its date has passed.")
     @ApiResponse(responseCode = "200", description = "The rule's timeline")
     @ApiResponse(responseCode = "400", description = "The id is not a number")
     @ApiResponse(responseCode = "404", description = "No policy has this id, or the policy is in no rule, such as "

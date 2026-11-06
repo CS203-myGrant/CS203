@@ -60,6 +60,24 @@ final class RuleFixtures {
     static final LocalDate H1B_FINAL_PUBLISHED = LocalDate.of(2024, 12, 18);
     static final LocalDate H1B_FINAL_EFFECTIVE = LocalDate.of(2025, 1, 17);
 
+    /**
+     * The real court order that postponed the D/S final rule (2026-14439) the day before it was due
+     * to take effect. No Federal Register document records it, so an admin posts it as a secondary
+     * source linked to the rule. The summary is our own wording.
+     */
+    static final String COURT_ORDER = "d-mass-1-26-cv-13799-2026-09-14";
+    static final String COURT_ORDER_TITLE = "Federal court postpones the duration of status final rule";
+    static final String COURT = "U.S. District Court for the District of Massachusetts";
+    static final LocalDate COURT_ORDER_PUBLISHED = LocalDate.of(2026, 9, 14);
+    static final String COURT_ORDER_URL =
+            "https://www.bu.edu/isso/2026/09/15/federal-ruling-postpones-implementation-of-dhs-rule-to-eliminate-d-s/";
+    static final String COURT_ORDER_SUMMARY = "On 14 September 2026 the U.S. District Court for the District of "
+            + "Massachusetts postponed, nationwide and under section 705 of the Administrative Procedure Act, the "
+            + "effective date of the DHS final rule that replaces duration of status admission for F-1 and J-1 "
+            + "students with a fixed period. The rule had been due to take effect on 15 September 2026. The case is "
+            + "Presidents' Alliance on Higher Education and Immigration v. DHS, No. 1:26-cv-13799. DHS has appealed. "
+            + "While the order stands, the rule is not in effect.";
+
     private RuleFixtures() {
     }
 

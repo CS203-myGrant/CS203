@@ -24,7 +24,9 @@ import mygrant.user.UserRepository;
  * Builds a rule's timeline for a reader. Each step's previous values come from the step before
  * it in timeline order, not from what was stored: an older document that arrived after a newer
  * one was stored against the newer state, which is kept as an audit record but would read wrongly
- * here. EFFECTIVE is worked out from the reader's test-clock date and added as a derived step.
+ * here. EFFECTIVE is worked out from the reader's test-clock date and added as a derived step,
+ * but never for a disputed rule: a court may have blocked it, as it did the D/S rule (2026-14439)
+ * the day before its effective date, and no Federal Register document records that.
  */
 @Service
 public class RuleTimelineService {
@@ -55,6 +57,7 @@ public class RuleTimelineService {
         List<Step> steps = steps(store.history(ruleId), rule.state(), asOf);
         RuleState state = rule.state();
         PolicyStatus currentStage = tookEffect(state, asOf) ? PolicyStatus.EFFECTIVE : state.primaryStage();
+        boolean passedWhileDisputed = effectiveDatePassedWhileDisputed(state, asOf);
         RuleSource disputedBy = steps.stream()
                 .filter(step -> step.changes().contains(RuleChange.DISPUTED) && step.disputed())
                 .map(Step::source).findFirst().orElse(null);
@@ -67,7 +70,8 @@ public class RuleTimelineService {
                         document.link().reviewReason()))
                 .toList();
         return new RuleTimelineResponse(ruleId, rule.title(), state.primaryStage(), currentStage, asOf,
-                state.effectiveDate(), state.disputed(), disputedBy, identifiers, documents, steps);
+                state.effectiveDate(), state.disputed(), passedWhileDisputed, disputedBy, identifiers, documents,
+                steps);
     }
 
     /**
@@ -77,8 +81,8 @@ public class RuleTimelineService {
      * about the effective date is a separate final rule: an ADDITIONAL_FINAL_RULE step that shows
      * its own date in ownEffectiveDate and keeps the rule's. This is worked out here, in
      * publication order, so it holds even when the second final rule was imported first. A
-     * TOOK_EFFECT step is added when the rule is final and its effective date is on or before
-     * asOf, after the step that set that date.
+     * TOOK_EFFECT step is added when the rule is final, not disputed, and its effective date is on
+     * or before asOf, after the step that set that date.
      */
     static List<Step> steps(List<HistoryRow> rows, RuleState current, LocalDate asOf) {
         List<Step> steps = new ArrayList<>();
@@ -116,7 +120,17 @@ public class RuleTimelineService {
         return steps;
     }
 
-    private static boolean tookEffect(RuleState state, LocalDate asOf) {
+    /** A final rule whose effective date has come, unless litigation or a court order disputes it. */
+    static boolean tookEffect(RuleState state, LocalDate asOf) {
+        return !state.disputed() && dateHasCome(state, asOf);
+    }
+
+    /** The final rule was scheduled to take effect by asOf, but it is disputed, so it is not shown as in effect. */
+    static boolean effectiveDatePassedWhileDisputed(RuleState state, LocalDate asOf) {
+        return state.disputed() && dateHasCome(state, asOf);
+    }
+
+    private static boolean dateHasCome(RuleState state, LocalDate asOf) {
         return state.primaryStage() == PolicyStatus.FINAL && state.effectiveDate() != null
                 && !asOf.isBefore(state.effectiveDate());
     }

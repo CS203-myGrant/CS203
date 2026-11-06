@@ -44,29 +44,51 @@ class RuleTimelineStepsTest {
     @Test
     void aFinalRuleTakesEffectOnTheReadersDateAfterTheStepThatSetTheDate() {
         RuleState moved = new RuleState(PolicyStatus.FINAL, NOV_1, false);
-        RuleState disputed = new RuleState(PolicyStatus.FINAL, NOV_1, true);
         List<HistoryRow> rows = List.of(
                 row(1, PROPOSED, null, true, "2025-16554", SourceType.PRIMARY, LocalDate.of(2025, 8, 28)),
                 row(2, FINAL, PROPOSED, true, "2026-14439", SourceType.PRIMARY, LocalDate.of(2026, 7, 17)),
                 row(3, moved, FINAL, true, true, "2026-99950", SourceType.PRIMARY, LocalDate.of(2026, 9, 1)),
-                row(4, disputed, moved, true, "rss:1", SourceType.SECONDARY, LocalDate.of(2026, 11, 20)));
+                // A correction published after the date, which leaves it alone.
+                row(4, new RuleState(PolicyStatus.FINAL, null, false), moved, true, true, "2026-99990",
+                        SourceType.PRIMARY, LocalDate.of(2026, 11, 20)));
 
-        assertThat(RuleTimelineService.steps(rows, disputed, NOV_1.minusDays(1))).hasSize(4)
+        assertThat(RuleTimelineService.steps(rows, moved, NOV_1.minusDays(1))).hasSize(4)
                 .noneMatch(Step::derived);
+        assertThat(RuleTimelineService.tookEffect(moved, NOV_1.minusDays(1))).isFalse();
 
-        List<Step> steps = RuleTimelineService.steps(rows, disputed, NOV_1);
-        assertThat(steps).extracting(step -> step.changes().getFirst()).containsExactly(RuleChange.STAGE,
-                RuleChange.STAGE, RuleChange.EFFECTIVE_DATE, RuleChange.TOOK_EFFECT, RuleChange.DISPUTED);
+        List<Step> steps = RuleTimelineService.steps(rows, moved, NOV_1);
+        assertThat(RuleTimelineService.tookEffect(moved, NOV_1)).isTrue();
+        assertThat(RuleTimelineService.effectiveDatePassedWhileDisputed(moved, NOV_1)).isFalse();
+        assertThat(steps).extracting(Step::derived).containsExactly(false, false, false, true, false);
         Step tookEffect = steps.get(3);
-        assertThat(tookEffect.derived()).isTrue();
+        assertThat(tookEffect.changes()).containsExactly(RuleChange.TOOK_EFFECT);
         assertThat(tookEffect.recordedAt()).isNull();
         assertThat(tookEffect.observedOn()).isEqualTo(NOV_1);
         assertThat(tookEffect.primaryStage()).isEqualTo(PolicyStatus.FINAL);
         assertThat(tookEffect.disputed()).isFalse();
         assertThat(tookEffect.source().externalId()).isEqualTo("2026-99950");
-        // News after the date leaves the primary stage alone.
-        assertThat(steps.get(4).primaryStage()).isEqualTo(PolicyStatus.FINAL);
-        assertThat(steps.get(4).disputed()).isTrue();
+    }
+
+    @Test
+    void aDisputedRuleNeverTakesEffectButSaysItsDatePassed() {
+        // The D/S rule: final, effective 15 Sep 2026, postponed by a court on 14 Sep 2026.
+        RuleState disputed = new RuleState(PolicyStatus.FINAL, SEP_15, true);
+        List<HistoryRow> rows = List.of(
+                row(1, PROPOSED, null, true, "2025-16554", SourceType.PRIMARY, LocalDate.of(2025, 8, 28)),
+                row(2, FINAL, PROPOSED, true, "2026-14439", SourceType.PRIMARY, LocalDate.of(2026, 7, 17)),
+                row(3, disputed, FINAL, true, "court-order", SourceType.SECONDARY, LocalDate.of(2026, 9, 14)));
+
+        for (LocalDate asOf : List.of(SEP_15.minusDays(1), SEP_15, LocalDate.of(2026, 11, 6))) {
+            List<Step> steps = RuleTimelineService.steps(rows, disputed, asOf);
+            assertThat(steps).as("as of " + asOf).hasSize(3).noneMatch(Step::derived)
+                    .noneMatch(step -> step.changes().contains(RuleChange.TOOK_EFFECT));
+            assertThat(steps.getLast().changes()).containsExactly(RuleChange.DISPUTED);
+            assertThat(steps.getLast().primaryStage()).isEqualTo(PolicyStatus.FINAL);
+            assertThat(RuleTimelineService.tookEffect(disputed, asOf)).isFalse();
+        }
+        assertThat(RuleTimelineService.effectiveDatePassedWhileDisputed(disputed, SEP_15.minusDays(1))).isFalse();
+        assertThat(RuleTimelineService.effectiveDatePassedWhileDisputed(disputed, SEP_15)).isTrue();
+        assertThat(RuleTimelineService.effectiveDatePassedWhileDisputed(disputed, LocalDate.of(2026, 11, 6))).isTrue();
     }
 
     @Test

@@ -46,7 +46,7 @@ class RuleLinkingIntegrationTest {
     @BeforeEach
     void isolateFixtures() {
         RuleFixtures.isolate(jdbc, List.of(PROPOSAL, FINAL_RULE, OLD_PROPOSAL, SYNTHETIC.get(0), SYNTHETIC.get(1),
-                SYNTHETIC.get(2)));
+                SYNTHETIC.get(2), "admin-source-1", "admin-source-2", "admin-source-3"));
         jdbc.update("DELETE FROM policy_documents WHERE external_id LIKE 'rss:guardian:%' AND title IN (:titles)",
                 java.util.Map.of("titles", List.of("Judge blocks rule ending open-ended stays for F-1 students",
                         "What the new admission rule means for F-1 students",
@@ -178,6 +178,30 @@ class RuleLinkingIntegrationTest {
         assertThat(store.findLink(newsId("Universities sue over F-1 student admission limits"))).isEmpty();
     }
 
+    @Test
+    void aSecondarySourceJoinsThroughTheLinksInItsSourceUrlAndReferences() {
+        long finalRule = ingest(RuleFixtures.finalRule());
+        String text = "A summary that names no docket, RIN or link.";
+
+        long byReference = ingest(secondary("admin-source-1", "https://www.example.edu/news/rule-update",
+                List.of("https://example.org/other", "https://www.federalregister.gov/d/2026-14439"), text));
+        long byUrl = ingest(secondary("admin-source-2", "https://www.regulations.gov/docket/ICEB-2025-0001",
+                List.of(), text));
+        long unrelated = ingest(secondary("admin-source-3", "https://www.example.edu/news/other-rule",
+                List.of("https://www.example.org/court-order.pdf"), text));
+
+        var reference = store.findLink(byReference).orElseThrow();
+        assertThat(reference.ruleId()).isEqualTo(ruleOf(finalRule));
+        assertThat(reference.method()).isEqualTo(MatchMethod.FR_DOCUMENT);
+        assertThat(reference.confidence()).isEqualTo(Confidence.HIGH);
+        var url = store.findLink(byUrl).orElseThrow();
+        assertThat(url.ruleId()).isEqualTo(ruleOf(finalRule));
+        assertThat(url.method()).isEqualTo(MatchMethod.DOCKET);
+        assertThat(store.findLink(unrelated)).isEmpty();
+        // Neither reports litigation, so the rule is linked but not disputed.
+        assertThat(store.findRule(ruleOf(finalRule)).orElseThrow().state().disputed()).isFalse();
+    }
+
     private long ingest(IngestPolicyRequest request) {
         return ingestion.ingest(request).policyId();
     }
@@ -189,6 +213,13 @@ class RuleLinkingIntegrationTest {
     private long newsId(String title) {
         return jdbc.queryForObject("SELECT id FROM policy_documents WHERE title = :title AND source_type = 'SECONDARY'",
                 java.util.Map.of("title", title), Long.class);
+    }
+
+    private static IngestPolicyRequest secondary(String externalId, String sourceUrl, List<String> references,
+            String content) {
+        return new IngestPolicyRequest(externalId, "Update on the student admission rule", "University of Example",
+                "F-1,J-1", PolicyStatus.UNKNOWN, SourceType.SECONDARY, LocalDate.of(2026, 9, 20), null, sourceUrl,
+                content, java.util.Set.of(), java.util.Set.of(), references);
     }
 
     private static IngestPolicyRequest primary(String documentNumber, String title, String content) {

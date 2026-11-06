@@ -15,9 +15,10 @@ import mygrant.rules.RuleState;
  * <ul>
  * <li>"Rule update for F-1, J-1: moved from proposed to final, effective 15 Sep 2026: TITLE"</li>
  * <li>"Rule update for F-1, J-1: effective date moved from 15 Sep 2026 to 1 Nov 2026: TITLE"</li>
- * <li>"Rule update for F-1, J-1: status disputed: news reports litigation or a stay (The Guardian).
- * The official status is still final, effective 1 Nov 2026: TITLE"</li>
+ * <li>"Rule update for F-1, J-1: status disputed: litigation or a court stay reported by The Guardian.
+ * The rule is final, but its effective date of 1 Nov 2026 is in question: TITLE"</li>
  * </ul>
+ * A dispute never says the rule is in effect: a court may have blocked it, so its date is in question.
  */
 final class RuleChangeMessage {
 
@@ -30,8 +31,11 @@ final class RuleChangeMessage {
             Set<RuleChange> changes, String sourceAgency) {
         String what;
         if (changes.contains(RuleChange.DISPUTED)) {
-            what = "status disputed: news reports litigation or a stay (" + sourceAgency
-                    + "). The official status is still " + stage(current.primaryStage()) + effective(current.effectiveDate());
+            what = "status disputed: litigation or a court stay reported by " + sourceAgency + ". ";
+            what += current.primaryStage() == PolicyStatus.FINAL && current.effectiveDate() != null
+                    ? "The rule is final, but its effective date of " + DATE.format(current.effectiveDate())
+                            + " is in question"
+                    : "The official status is still " + stage(current.primaryStage());
         } else if (changes.contains(RuleChange.STAGE)) {
             what = "moved from " + stage(previous.primaryStage()) + " to " + stage(current.primaryStage());
             if (changes.contains(RuleChange.EFFECTIVE_DATE)) {

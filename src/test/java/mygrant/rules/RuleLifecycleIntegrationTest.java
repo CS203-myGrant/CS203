@@ -1,5 +1,6 @@
 package mygrant.rules;
 
+import static mygrant.rules.RuleFixtures.COURT_ORDER;
 import static mygrant.rules.RuleFixtures.DATE_MOVE;
 import static mygrant.rules.RuleFixtures.FINAL_RULE;
 import static mygrant.rules.RuleFixtures.H1B_FINAL_RULE;
@@ -16,6 +17,7 @@ import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -37,10 +39,13 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.mock.mockito.SpyBean;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.web.servlet.MockMvc;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import mygrant.auth.JwtService;
 import mygrant.email.DailyDigestService;
@@ -65,7 +70,9 @@ import mygrant.user.UserRole;
  * delay notice and a synthetic news report of an injunction, through the Federal Register and news
  * connectors, the alerts, email, the live stream, reassessment and the timeline endpoint. Also the
  * real 2023 H-1B proposal and the two final rules DHS issued on it, the second of which is a
- * separate final rule, not an effective-date move.
+ * separate final rule, not an effective-date move. And the real court order postponing the D/S
+ * rule, which an admin records through the ingestion endpoint because no Federal Register
+ * document reports it.
  *
  * <p>Not @Transactional, because alerts and reassessment run after commit; every row it creates is
  * removed afterwards. It needs a database where these documents do not exist yet, as in CI, and is
@@ -77,7 +84,7 @@ import mygrant.user.UserRole;
 class RuleLifecycleIntegrationTest {
 
     private static final List<String> DOCUMENTS = List.of(PROPOSAL, FINAL_RULE, DATE_MOVE, H1B_PROPOSAL,
-            H1B_REGISTRATION_RULE, H1B_FINAL_RULE);
+            H1B_REGISTRATION_RULE, H1B_FINAL_RULE, COURT_ORDER);
     private static final List<String> FIXED_TIME_DOCKETS = List.of("DHS Docket No. ICEB-2025-0001");
     private static final List<String> FIXED_TIME_RINS = List.of("1653-AA95");
     private static final String CHANGE_PREFIX = "Rule update for F-1, J-1: ";
@@ -93,6 +100,7 @@ class RuleLifecycleIntegrationTest {
     @Autowired ImmediateAlertQueue immediateEmails;
     @Autowired DailyDigestService digests;
     @Autowired ApplicationEvents events;
+    @Autowired ObjectMapper json;
     @MockBean VectorStore vectors;
     @MockBean FederalRegisterClient client;
     @MockBean ProfileImpactAssessmentService assessments;
@@ -216,12 +224,24 @@ class RuleLifecycleIntegrationTest {
                 + "effective date moved from 15 Sep 2026 to 1 Nov 2026: " + RuleFixtures.TITLE);
         verify(assessments, timeout(10_000)).assess(eq(reader.getEmail()), document(DATE_MOVE), any(), any(), any());
 
+        // Undisputed, the rule takes effect on the moved date.
+        clock.setUserDate(student.getId(), LocalDate.of(2026, 11, 2));
+        mvc.perform(get("/api/v1/policies/{id}/timeline", finalRule).header("Authorization", token(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentStage").value("EFFECTIVE"))
+                .andExpect(jsonPath("$.effectiveDatePassedWhileDisputed").value(false))
+                .andExpect(jsonPath("$.steps.length()").value(4))
+                .andExpect(jsonPath("$.steps[3].changes").value(org.hamcrest.Matchers.contains("TOOK_EFFECT")))
+                .andExpect(jsonPath("$.steps[3].derived").value(true))
+                .andExpect(jsonPath("$.steps[3].observedOn").value("2026-11-01"))
+                .andExpect(jsonPath("$.steps[3].source.externalId").value(DATE_MOVE));
+
         // The synthetic news report of an injunction marks the rule disputed; its stage stays final.
         news.importSaved(RuleFixtures.text(RuleFixtures.NEWS_FEED));
         long injunction = newsId(RuleFixtures.INJUNCTION_HEADLINE);
         assertThat(alertsFor(student, injunction)).containsExactly(CHANGE_PREFIX
-                + "status disputed: news reports litigation or a stay (The Guardian). The official status is still "
-                + "final, effective 1 Nov 2026: " + RuleFixtures.TITLE);
+                + "status disputed: litigation or a court stay reported by The Guardian. The rule is final, but its "
+                + "effective date of 1 Nov 2026 is in question: " + RuleFixtures.TITLE);
         assertThat(store.findRule(ruleId).orElseThrow().state())
                 .isEqualTo(new RuleState(mygrant.policies.PolicyStatus.FINAL, RuleFixtures.MOVED_EFFECTIVE, true));
         assertThat(messages(student)).hasSize(4);
@@ -237,6 +257,7 @@ class RuleLifecycleIntegrationTest {
                 .andExpect(jsonPath("$.asOf").value("2026-10-15"))
                 .andExpect(jsonPath("$.effectiveDate").value("2026-11-01"))
                 .andExpect(jsonPath("$.disputed").value(true))
+                .andExpect(jsonPath("$.effectiveDatePassedWhileDisputed").value(false))
                 .andExpect(jsonPath("$.disputedBy.title").value(RuleFixtures.INJUNCTION_HEADLINE))
                 .andExpect(jsonPath("$.disputedBy.sourceType").value("SECONDARY"))
                 .andExpect(jsonPath("$.identifiers[*].value").value(org.hamcrest.Matchers.contains("ICEB-2025-0001",
@@ -258,17 +279,96 @@ class RuleLifecycleIntegrationTest {
                 .andExpect(jsonPath("$.steps[3].primaryStage").value("FINAL"))
                 .andExpect(jsonPath("$.steps[3].source.agency").value("The Guardian"));
         clock.setUserDate(student.getId(), LocalDate.of(2026, 11, 2));
-        // Any document of the rule, including the news item, finds the same timeline.
+        // Any document of the rule, including the news item, finds the same timeline. Disputed, the
+        // rule is not shown as in effect once its date has passed.
         mvc.perform(get("/api/v1/policies/{id}/timeline", injunction).header("Authorization", token(student)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.ruleId").value(ruleId))
                 .andExpect(jsonPath("$.primaryStage").value("FINAL"))
-                .andExpect(jsonPath("$.currentStage").value("EFFECTIVE"))
-                .andExpect(jsonPath("$.steps.length()").value(5))
-                .andExpect(jsonPath("$.steps[4].changes").value(org.hamcrest.Matchers.contains("TOOK_EFFECT")))
-                .andExpect(jsonPath("$.steps[4].derived").value(true))
-                .andExpect(jsonPath("$.steps[4].observedOn").value("2026-11-01"))
-                .andExpect(jsonPath("$.steps[4].source.externalId").value(DATE_MOVE));
+                .andExpect(jsonPath("$.currentStage").value("FINAL"))
+                .andExpect(jsonPath("$.effectiveDate").value("2026-11-01"))
+                .andExpect(jsonPath("$.effectiveDatePassedWhileDisputed").value(true))
+                .andExpect(jsonPath("$.steps.length()").value(4))
+                .andExpect(jsonPath("$.steps[*].changes[*]").value(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.hasItem("TOOK_EFFECT"))));
+    }
+
+    @Test
+    void aCourtOrderAnAdminRecordsMarksTheRuleDisputedAndNotInEffect() throws Exception {
+        importDocument(PROPOSAL);
+        long finalRule = importDocument(FINAL_RULE);
+        long ruleId = store.findLink(finalRule).orElseThrow().ruleId();
+        User admin = user(null, UserRole.ADMIN);
+        events.clear();
+
+        // No Federal Register document records the order, and the news about it carries no link, so
+        // an admin posts it as a secondary source that links the final rule.
+        String body = json.writeValueAsString(Map.of(
+                "externalId", COURT_ORDER,
+                "title", RuleFixtures.COURT_ORDER_TITLE,
+                "agency", RuleFixtures.COURT,
+                "visaType", "F-1,J-1",
+                "status", "CHALLENGED",
+                "sourceType", "SECONDARY",
+                "publicationDate", RuleFixtures.COURT_ORDER_PUBLISHED.toString(),
+                "sourceUrl", RuleFixtures.COURT_ORDER_URL,
+                "sourceReferences", List.of("https://www.federalregister.gov/d/" + FINAL_RULE),
+                "content", RuleFixtures.COURT_ORDER_SUMMARY));
+        String created = mvc.perform(post("/api/v1/ingestion/documents").header("Authorization", token(admin))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.alreadyIndexed").value(false))
+                .andReturn().getResponse().getContentAsString();
+        long courtOrder = json.readTree(created).path("policyId").asLong();
+
+        var link = store.findLink(courtOrder).orElseThrow();
+        assertThat(link.ruleId()).isEqualTo(ruleId);
+        assertThat(link.method()).isEqualTo(MatchMethod.FR_DOCUMENT);
+        assertThat(link.confidence()).isEqualTo(mygrant.common.Confidence.HIGH);
+        assertThat(link.needsReview()).isFalse();
+        assertThat(store.findRule(ruleId).orElseThrow().state()).isEqualTo(
+                new RuleState(mygrant.policies.PolicyStatus.FINAL, RuleFixtures.FINAL_EFFECTIVE, true));
+        assertThat(events.stream(PolicyChangedEvent.class)).singleElement().satisfies(change -> {
+            assertThat(change.changes()).containsExactly(RuleChange.DISPUTED);
+            assertThat(change.source().externalId()).isEqualTo(COURT_ORDER);
+        });
+
+        // One disputed alert for each matching applicant, saying the effective date is in question.
+        String disputedAlert = CHANGE_PREFIX + "status disputed: litigation or a court stay reported by "
+                + RuleFixtures.COURT + ". The rule is final, but its effective date of 15 Sep 2026 is in question: "
+                + RuleFixtures.TITLE;
+        assertThat(alertsFor(student, courtOrder)).containsExactly(disputedAlert);
+        assertThat(alertsFor(reader, courtOrder)).containsExactly(disputedAlert);
+        assertThat(messages(student)).hasSize(3);
+
+        // Posting it again changes nothing.
+        mvc.perform(post("/api/v1/ingestion/documents").header("Authorization", token(admin))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.alreadyIndexed").value(true));
+        assertThat(messages(student)).hasSize(3);
+
+        clock.setUserDate(student.getId(), LocalDate.of(2026, 11, 6));
+        mvc.perform(get("/api/v1/policies/{id}/timeline", finalRule).header("Authorization", token(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.asOf").value("2026-11-06"))
+                .andExpect(jsonPath("$.primaryStage").value("FINAL"))
+                .andExpect(jsonPath("$.currentStage").value("FINAL"))
+                .andExpect(jsonPath("$.effectiveDate").value("2026-09-15"))
+                .andExpect(jsonPath("$.disputed").value(true))
+                .andExpect(jsonPath("$.effectiveDatePassedWhileDisputed").value(true))
+                .andExpect(jsonPath("$.disputedBy.externalId").value(COURT_ORDER))
+                .andExpect(jsonPath("$.disputedBy.title").value(RuleFixtures.COURT_ORDER_TITLE))
+                .andExpect(jsonPath("$.disputedBy.agency").value(RuleFixtures.COURT))
+                .andExpect(jsonPath("$.disputedBy.url").value(RuleFixtures.COURT_ORDER_URL))
+                .andExpect(jsonPath("$.disputedBy.publishedOn").value("2026-09-14"))
+                .andExpect(jsonPath("$.documents[2].matchMethod").value("FR_DOCUMENT"))
+                .andExpect(jsonPath("$.documents[2].confidence").value("HIGH"))
+                .andExpect(jsonPath("$.steps.length()").value(3))
+                .andExpect(jsonPath("$.steps[2].changes").value(org.hamcrest.Matchers.contains("DISPUTED")))
+                .andExpect(jsonPath("$.steps[2].primaryStage").value("FINAL"))
+                .andExpect(jsonPath("$.steps[*].changes[*]").value(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.hasItem("TOOK_EFFECT"))));
     }
 
     @Test
@@ -371,9 +471,13 @@ class RuleLifecycleIntegrationTest {
     }
 
     private User applicant(String visaType) {
+        return user(visaType, UserRole.APPLICANT);
+    }
+
+    private User user(String visaType, UserRole role) {
         String suffix = UUID.randomUUID().toString();
         User user = new User("Lifecycle test", "rule-lifecycle-" + suffix + "@example.com", null, visaType, null, null);
-        user.setRole(UserRole.APPLICANT);
+        user.setRole(role);
         user.setWorkosUserId("user_rule_lifecycle_" + suffix);
         user.setProfileComplete(true);
         user = users.saveAndFlush(user);

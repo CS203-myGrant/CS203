@@ -43,10 +43,18 @@ class RuleChangeMessageTest {
     }
 
     @Test
-    void aDisputeKeepsTheOfficialStatus() {
+    void aDisputeOfAFinalRulePutsItsEffectiveDateInQuestion() {
         assertThat(message(new RuleState(PolicyStatus.FINAL, NOV_1, false), new RuleState(PolicyStatus.FINAL, NOV_1, true)))
-                .isEqualTo("Rule update for F-1, J-1: status disputed: news reports litigation or a stay (The Guardian). "
-                        + "The official status is still final, effective 1 Nov 2026: Rule");
+                .isEqualTo("Rule update for F-1, J-1: status disputed: litigation or a court stay reported by The Guardian. "
+                        + "The rule is final, but its effective date of 1 Nov 2026 is in question: Rule")
+                .doesNotContain("still final, effective");
+    }
+
+    @Test
+    void aDisputeOfAProposalKeepsTheOfficialStatus() {
+        assertThat(message(new RuleState(PolicyStatus.PROPOSED, null, false), new RuleState(PolicyStatus.PROPOSED, null, true)))
+                .isEqualTo("Rule update for F-1, J-1: status disputed: litigation or a court stay reported by The Guardian. "
+                        + "The official status is still proposed: Rule");
     }
 
     private static String message(RuleState previous, RuleState current) {

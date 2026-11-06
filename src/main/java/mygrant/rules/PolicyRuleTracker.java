@@ -1,6 +1,7 @@
 package mygrant.rules;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.EnumSet;
@@ -29,7 +30,9 @@ import mygrant.rules.PolicyRuleStore.Rule;
  * Puts each stored document in its policy rule and records the stage history.
  *
  * <p>Linking: a document joins the rule whose primary documents share a docket, RIN or (for news)
- * a linked Federal Register document number with it. Any one shared identifier is enough, so a
+ * a linked Federal Register document number with it. A secondary document's links are read from its
+ * text, its sourceUrl and its sourceReferences, so an admin can record a court order that no
+ * Federal Register document reports by posting it with a link to the rule. Any one shared identifier is enough, so a
  * document with several joins on whichever matches. When identifiers point to more than one rule
  * the document joins the one matched by docket (else RIN, else document number), with MEDIUM
  * confidence, flagged for review. When nothing matches, the title fallback ({@link TitleSimilarity})
@@ -39,9 +42,9 @@ import mygrant.rules.PolicyRuleStore.Rule;
  *
  * <p>Changes: a meaningful change raises one {@link PolicyChangedEvent}. That is a primary document
  * moving a staged rule forward (PROPOSED to FINAL, or to WITHDRAWN) or changing its effective date,
- * or news linked by an identifier (HIGH confidence) reporting litigation or a stay, which sets
- * disputed and leaves the stage alone. Nothing is raised for a rule's first document, for a
- * document that changes nothing, for an older document arriving late, or by the backfill.
+ * or a secondary source linked by an identifier (HIGH confidence) reporting litigation or a stay,
+ * which sets disputed and leaves the stage alone. Nothing is raised for a rule's first document,
+ * for a document that changes nothing, for an older document arriving late, or by the backfill.
  *
  * <p>On a rule already final, only a document about the effective date ({@link DateNotice}), such as
  * a delay notice, moves the date. Any other final document is a separate final rule in the same
@@ -136,13 +139,19 @@ public class PolicyRuleTracker {
         return new Result(found.ruleId(), true, change.isPresent());
     }
 
-    /** A primary document's own header; for news, dockets, RINs and links anywhere in its text. */
+    /**
+     * A primary document's own header. For a secondary one, dockets, RINs and links anywhere in its
+     * text, and Federal Register and regulations.gov links in its sourceUrl and sourceReferences.
+     */
     private static Set<RuleIdentifier> identifiers(PolicyDocument document, Set<RuleIdentifier> known) {
         Set<RuleIdentifier> identifiers = new LinkedHashSet<>(known);
         if (document.getSourceType() == SourceType.PRIMARY) {
             identifiers.addAll(RuleIdentifiers.fromHeader(document.getContent()));
         } else {
             identifiers.addAll(RuleIdentifiers.fromNewsText(document.getTitle() + "\n" + document.getContent()));
+            List<String> links = new ArrayList<>(document.getSourceReferences());
+            links.add(document.getSourceUrl());
+            identifiers.addAll(RuleIdentifiers.fromLinks(links));
         }
         return identifiers;
     }
@@ -279,8 +288,9 @@ public class PolicyRuleTracker {
     }
 
     /**
-     * Marks the rule disputed because linked news reports litigation or a stay. The primary stage
-     * and effective date stay as the primary sources set them. A rule already disputed is a repeat.
+     * Marks the rule disputed because a linked secondary source, news or an admin-recorded court
+     * order, reports litigation or a stay. The primary stage and effective date stay as the primary
+     * sources set them. A rule already disputed is a repeat.
      */
     private Optional<PolicyChangedEvent> applyDispute(PolicyDocument report, Rule rule, RecordedBy recordedBy) {
         RuleState before = rule.state();

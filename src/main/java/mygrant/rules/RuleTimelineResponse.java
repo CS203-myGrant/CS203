@@ -18,18 +18,24 @@ public record RuleTimelineResponse(
         @Schema(description = "The stage set by primary (Federal Register) sources, as stored: PROPOSED, FINAL, "
                 + "WITHDRAWN, GUIDANCE or UNKNOWN. News never changes it, and it is never EFFECTIVE.", example = "FINAL")
         PolicyStatus primaryStage,
-        @Schema(description = "The stage for the caller today: EFFECTIVE when primaryStage is FINAL and asOf is on "
-                + "or after effectiveDate, otherwise primaryStage", example = "EFFECTIVE")
+        @Schema(description = "The stage for the caller today: EFFECTIVE when primaryStage is FINAL, asOf is on "
+                + "or after effectiveDate and the rule is not disputed, otherwise primaryStage. A disputed rule is "
+                + "never shown as EFFECTIVE: see effectiveDatePassedWhileDisputed.", example = "EFFECTIVE")
         PolicyStatus currentStage,
         @Schema(description = "The caller's date that currentStage is worked out for: their test-clock date when "
                 + "one is set, otherwise today", example = "2026-11-06")
         LocalDate asOf,
         @Schema(description = "The final rule's effective date; null until a final rule sets one", example = "2026-11-01")
         LocalDate effectiveDate,
-        @Schema(description = "True once news linked to the rule by an identifier reported litigation or a stay. "
-                + "Shown alongside primaryStage, never instead of it.")
+        @Schema(description = "True once a secondary source linked to the rule by an identifier reported litigation "
+                + "or a stay: a news item, or a court order an admin recorded. Shown alongside primaryStage, never "
+                + "instead of it.")
         boolean disputed,
-        @Schema(description = "The news item that marked the rule disputed; null when it is not disputed")
+        @Schema(description = "True when the rule is disputed and asOf has reached effectiveDate: it was scheduled to "
+                + "take effect then, but whether it did is in question, so currentStage stays FINAL and there is no "
+                + "TOOK_EFFECT step. Show it as \"scheduled for <effectiveDate>; blocked or in dispute\".")
+        boolean effectiveDatePassedWhileDisputed,
+        @Schema(description = "The secondary source that marked the rule disputed; null when it is not disputed")
         RuleSource disputedBy,
         @Schema(description = "Dockets and RINs of the rule's primary documents")
         List<RuleIdentifier> identifiers,
@@ -47,7 +53,7 @@ public record RuleTimelineResponse(
             @Schema(description = "When the step was recorded; null for a derived step")
             Instant recordedAt,
             @Schema(description = "True for the TOOK_EFFECT step, which is worked out from the caller's date and "
-                    + "never stored")
+                    + "never stored. A disputed rule has no TOOK_EFFECT step.")
             boolean derived,
             @Schema(description = "The primary stage after this step", example = "FINAL")
             PolicyStatus primaryStage,
