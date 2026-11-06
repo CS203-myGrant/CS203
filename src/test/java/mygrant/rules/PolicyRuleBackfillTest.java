@@ -31,6 +31,7 @@ import mygrant.rules.PolicyRuleStore.HistoryRow;
  */
 @SpringBootTest
 @Transactional
+@org.springframework.test.context.event.RecordApplicationEvents
 class PolicyRuleBackfillTest {
 
     @Autowired PolicyRuleBackfill backfill;
@@ -38,6 +39,7 @@ class PolicyRuleBackfillTest {
     @Autowired PolicyDocumentRepository policies;
     @Autowired NamedParameterJdbcTemplate jdbc;
     @MockBean VectorStore vectors;
+    @Autowired org.springframework.test.context.event.ApplicationEvents events;
 
     @BeforeEach
     void isolateFixtures() {
@@ -68,6 +70,9 @@ class PolicyRuleBackfillTest {
             assertThat(row.alerted()).isFalse();
             assertThat(row.recordedBy()).isEqualTo(RecordedBy.BACKFILL);
         });
+        // PROPOSED to FINAL is a meaningful change, but nobody is alerted about old documents.
+        assertThat(events.stream(PolicyChangedEvent.class)).isEmpty();
+        assertThat(events.stream(RuleLinkFlaggedEvent.class)).isEmpty();
     }
 
     @Test

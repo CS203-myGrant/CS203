@@ -50,6 +50,12 @@ class PolicyIngestionServiceTests {
     @Mock
     private PolicyRuleTracker ruleTracker;
 
+    @org.junit.jupiter.api.BeforeEach
+    void noRuleChange() {
+        org.mockito.Mockito.lenient().when(ruleTracker.track(any(), any(), any()))
+                .thenReturn(new PolicyRuleTracker.Result(7L, true, false));
+    }
+
     @Test
     void indexesANewPolicyDocument() {
         IngestPolicyRequest request = request();
@@ -175,6 +181,25 @@ class PolicyIngestionServiceTests {
 
         verify(ruleTracker).track(argThat(policy -> policy.getId().equals(1L)), same(identifiers),
                 eq(RecordedBy.INGESTION));
+    }
+
+    @Test
+    void aPolicyThatMovedItsRuleIsMarkedSoItGetsOnlyTheChangeAlert() {
+        IngestPolicyRequest request = request();
+        when(repository.findByExternalId(request.externalId())).thenReturn(Optional.empty());
+        when(repository.save(any(PolicyDocument.class))).thenAnswer(invocation -> {
+            PolicyDocument policy = invocation.getArgument(0);
+            if (policy.getId() == null) {
+                ReflectionTestUtils.setField(policy, "id", 1L);
+            }
+            return policy;
+        });
+        when(ruleTracker.track(any(), any(), any())).thenReturn(new PolicyRuleTracker.Result(7L, true, true));
+
+        new PolicyIngestionService(repository, vectorStore, eventPublisher, ruleTracker).ingest(request);
+
+        verify(eventPublisher).publishEvent(argThat((Object event) -> event instanceof PolicyIndexedEvent indexed
+                && indexed.ruleChanged()));
     }
 
     @Test

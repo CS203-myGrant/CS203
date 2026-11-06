@@ -96,7 +96,7 @@ class PolicyRuleTrackingIntegrationTest {
         // Tracking a document already in a rule is a no-op too.
         var again = tracker.track(policies.findById(proposal).orElseThrow(), Set.of(), RecordedBy.INGESTION);
 
-        assertThat(again).isEqualTo(new PolicyRuleTracker.Result(ruleId, false));
+        assertThat(again).isEqualTo(new PolicyRuleTracker.Result(ruleId, false, false));
         assertThat(store.history(ruleId)).isEqualTo(before);
     }
 

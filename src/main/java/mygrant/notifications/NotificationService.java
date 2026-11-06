@@ -9,6 +9,8 @@ import java.util.stream.Collectors;
 import java.util.HashMap;
 
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -23,6 +25,9 @@ import mygrant.notifications.dto.NotificationResponse;
 import mygrant.policies.PolicyDocumentRepository;
 import mygrant.policies.PolicyIndexedEvent;
 import mygrant.policies.SourceType;
+import mygrant.rules.PolicyChangedEvent;
+import mygrant.rules.PolicyRuleStore;
+import mygrant.rules.RuleChange;
 import mygrant.testclock.TestClock;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
@@ -34,6 +39,8 @@ import mygrant.user.UserProfileRepository;
 @Service
 public class NotificationService {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(NotificationService.class);
+
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
     private final PolicyImpactRules impactRules;
@@ -41,11 +48,12 @@ public class NotificationService {
     private final NotificationStreamRegistry streamRegistry;
     private final PolicyDocumentRepository policyRepository;
     private final TestClock testClock;
+    private final PolicyRuleStore ruleStore;
 
     public NotificationService(NotificationRepository notificationRepository,
             UserRepository userRepository, UserProfileRepository userProfileRepository,
             PolicyImpactRules impactRules, NotificationStreamRegistry streamRegistry,
-            PolicyDocumentRepository policyRepository, TestClock testClock) {
+            PolicyDocumentRepository policyRepository, TestClock testClock, PolicyRuleStore ruleStore) {
         this.notificationRepository = notificationRepository;
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
@@ -53,6 +61,7 @@ public class NotificationService {
         this.streamRegistry = streamRegistry;
         this.policyRepository = policyRepository;
         this.testClock = testClock;
+        this.ruleStore = ruleStore;
     }
 
     /**
@@ -63,6 +72,10 @@ public class NotificationService {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onPolicyIndexed(PolicyIndexedEvent event) {
+        if (event.ruleChanged()) {
+            // onPolicyChanged sends this policy's one alert, saying what moved.
+            return;
+        }
         List<String> visaTypes = event.visaTypes().stream()
                 .map(PolicyImpactRules::normalizeVisaType)
                 .distinct()
@@ -89,9 +102,49 @@ public class NotificationService {
                 .map(user -> toNotification(
                         user,
                         profilesByUserId.getOrDefault(user.getId(), UserProfile.fromUser(user)),
-                        event,
+                        event.policyId(),
                         message,
                         fieldsByVisaType))
+                .toList());
+        publishAfterCommit(saved);
+    }
+
+    /**
+     * Alerts the same applicants about a rule change, saying what moved (CS203-86). The alert
+     * belongs to the document that caused the change: the new Federal Register document, or the
+     * news item behind a dispute. That document gets no other alert, so each reader has one
+     * alert per change. A reader who already holds an alert for that document, because the event
+     * was delivered twice, is skipped; any other unique-key clash is a bug and fails loudly.
+     * Email and the live stream pick the rows up as they do every alert.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onPolicyChanged(PolicyChangedEvent event) {
+        Long policyId = event.source().policyId();
+        List<String> visaTypes = event.visaTypes().stream()
+                .map(PolicyImpactRules::normalizeVisaType)
+                .distinct()
+                .toList();
+        Set<Long> alreadyAlerted = notificationRepository.findUserIdsByPolicyId(policyId);
+        List<User> matching = userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, visaTypes).stream()
+                .filter(user -> testClock.isPublished(event.source().publishedOn(), user.getId()))
+                .toList();
+        List<User> affected = matching.stream().filter(user -> !alreadyAlerted.contains(user.getId())).toList();
+        if (affected.size() < matching.size()) {
+            LOGGER.info("Rule {} change {}: {} reader(s) already alerted about policy {} were skipped",
+                    event.ruleId(), event.historyId(), matching.size() - affected.size(), policyId);
+        }
+        String message = truncate(RuleChangeMessage.of(event.visaTypes(), event.ruleTitle(), event.previous(),
+                event.current(), event.changes(), event.source().agency()));
+        Map<String, Set<ProfileField>> fieldsByVisaType =
+                impactRules.affectedFieldsByVisaType(visaTypes, event.primaryTitle(), event.primaryContent());
+        Map<Long, UserProfile> profilesByUserId = new HashMap<>();
+        userProfileRepository.findAllById(affected.stream().map(User::getId).toList())
+                .forEach(profile -> profilesByUserId.put(profile.getUserId(), profile));
+
+        List<Notification> saved = notificationRepository.saveAll(affected.stream()
+                .map(user -> toNotification(user, profilesByUserId.getOrDefault(user.getId(), UserProfile.fromUser(user)),
+                        policyId, message, fieldsByVisaType))
                 .toList());
         publishAfterCommit(saved);
     }
@@ -125,7 +178,7 @@ public class NotificationService {
                 .filter(event -> event.visaTypes().stream()
                         .map(PolicyImpactRules::normalizeVisaType)
                         .anyMatch(visaType::equals))
-                .map(event -> toNotification(user, profile, event, buildMessage(event),
+                .map(event -> toNotification(user, profile, event.policyId(), syncMessage(event),
                         impactRules.affectedFieldsByVisaType(event.visaTypes(), event.title(), event.content())))
                 .toList();
         List<Notification> saved = notificationRepository.saveAll(missing);
@@ -161,7 +214,7 @@ public class NotificationService {
     private Notification toNotification(
         User user,
         UserProfile profile,
-        PolicyIndexedEvent event,
+        Long policyId,
         String message,
         Map<String, Set<ProfileField>> fieldsByVisaType) {
         Set<ProfileField> policyFields = fieldsByVisaType
@@ -171,7 +224,7 @@ public class NotificationService {
             return new Notification(
                     user.getId(),
                     profile.getVersion(),
-                    event.policyId(),
+                    policyId,
                     message,
                     toReview);
         }
@@ -179,7 +232,7 @@ public class NotificationService {
         return new Notification(
                 user.getId(),
                 profile.getVersion(),
-                event.policyId(),
+                policyId,
                 truncate(message + ". Action needed: review your " + labels + "."),
                 toReview
         );
@@ -214,6 +267,16 @@ public class NotificationService {
     private Long userId(String email) {
         return userRepository.findByEmail(email).map(User::getId)
                 .orElseThrow(() -> new IllegalStateException("Authenticated user no longer exists"));
+    }
+
+    /** The wording a reader would have got at ingestion: the change alert for a document that moved its rule. */
+    private String syncMessage(PolicyIndexedEvent event) {
+        return ruleStore.alertedChangeFrom(event.policyId())
+                .map(change -> truncate(RuleChangeMessage.of(event.visaTypes(), change.ruleTitle(),
+                        change.row().previous(), change.row().state(),
+                        RuleChange.between(change.row().previous(), change.row().state()),
+                        change.row().source().agency())))
+                .orElseGet(() -> buildMessage(event));
     }
 
     private String buildMessage(PolicyIndexedEvent event) {

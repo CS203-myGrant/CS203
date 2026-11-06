@@ -250,6 +250,33 @@ public class PolicyRuleStore {
                 """, params, (rs, row) -> rs.getLong(1)).stream().findFirst();
     }
 
+    /**
+     * The rule's primary document behind its current state: the newest published on or before
+     * primary_as_of, so a document flagged for moving the stage backwards is never it.
+     */
+    Optional<Long> currentPrimaryDocumentId(long ruleId) {
+        return jdbc.query("""
+                SELECT p.id FROM policy_rule_documents d
+                JOIN policy_documents p ON p.id = d.policy_id
+                JOIN policy_rules r ON r.id = d.rule_id
+                WHERE d.rule_id = :id AND p.source_type = 'PRIMARY' AND p.publication_date <= r.primary_as_of
+                ORDER BY p.publication_date DESC, p.id DESC LIMIT 1
+                """, Map.of("id", ruleId), (rs, row) -> rs.getLong(1)).stream().findFirst();
+    }
+
+    /** A change that was alerted, with the title of its rule. */
+    public record AlertedChange(String ruleTitle, HistoryRow row) {
+    }
+
+    /** The change this document caused and alerted about, if any; a document causes at most one. */
+    public Optional<AlertedChange> alertedChangeFrom(long policyId) {
+        return jdbc.query("""
+                SELECT h.*, r.title AS rule_title FROM policy_rule_history h JOIN policy_rules r ON r.id = h.rule_id
+                WHERE h.source_policy_id = :id AND h.alerted ORDER BY h.id LIMIT 1
+                """, Map.of("id", policyId), (rs, row) -> new AlertedChange(rs.getString("rule_title"), historyRow(rs)))
+                .stream().findFirst();
+    }
+
     /** The rule's history in timeline order: by source publication date, then as recorded. */
     public List<HistoryRow> history(long ruleId) {
         return jdbc.query("""

@@ -110,12 +110,13 @@ public class PolicyIngestionService {
         // In this transaction, so a document is never stored without its rule. Last, so the rule
         // lock is held only until commit, not through the embedding call above. The row is already
         // inserted: IDENTITY ids make Hibernate insert on the first save.
-        ruleTracker.track(saved, ruleIdentifiers, RecordedBy.INGESTION);
+        PolicyRuleTracker.Result rule = ruleTracker.track(saved, ruleIdentifiers, RecordedBy.INGESTION);
 
         // Profile impact alerts describe official policy changes. News is searchable
-        // as secondary evidence but must not create a policy-change notification.
+        // as secondary evidence but must not create a policy-change notification. A policy that
+        // moved its rule is alerted once, by the change alert that says what moved.
         if (saved.getSourceType() == SourceType.PRIMARY) {
-            eventPublisher.publishEvent(PolicyIndexedEvent.from(saved));
+            eventPublisher.publishEvent(PolicyIndexedEvent.from(saved, rule.changeAlerted()));
         }
 
         return new IngestionResponse(saved.getId(), saved.getExternalId(), chunks.size(), indexedAt, false);

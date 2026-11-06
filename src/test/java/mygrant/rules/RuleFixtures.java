@@ -31,6 +31,15 @@ final class RuleFixtures {
     static final LocalDate FINAL_PUBLISHED = LocalDate.of(2026, 7, 17);
     static final LocalDate FINAL_EFFECTIVE = LocalDate.of(2026, 9, 15);
     static final LocalDate OLD_PROPOSAL_PUBLISHED = LocalDate.of(2020, 9, 25);
+    /** Synthetic: a delay notice moving the final rule's effective date from 15 Sep to 1 Nov 2026. */
+    static final String DATE_MOVE = "2026-99950";
+    static final LocalDate DATE_MOVE_PUBLISHED = LocalDate.of(2026, 9, 1);
+    static final LocalDate MOVED_EFFECTIVE = LocalDate.of(2026, 11, 1);
+    /** Synthetic: news items about the rule, one reporting an injunction. */
+    static final String NEWS_FEED = "newsrss/synthetic-rule-coverage-feed.xml";
+    static final String INJUNCTION_HEADLINE = "Judge blocks rule ending open-ended stays for F-1 students";
+    static final List<String> NEWS_HEADLINES = List.of(INJUNCTION_HEADLINE,
+            "What the new admission rule means for F-1 students", "Universities sue over F-1 student admission limits");
     static final List<String> IDENTIFIERS = List.of("ICEB-2025-0001", "1653-AA95", "ICEB-2019-0006", "1653-AA78");
 
     private RuleFixtures() {
@@ -46,6 +55,12 @@ final class RuleFixtures {
 
     static IngestPolicyRequest oldProposal() {
         return federalRegister(OLD_PROPOSAL, PolicyStatus.PROPOSED, OLD_PROPOSAL_PUBLISHED, null);
+    }
+
+    static IngestPolicyRequest dateMove() {
+        return new IngestPolicyRequest(DATE_MOVE, TITLE + "; Delay of Effective Date", "Homeland Security Department",
+                "F-1,J-1", PolicyStatus.FINAL, SourceType.PRIMARY, DATE_MOVE_PUBLISHED, MOVED_EFFECTIVE,
+                "https://www.federalregister.gov/d/" + DATE_MOVE, text("federal-register/synthetic-2026-99950-delay.txt"));
     }
 
     static IngestPolicyRequest federalRegister(String documentNumber, PolicyStatus status, LocalDate published,
@@ -80,5 +95,7 @@ final class RuleFixtures {
         jdbc.update("DELETE FROM policy_document_identifiers WHERE value IN (:identifiers)",
                 Map.of("identifiers", IDENTIFIERS));
         jdbc.update("DELETE FROM policy_documents WHERE external_id IN (:ids)", Map.of("ids", externalIds));
+        jdbc.update("DELETE FROM policy_documents WHERE source_type = 'SECONDARY' AND title IN (:titles)",
+                Map.of("titles", NEWS_HEADLINES));
     }
 }
