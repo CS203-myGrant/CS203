@@ -1147,10 +1147,11 @@ Stages:
   the date sends no alert: readers were told the date when it was set.
 - **Disputed** is a separate flag. It is set when a news item linked by an identifier (`HIGH`
   confidence) reports litigation or a stay, and it never changes the primary stage. The
-  litigation phrases include lawsuit, sue, sued, injunction, enjoined, restraining order,
-  vacated, judge blocks and blocked by a judge or court; the full list is
-  `LitigationSignal.PHRASES`. A stay counts only as "stay of the rule", "stayed the rule" or
-  "court stay", because "stay" alone is everywhere in immigration text ("length of stay"). A report on a `MEDIUM` or `LOW` link is flagged for review and not
+  litigation phrases include lawsuit, sued, sues, suing, injunction, enjoined, restraining
+  order, vacated, judge blocks and blocked by a judge or court; the full list is
+  `LitigationSignal.PHRASES`. Matching ignores case, so "sue" is not on the list: it would hit
+  the name Sue. A stay counts only as "stay of the rule", "stayed the rule" or "court stay",
+  because "stay" alone is everywhere in immigration text ("length of stay"). A report on a `MEDIUM` or `LOW` link is flagged for review and not
   applied. Once set, disputed stays set; clearing it is follow-up work for CS203-90. The
   `CHALLENGED` status is not used for rules.
 
