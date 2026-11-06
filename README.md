@@ -672,7 +672,9 @@ Content-Type: application/json
 }
 ```
 
-Read stored policy records with `GET /api/v1/policies` or `GET /api/v1/policies/{id}`.
+Read stored policy records with `GET /api/v1/policies` or `GET /api/v1/policies/{id}`, and the
+stage history of the rule a policy belongs to with `GET /api/v1/policies/{id}/timeline` (see
+[Rule stages and timeline](#rule-stages-and-timeline-cs203-86)).
 
 ## Source connector contract
 

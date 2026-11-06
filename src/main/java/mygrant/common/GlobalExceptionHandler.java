@@ -39,6 +39,7 @@ import mygrant.notifications.NotificationNotFoundException;
 import mygrant.manager.ManagerMembershipConflictException;
 import mygrant.manager.ManagerMembershipNotFoundException;
 import mygrant.policies.PolicyNotFoundException;
+import mygrant.rules.PolicyRuleNotFoundException;
 import mygrant.sources.PolicySourceNotFoundException;
 import mygrant.user.UserNotFoundException;
 
@@ -68,6 +69,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(PolicyNotFoundException.class)
     public ResponseEntity<ApiError> handleNotFound(PolicyNotFoundException exception) {
+        return response(HttpStatus.NOT_FOUND, exception.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(PolicyRuleNotFoundException.class)
+    public ResponseEntity<ApiError> handleRuleNotFound(PolicyRuleNotFoundException exception) {
         return response(HttpStatus.NOT_FOUND, exception.getMessage(), Map.of());
     }
 

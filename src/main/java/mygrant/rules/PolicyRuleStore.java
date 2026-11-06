@@ -277,6 +277,21 @@ public class PolicyRuleStore {
                 .stream().findFirst();
     }
 
+    /** A document in a rule, with how it was linked. */
+    public record RuleDocument(Link link, String externalId, SourceType sourceType, String title, LocalDate publishedOn) {
+    }
+
+    /** Every document in the rule, oldest first. */
+    public List<RuleDocument> documents(long ruleId) {
+        return jdbc.query("""
+                SELECT d.*, p.external_id, p.source_type, p.title, p.publication_date
+                FROM policy_rule_documents d JOIN policy_documents p ON p.id = d.policy_id
+                WHERE d.rule_id = :id ORDER BY p.publication_date, p.id
+                """, Map.of("id", ruleId), (rs, row) -> new RuleDocument(link(rs), rs.getString("external_id"),
+                        SourceType.valueOf(rs.getString("source_type")), rs.getString("title"),
+                        rs.getObject("publication_date", LocalDate.class)));
+    }
+
     /** The rule's history in timeline order: by source publication date, then as recorded. */
     public List<HistoryRow> history(long ruleId) {
         return jdbc.query("""
