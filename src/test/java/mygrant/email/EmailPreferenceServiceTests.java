@@ -144,7 +144,7 @@ class EmailPreferenceServiceTests {
     }
 
     private User user(Long id, String workosUserId) {
-        User user = new User("Student", EMAIL, null, "F-1", null, null);
+        User user = new User("Student", EMAIL, null);
         ReflectionTestUtils.setField(user, "id", id);
         user.setWorkosUserId(workosUserId);
         return user;

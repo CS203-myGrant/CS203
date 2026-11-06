@@ -102,7 +102,7 @@ public class ProfileImpactAssessmentService {
             return unavailable("The signed-in user profile could not be loaded.");
         }
         UserProfile profile = profileRepository.findById(user.getId())
-                .orElseGet(() -> UserProfile.fromUser(user));
+                .orElseGet(() -> UserProfile.empty(user.getId()));
 
         Set<ProfileFieldDefinition> consentedFields = consentRepository
                 .findByUserId(user.getId())

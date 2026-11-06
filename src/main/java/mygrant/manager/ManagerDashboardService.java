@@ -47,12 +47,15 @@ public class ManagerDashboardService {
                 """, params, Long.class);
 
         Map<String, Long> visaCounts = counts("""
-                SELECT coalesce(nullif(upper(trim(u.visa_type)), ''), 'UNKNOWN') AS bucket,
-                       count(DISTINCT u.id) AS total
+                SELECT coalesce(nullif(upper(trim(p.visa_type)), ''), 'UNKNOWN') AS bucket,
+                    count(DISTINCT u.id) AS total
                 FROM manager_user_memberships m
                 JOIN users u ON u.id = m.user_id
-                WHERE m.manager_id = :managerId AND u.role = 'APPLICANT' AND u.active = TRUE
-                GROUP BY coalesce(nullif(upper(trim(u.visa_type)), ''), 'UNKNOWN')
+                LEFT JOIN user_profiles p ON p.user_id = u.id
+                WHERE m.manager_id = :managerId
+                AND u.role = 'APPLICANT'
+                AND u.active = TRUE
+                GROUP BY coalesce(nullif(upper(trim(p.visa_type)), ''), 'UNKNOWN')
                 ORDER BY bucket
                 """, params);
 

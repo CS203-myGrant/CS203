@@ -420,7 +420,7 @@ class ActionItemIntegrationTest {
 
     private User account(UserRole role) {
         User user = new User("Checklist test", "actions-" + UUID.randomUUID() + "@example.org",
-                "unused", "F-1", null, null);
+                "unused");
         user.setRole(role);
         return users.saveAndFlush(user);
     }

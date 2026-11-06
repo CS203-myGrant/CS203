@@ -19,7 +19,7 @@ public class ProfilePolicyRetrieval {
     }
     public UserProfile profile(String email){
         var user=users.findByEmail(email).orElseThrow(()->new IllegalStateException("User not found"));
-        return profiles.findById(user.getId()).orElseGet(()->UserProfile.fromUser(user));
+        return profiles.findById(user.getId()).orElseGet(()->UserProfile.empty(user.getId()));
     }
     public List<Document> search(UserProfile profile,String question,Long policyId){
         String visa=profile.getVisaType()==null?"":profile.getVisaType().trim().toUpperCase(Locale.ROOT);

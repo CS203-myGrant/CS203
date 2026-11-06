@@ -13,6 +13,12 @@ import org.springframework.web.server.ResponseStatusException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import mygrant.ai.OpenAiGenerationService;
 import mygrant.impact.*;
+import mygrant.policies.PolicyChatService;
+import mygrant.policies.PolicyDocument;
+import mygrant.policies.PolicyQuestionHistory;
+import mygrant.policies.PolicyRecommendationStore;
+import mygrant.policies.PolicyService;
+import mygrant.policies.PolicyStatus;
 import mygrant.user.*;
 
 class PolicyChatServiceTests {
@@ -39,8 +45,20 @@ class PolicyChatServiceTests {
         when(policy.getPublicationDate()).thenReturn(LocalDate.of(2026,7,17));
         when(policy.getSourceUrl()).thenReturn("https://example.org/policy");
         when(policy.getContent()).thenReturn("<html><body>SUMMARY: Proposed student admission rule.</body></html>");
-        User user=new User();user.setId(7L);user.setVisaType("F-1");
+        User user = new User();
+        user.setId(7L);
+
+        UserProfile profile = UserProfile.registrationProfile(
+                user.getId(),
+                "F-1",
+                null,
+                null,
+                null,
+                null
+        );
+
         when(users.findByEmail("owner@example.org")).thenReturn(Optional.of(user));
+        when(profiles.findById(user.getId())).thenReturn(Optional.of(profile));
         when(recommendations.findCurrent("owner@example.org",policy)).thenReturn(Optional.of(new ProfileImpactAssessment(
                 ImpactUrgency.MEDIUM,80,"Saved assessment",List.of("Reason"),List.of("Verify dates"),List.of(),true,"OpenAI","model",null,1)));
     }

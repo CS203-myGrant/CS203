@@ -89,7 +89,7 @@ class ManagerMembershipIntegrationTest {
 
     private User account(UserRole role, String label) {
         User user = new User(label, label + "-" + UUID.randomUUID() + "@example.org",
-                "unused", "F-1", null, null);
+                "unused");
         user.setRole(role);
         return users.saveAndFlush(user);
     }

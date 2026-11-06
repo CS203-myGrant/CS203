@@ -324,9 +324,11 @@ class NotificationServiceTests {
     @Test
     void flagsActionRequiredWhenThePolicyTouchesAFilledInProfileField() {
         User student = user(7L, "student@example.com");
-        student.setProgramEndDate(LocalDate.parse("2028-05-31"));
+        UserProfile studentProfile = profile(student, "F-1", null,
+                LocalDate.parse("2028-05-31"), null, null);
         when(userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("F-1")))
                 .thenReturn(List.of(student));
+        when(userProfileRepository.findAllById(List.of(7L))).thenReturn(List.of(studentProfile));
 
         service().onPolicyIndexed(new PolicyIndexedEvent(3L, "Fixed Time Period of Admission",
                 List.of("F-1"), null, "Ends duration of status."));
@@ -346,12 +348,15 @@ class NotificationServiceTests {
     @Test
     void flagsOnlyTheVisaCategoryTheRuleAppliesTo() {
         User student = user(7L, "student@example.com");
-        student.setProgramEndDate(LocalDate.parse("2028-05-31"));
         User worker = user(8L, "worker@example.com");
-        worker.setVisaType("H-1B");
-        worker.setProgramEndDate(LocalDate.parse("2028-05-31"));
+        UserProfile studentProfile = profile(student, "F-1", null,
+                LocalDate.parse("2028-05-31"), null, null);
+        UserProfile workerProfile = profile(worker, "H-1B", null,
+                LocalDate.parse("2028-05-31"), null, null);
         when(userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("F-1", "H-1B")))
                 .thenReturn(List.of(student, worker));
+        when(userProfileRepository.findAllById(List.of(7L, 8L)))
+                .thenReturn(List.of(studentProfile, workerProfile));
 
         // One rule classified into two categories: only the F-1 half concerns practical training.
         service().onPolicyIndexed(new PolicyIndexedEvent(3L, "Training and specialty occupation update",
@@ -375,10 +380,11 @@ class NotificationServiceTests {
     @Test
     void flagsUpcomingTravelForH1bWorkersOnAnEntryExitPolicy() {
         User worker = user(8L, "worker@example.com");
-        worker.setVisaType("H-1B");
-        worker.setUpcomingTravelDate(LocalDate.parse("2026-12-20"));
+        UserProfile workerProfile = profile(worker, "H-1B", null, null, null,
+                LocalDate.parse("2026-12-20"));
         when(userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("H-1B")))
                 .thenReturn(List.of(worker));
+        when(userProfileRepository.findAllById(List.of(8L))).thenReturn(List.of(workerProfile));
 
         // Made-up wording: a rule that changes what a worker must do when crossing the border.
         service().onPolicyIndexed(new PolicyIndexedEvent(3L,
@@ -396,15 +402,29 @@ class NotificationServiceTests {
     @Test
     void flagsH1bEmploymentFromTheSavedProfileOnAWorkerGracePeriodPolicy() {
         User student = user(7L, "student@example.com");
-        student.setProgramEndDate(LocalDate.parse("2028-05-31"));
+        UserProfile studentProfile = UserProfile.registrationProfile(
+                student.getId(),
+                "F-1",
+                null,
+                LocalDate.parse("2028-05-31"),
+                null,
+                null
+        );
+
         User worker = user(8L, "worker@example.com");
-        worker.setVisaType("H-1B");
-        // The employer exists only on the versioned profile; the legacy user row has no such field.
-        UserProfile workerProfile = UserProfile.fromUser(worker);
+        UserProfile workerProfile = UserProfile.registrationProfile(
+                worker.getId(),
+                "H-1B",
+                null,
+                null,
+                null,
+                null
+        );
         workerProfile.setEmployer("Acme Corp");
         when(userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("F-1", "H-1B")))
                 .thenReturn(List.of(student, worker));
-        when(userProfileRepository.findAllById(List.of(7L, 8L))).thenReturn(List.of(workerProfile));
+        when(userProfileRepository.findAllById(List.of(7L, 8L)))
+                .thenReturn(List.of(studentProfile, workerProfile));
 
         // Shaped like FR Doc 2026-18631, which the classifier also filed under F-1.
         service().onPolicyIndexed(new PolicyIndexedEvent(3L, "Eliminating the Discretionary 60-Day Grace Period",
@@ -444,7 +464,6 @@ class NotificationServiceTests {
     @Test
     void h1bPolicyNeverReachesStudentsOrExchangeVisitors() {
         User worker = user(8L, "worker@example.com");
-        worker.setVisaType("H-1B");
         when(userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("H-1B")))
                 .thenReturn(List.of(worker));
 
@@ -460,7 +479,6 @@ class NotificationServiceTests {
     void publishesEachNotificationToItsRecipientForLivePush() {
         User student = user(7L, "student@example.com");
         User exchange = user(9L, "exchange@example.com");
-        exchange.setVisaType("J-1");
         when(userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("F-1", "J-1")))
                 .thenReturn(List.of(student, exchange));
 
@@ -476,10 +494,11 @@ class NotificationServiceTests {
     @Test
     void matchesUsersWhoseVisaTypeWasStoredWithStrayCaseOrSpacing() {
         User student = user(7L, "student@example.com");
-        student.setVisaType(" f-1 "); // registration stores whatever was typed
-        student.setProgramEndDate(LocalDate.parse("2028-05-31"));
+        UserProfile studentProfile = profile(student, " f-1 ", null,
+                LocalDate.parse("2028-05-31"), null, null);
         when(userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("F-1")))
                 .thenReturn(List.of(student));
+        when(userProfileRepository.findAllById(List.of(7L))).thenReturn(List.of(studentProfile));
 
         service().onPolicyIndexed(new PolicyIndexedEvent(3L, "Fixed Time Period of Admission",
                 List.of("F-1"), null, "Ends duration of status."));
@@ -492,9 +511,11 @@ class NotificationServiceTests {
     @Test
     void sendsInformationalNotificationWhenNoRuleMatches() {
         User student = user(7L, "student@example.com");
-        student.setProgramEndDate(LocalDate.parse("2028-05-31"));
+        UserProfile studentProfile = profile(student, "F-1", null,
+                LocalDate.parse("2028-05-31"), null, null);
         when(userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("F-1")))
                 .thenReturn(List.of(student));
+        when(userProfileRepository.findAllById(List.of(7L))).thenReturn(List.of(studentProfile));
 
         service().onPolicyIndexed(new PolicyIndexedEvent(3L, "Fee schedule update",
                 List.of("F-1"), null, "Adjusts filing fees."));
@@ -527,7 +548,6 @@ class NotificationServiceTests {
     @Test
     void doesNotFlagActionWhenTheUserHasNotFilledInTheAffectedField() {
         User student = user(7L, "student@example.com"); // no program end date, no academic level
-        student.setAcademicLevel(null);
         when(userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("F-1")))
                 .thenReturn(List.of(student));
 
@@ -558,7 +578,8 @@ class NotificationServiceTests {
     @Test
     void testClockSyncAlertsOnlyPoliciesForTheUsersCurrentCategory() {
         User worker = user(7L, "worker@example.com");
-        worker.setVisaType("H-1B");
+        when(userProfileRepository.findById(7L)).thenReturn(Optional.of(
+                profile(worker, "H-1B", null, null, null, null)));
         testClock.setUserDate(7L, LocalDate.parse("2026-09-30"));
         LocalDate today = LocalDate.parse("2026-09-30");
         when(notificationRepository.deleteForPoliciesPublishedAfter(7L, today)).thenReturn(2);
@@ -629,7 +650,14 @@ class NotificationServiceTests {
         void savesTheProfileVersionUsedToGenerateTheNotification() {
         User student = user(7L, "student@example.com");
 
-        UserProfile profile = UserProfile.fromUser(student);
+        UserProfile profile = UserProfile.registrationProfile(
+                student.getId(),
+                "F-1",
+                null,
+                null,
+                null,
+                null
+        );
         profile.setVersion(4);
 
         when(userRepository.findByRoleAndVisaTypeIn(
@@ -677,8 +705,14 @@ class NotificationServiceTests {
     }
 
     private User user(Long id, String email) {
-        User user = new User("Student", email, "hash", "F-1", "Master's", null);
+        User user = new User("Student", email, "hash");
         ReflectionTestUtils.setField(user, "id", id);
         return user;
+    }
+
+    private UserProfile profile(User user, String visaType, String academicLevel,
+            LocalDate programEndDate, String currentLocation, LocalDate upcomingTravelDate) {
+        return UserProfile.registrationProfile(
+                user.getId(), visaType, academicLevel, programEndDate, currentLocation, upcomingTravelDate);
     }
 }

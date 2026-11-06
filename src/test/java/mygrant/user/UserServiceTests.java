@@ -68,11 +68,7 @@ class UserServiceTests {
         assertThat(savedProfile.getValue().getAcademicLevel()).isEqualTo("Master's");
         assertThat(savedProfile.getValue().getProgramEndDate())
                 .isEqualTo(LocalDate.parse("2028-05-31"));
-        assertThat(saved.getValue().getCurrentLocation()).isNull();
-        assertThat(saved.getValue().getUpcomingTravelDate()).isNull();
-        assertThat(saved.getValue().getVisaType()).isEqualTo("F-1");
         assertThat(saved.getValue().isProfileComplete()).isFalse();
-        assertThat(saved.getValue().getProgramEndDate()).isEqualTo(LocalDate.parse("2028-05-31"));
         assertThat(response.getCurrentLocation()).isNull();
         assertThat(response.getUpcomingTravelDate()).isNull();
         assertThat(response.getToken()).isEqualTo("token");
@@ -88,8 +84,10 @@ class UserServiceTests {
         LoginResponse response = service().createUser(registration);
 
         verify(userRepository).save(saved.capture());
-        assertThat(saved.getValue().getCurrentLocation()).isEqualTo("ABROAD");
-        assertThat(saved.getValue().getUpcomingTravelDate()).isEqualTo(LocalDate.parse("2026-12-15"));
+        verify(userProfileRepository).save(savedProfile.capture());
+        assertThat(savedProfile.getValue().getCurrentLocation()).isEqualTo("ABROAD");
+        assertThat(savedProfile.getValue().getUpcomingTravelDate())
+                .isEqualTo(LocalDate.parse("2026-12-15"));
         assertThat(response.getCurrentLocation()).isEqualTo("ABROAD");
         assertThat(response.getUpcomingTravelDate()).isEqualTo(LocalDate.parse("2026-12-15"));
     }
@@ -147,6 +145,34 @@ class UserServiceTests {
                 .isInstanceOf(InvalidCredentialsException.class)
                 .hasMessage("Invalid email or password");
         verifyNoInteractions(jwtService);
+    }
+
+    @Test
+    void loginResponseUsesValuesFromAnEditedProfile() {
+        User user = activeUser();
+        UserProfile editedProfile = UserProfile.registrationProfile(
+                user.getId(),
+                "H-1B",
+                "Master's",
+                LocalDate.parse("2028-05-31"),
+                "ABROAD",
+                LocalDate.parse("2026-12-15"));
+
+        when(userRepository.findByEmail("student@example.com"))
+                .thenReturn(java.util.Optional.of(user));
+        when(userProfileRepository.findById(user.getId()))
+                .thenReturn(java.util.Optional.of(editedProfile));
+        when(passwordEncoder.matches("password1", "hash")).thenReturn(true);
+        when(jwtService.generateAccessToken(user)).thenReturn("access-token");
+        when(jwtService.generateRefreshToken(user)).thenReturn("refresh-token");
+        when(jwtService.extractExpiration("refresh-token"))
+                .thenReturn(Instant.now().plusSeconds(3600));
+
+        LoginResponse response = service().loginUser(loginRequest());
+
+        assertThat(response.getVisaType()).isEqualTo("H-1B");
+        assertThat(response.getCurrentLocation()).isEqualTo("ABROAD");
+        assertThat(response.getUpcomingTravelDate()).isEqualTo(LocalDate.parse("2026-12-15"));
     }
 
     @Test

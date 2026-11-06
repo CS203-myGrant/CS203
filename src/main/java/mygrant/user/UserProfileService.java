@@ -62,7 +62,7 @@ public class UserProfileService {
         User user = currentUser(email);
 
         UserProfile profile = userProfileRepository.findById(user.getId())
-        .orElseGet(() -> UserProfile.fromUser(user));
+        .orElseGet(() -> UserProfile.empty(user.getId()));
         applyUpdates(profile, request);
         clearWithdrawnFields(user.getId(), profile, request);
         validateOnboardingConsent(user, profile, request);
@@ -72,13 +72,6 @@ public class UserProfileService {
 
         profile.setVersion(profile.getVersion() + 1);
         user.setProfileComplete(true);
-
-        // Keep legacy user fields in sync until alerts are migrated to user_profiles.
-        user.setVisaType(profile.getVisaType());
-        user.setAcademicLevel(profile.getAcademicLevel());
-        user.setProgramEndDate(profile.getProgramEndDate());
-        user.setCurrentLocation(profile.getCurrentLocation());
-        user.setUpcomingTravelDate(profile.getUpcomingTravelDate());
 
         userRepository.save(user);
 

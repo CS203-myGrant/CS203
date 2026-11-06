@@ -108,7 +108,7 @@ class TestClockServiceTests {
     }
 
     private User user(Long id, String email, UserRole role) {
-        User user = new User("Name", email, "hash", "F-1", null, null);
+        User user = new User("Name", email, "hash");
         user.setRole(role);
         ReflectionTestUtils.setField(user, "id", id);
         return user;
