@@ -1,0 +1,47 @@
+SYNTHETIC TEST FIXTURE (CS203-86): NOT a real Federal Register document. Written in the format of
+2026-14439 to test an effective-date move on the real rule DHS Docket ICEB-2025-0001 / RIN 1653-AA95.
+<html>
+<head>
+<title>Federal Register, Volume 91 Issue 168 (Tuesday, September 1, 2026)</title>
+</head>
+<body><pre>
+[Federal Register Volume 91, Number 168 (Tuesday, September 1, 2026)]
+[Rules and Regulations]
+[Pages 55001-55002]
+[FR Doc No: 2026-99950]
+
+
+-----------------------------------------------------------------------
+
+DEPARTMENT OF HOMELAND SECURITY
+
+8 CFR Parts 214, 248, and 274a
+
+[DHS Docket No. ICEB-2025-0001]
+RIN 1653-AA95
+
+
+Establishing a Fixed Time Period of Admission and an Extension of
+Stay Procedure for Nonimmigrant Academic Students, Exchange Visitors,
+and Representatives of Foreign Information Media; Delay of Effective
+Date
+
+AGENCY: U.S. Immigration and Customs Enforcement (ICE), U.S. Department
+of Homeland Security (DHS).
+
+ACTION: Final rule; delay of effective date.
+
+-----------------------------------------------------------------------
+
+SUMMARY: DHS is delaying the effective date of the final rule
+published in the Federal Register on July 17, 2026, which changes the
+admission period for F-1 academic students and J-1 exchange visitors
+from duration of status to a fixed time period, from September 15,
+2026, to November 1, 2026, so that schools and sponsors can update
+their systems.
+
+DATES: The effective date of the final rule published July 17, 2026,
+at 91 FR 44976, is delayed until November 1, 2026.
+
+</pre></body>
+</html>

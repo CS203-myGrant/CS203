@@ -1,0 +1,738 @@
+<html>
+<head>
+<title>Federal Register, Volume 86 Issue 24 (Monday, February 8, 2021)</title>
+</head>
+<body><pre>
+[Federal Register Volume 86, Number 24 (Monday, February 8, 2021)]
+[Rules and Regulations]
+[Pages 8543-8548]
+From the Federal Register Online via the Government Publishing Office [<a href="http://www.gpo.gov">www.gpo.gov</a>]
+[FR Doc No: 2021-02665]
+
+
+
+========================================================================
+Rules and Regulations
+                                                Federal Register
+________________________________________________________________________
+
+This section of the FEDERAL REGISTER contains regulatory documents 
+having general applicability and legal effect, most of which are keyed 
+to and codified in the Code of Federal Regulations, which is published 
+under 50 titles pursuant to 44 U.S.C. 1510.
+
+The Code of Federal Regulations is sold by the Superintendent of Documents. 
+
+========================================================================
+
+
+Federal Register / Vol. 86, No. 24 / Monday, February 8, 2021 / Rules 
+and Regulations
+
+[[Page 8543]]
+
+
+
+DEPARTMENT OF HOMELAND SECURITY
+
+8 CFR Part 214
+
+[CIS No. 2680-21; Docket No: USCIS 2020-0019]
+RIN 1615-AC61
+
+
+Modification of Registration Requirement for Petitioners Seeking 
+To File Cap-Subject H-1B Petitions; Delay of Effective Date
+
+AGENCY: U.S. Citizenship and Immigration Services (USCIS), U.S. 
+Department of Homeland Security (DHS).
+
+ACTION: Final rule; delay of effective date; request for comments.
+
+-----------------------------------------------------------------------
+
+SUMMARY: On January 8, 2021, DHS published a final rule, Modification 
+of Registration Requirement for Petitioners Seeking To File Cap-Subject 
+H-1B Petitions (H-1B Selection Final Rule) amending regulations 
+governing the process by which U.S. Citizenship and Immigration 
+Services (USCIS) selects H-1B registrations for the filing of H-1B cap-
+subject petitions (or H-1B petitions for any year in which the 
+registration requirement is suspended), by generally first selecting 
+registrations based on the highest Occupational Employment Statistics 
+(OES) prevailing wage level that the proffered wage equals or exceeds 
+for the relevant Standard Occupational Classification (SOC) code and 
+area(s) of intended employment. The Department is delaying the rule's 
+effective date until December 31, 2021, because USCIS will not have 
+adequate time to complete system development, thoroughly test the 
+modifications, train staff, and conduct public outreach needed to 
+ensure an effective and orderly implementation of the H-1B Selection 
+Final Rule by the time the initial registration period will be open for 
+the upcoming fiscal year (FY) 2022 H-1B cap season. During the delay, 
+while USCIS works through the issues associated with implementation, 
+DHS leadership will also evaluate the January 8th rule and its 
+associated policies, as is typical of agencies at the beginning of a 
+new Administration.
+
+DATES: As of February 8, 2021, the effective date of the final rule 
+published January 8, 2021, at 86 FR 1676, is delayed to December 31, 
+2021. DHS is accepting public comments on this delay until March 10, 
+2021.
+
+ADDRESSES: You may submit comments on the entirety of this final rule 
+package, identified by DHS Docket No. USCIS-2020-0019, through the 
+Federal eRulemaking Portal: <a href="http://www.regulations.gov">http://www.regulations.gov</a>. Follow the 
+website instructions for submitting comments. Comments submitted in a 
+manner other than the one listed above, including emails or letters 
+sent to DHS or USCIS officials, will not be considered comments on this 
+final rule and may not receive a response from DHS. Please note that 
+DHS and USCIS cannot accept any comments that are hand-delivered or 
+couriered. In addition, USCIS cannot accept comments contained on any 
+form of digital media storage devices, such as CDs/DVDs and USB drives. 
+Due to COVID-19, USCIS is also not accepting mailed comments at this 
+time. If you cannot submit your comment by using <a href="http://www.regulations.gov">http://www.regulations.gov</a>, please contact Samantha Deshommes, Chief, 
+Regulatory Coordination Division, Office of Policy and Strategy, U.S. 
+Citizenship and Immigration Services, Department of Homeland Security, 
+by telephone at 240-721-3000 for alternate instructions.
+
+FOR FURTHER INFORMATION CONTACT: Charles L. Nimick, Chief, Business and 
+Foreign Workers Division, U.S. Citizenship and Immigration Services, 
+5900 Capital Gateway Drive, Camp Springs, MD 20746; telephone 240-721-
+3000 (this is not a toll-free number). Individuals with hearing or 
+speech impairments may access the telephone number above via TTY by 
+calling the toll-free Federal Information Relay Service at 1-877-889-
+5627 (TTY-TDD).
+
+SUPPLEMENTARY INFORMATION:
+
+I. Public Participation
+
+    DHS invites all interested parties to participate in this 
+rulemaking by submitting written data, views, comments, and arguments 
+on all aspects of this final rule. DHS also invites comments that 
+relate to the economic, environmental, or federalism effects that might 
+result from this final rule. Comments must be submitted in English, or 
+an English translation must be provided. Comments that will provide the 
+most assistance to DHS in implementing these changes will: reference a 
+specific portion of the final rule; explain the reason for any 
+recommended change; and include data, information, or authority that 
+supports such a recommended change. Comments submitted in a manner 
+other than those listed in the ADDRESSES section, including emails or 
+letters sent to DHS or USCIS officials, will not be considered comments 
+on the final rule. Please note that DHS and USCIS cannot accept any 
+comments that are hand-delivered or couriered. In addition, USCIS 
+cannot accept mailed comments contained on any form of digital media 
+storage devices, such as CDs/DVDs and USB drives.
+    Instructions: If you submit a comment, you must include the agency 
+name (U.S. Citizenship and Immigration Services) and the DHS Docket No. 
+USCIS-2020-0019 for this rulemaking. Regardless of the method used for 
+submitting comments or material, all submissions will be posted, 
+without change, to the Federal eRulemaking Portal at <a href="http://www.regulations.gov">http://www.regulations.gov</a>, and will include any personal information you 
+provide. Therefore, submitting this information makes it public. You 
+may wish to consider limiting the amount of personal information that 
+you provide in any voluntary public comment submission you make to DHS. 
+DHS may withhold information provided in comments from public viewing 
+that it determines may impact the privacy of an individual or is 
+offensive. For additional information, please read the Privacy and 
+Security Notice available at <a href="http://www.regulations.gov">http://www.regulations.gov</a>.
+    Docket: For access to the docket and to read background documents 
+or comments received, go to <a href="http://www.regulations.gov">http://www.regulations.gov</a>, referencing DHS 
+Docket No. USCIS-2020-0019. You may also sign up for email alerts on 
+the online docket to be notified when comments are posted or a final 
+rule is published.
+
+[[Page 8544]]
+
+II. Background
+
+    On January 8, 2021, DHS published the H-1B Selection Final Rule, 
+Modification of Registration Requirement for Petitioners Seeking To 
+File Cap-Subject H-1B Petitions, amending regulations governing the 
+process by which USCIS selects H-1B registrations for the filing of H-
+1B cap-subject petitions (or H-1B petitions for any year in which the 
+registration requirement is suspended). Under the rule, USCIS would 
+generally select H-1B registrations based on proffered wages and 
+corresponding prevailing wage levels. Specifically, USCIS would first 
+select registrations with proffered wages that meet or exceed the 
+highest OES prevailing wage level for the relevant SOC code and area(s) 
+of intended employment.\1\
+---------------------------------------------------------------------------
+
+    \1\ 86 FR 1676. The H-1B Selection Final Rule was approved by 
+Chad F. Wolf in his capacity as Acting Secretary of Homeland 
+Security. DHS is aware that multiple courts have indicated or held 
+that Mr. Wolf did not have valid authority to act, and, therefore, 
+did not have authority to sign rules in that capacity. DHS also is 
+aware that, following issuance of the rule, Peter T. Gaynor and Mr. 
+Wolf took steps to ratify the H-1B Selection Final Rule. See DHS 
+Delegation No. 23028, Delegation to the Under Secretary for 
+Strategy, Policy, and Plans to Act on Final Rules, Regulations, and 
+Other Matters (Jan. 12, 2021); Chad F. Wolf, Ratification (Jan. 14, 
+2021). By issuing this rule, DHS states no position on Mr. Gaynor's 
+or Mr. Wolf's actions or authority.
+---------------------------------------------------------------------------
+
+    The H-1B Selection Final Rule is currently scheduled to go into 
+effect on March 9, 2021. As discussed in greater detail below, after 
+further consideration, USCIS has determined that the final rule's 60-
+day effective date does not afford USCIS sufficient time between the 
+publication of the rule on January 8, 2021, and March 9, 2021, to 
+complete the development and thoroughly test the modifications needed 
+in the H-1B registration system to sufficiently minimize technical 
+risks that result from a compressed testing schedule, as well as to 
+amend policies and train staff to ensure the effective and orderly 
+administration of the cap under the H-1B Selection Final Rule. By this 
+action, DHS is delaying the H-1B Selection Final Rule until December 
+31, 2021, and is applying the regulations currently in place (random 
+selection) to the initial registration period, and, most likely, any 
+subsequent registration period for the FY 2022 registration process.
+    DHS expects that delaying the rule to December 31, 2021, will 
+provide USCIS sufficient time to develop, thoroughly test, and 
+implement the modifications to the registration system and selection 
+process and give stakeholders sufficient time to adjust to new 
+procedures arising from the new rule. The publication of the final rule 
+on January 8, 2021, finalized a new selection process requiring, from a 
+technical standpoint, that a new algorithm be developed, thoroughly 
+tested, and implemented in the form of an electronic registration tool. 
+The publication date of the final rule only affords six weeks of 
+development time, and less than two weeks to complete internal end-to-
+end testing and external performance testing with DHS OneNet, the DHS 
+network. The selection logic is a fundamental part of the registration 
+tool, and the H-1B Selection Final Rule created more complexity in the 
+logic calculation by adding several versions of lotteries that must be 
+developed, thoroughly tested and implemented. This additional 
+complexity essentially requires a complete rebuilding of the 
+registration tool that was developed for the FY 2021 selection 
+process.\2\ In light of these technical challenges, DHS now believes 
+that there is not adequate time to develop and thoroughly test the new 
+H-1B registration system, conduct training and provide outreach on such 
+changes to the regulated public prior to the start of the FY22 initial 
+registration period.\3\
+---------------------------------------------------------------------------
+
+    \2\ Development of the new system has been ongoing since 
+publication of the final rule, however current estimates indicate 
+that development work will not be complete before February 19, 2021. 
+Testing of the system may commence upon completion of system 
+development, which only leaves one to two weeks (depending on when 
+the initial registration period opens), in a best case scenario, to 
+test the system, identify any bugs, conduct additional development 
+to resolve identified bugs, complete additional testing to ensure 
+proper functionality, conduct internal training, and provide 
+outreach to the public.
+    \3\ The Registration Requirement for Petitioners Seeking to File 
+H-1B Petitions on Behalf of Cap-Subject Aliens Final Rule, 84 FR 888 
+(Jan. 31, 2019), made clear that implementation of the registration 
+tool requires significant development, testing and stakeholder 
+outreach that cannot reasonably happen in a few weeks. As a result, 
+DHS delayed implementation of the initial registration process for a 
+full year to develop, test, and conduct stakeholder outreach. The H-
+1B Selection Final Rule would also benefit from a similar delay to 
+develop, thoroughly test, and conduct stakeholder training on the 
+modified registration tool, including training on identifying the 
+wage level that should be used for selection. While there was an 
+aspirational hope that the H-1B Selection Final Rule could be 
+implemented in time for the FY 22 selection process, that hope has 
+proven misguided.
+---------------------------------------------------------------------------
+
+    As indicated below, DHS wants to ensure the orderly and efficient 
+administration of the H-1B numerical allocations and wants to avoid 
+disruption to the regulated public by affording itself sufficient time 
+to fully modify and thoroughly test the changes to the H-1B 
+registration system, minimize technical risks that result from a 
+compressed testing schedule, and provide the regulated public enough 
+time to become familiar with those changes to facilitate full 
+compliance with the new regulatory requirements.
+    While DHS considered other alternatives, including a shorter term 
+delay (such as a delay of 60 days, or a delay to the start of the next 
+fiscal year, October 1, 2021), DHS believes that a longer delay is 
+needed to avoid the confusion and disparate treatment of registrants 
+that would result if a new rule took effect during the initial 
+registration period, or a subsequent registration and selection period, 
+for the FY 2022 numerical allocations, particularly if USCIS needs to 
+open a subsequent registration period later this year to ensure full 
+utilization of the FY 2022 numerical allocations. DHS cannot predict, 
+with full certainty, the demand for H-1B visas for FY 2022 given the 
+current state of the U.S. economy, the continued COVID-19 public health 
+emergency, and efforts to address it in the United States and abroad. 
+Thus, DHS cannot predict whether it will be necessary to continue to 
+accept registrations after the initial registration period for the FY 
+2022 numerical allocations closes, or whether USCIS will need to reopen 
+the H-1B registration period later in the 2021 calendar year to 
+generate the number of H-1B cap petitions projected as needed to reach 
+the FY 2022 numerical allocations. Should USCIS need to open a 
+subsequent registration period and the H-1B Selection Final Rule is in 
+effect at that time, that would mean that H-1B registrations for the 
+same fiscal year would be selected under two different standards, thus 
+causing confusion and disparate treatment among H-1B registrants for FY 
+2022. Further, if USCIS needed to select additional registrations after 
+the H-1B Selection Final Rule takes effect, but must continue to select 
+from among those submitted before the H-1B Selection Final Rule takes 
+effect (e.g. submitted during the initial registration period), the 
+submitted registrations would not contain the necessary data to make a 
+wage level selection as such data would only be collected after the H-
+1B Selection Final Rule, and associated revisions to data collection, 
+take effect. The H-1B Selection Final Rule does not have a mechanism 
+whereby USCIS could request additional information from registrants in 
+order to apply a new regulatory scheme. Furthermore, applying a new 
+regulation to registrations submitted under the current regulations 
+would lead to disparate treatment of registrants who submitted 
+registrations during the same initial registration period and would
+
+[[Page 8545]]
+
+have the potential to disturb their reliance interests.
+    After determining that there is not adequate time for USCIS to 
+complete the development and thoroughly test the modifications to the 
+H-1B registration system, train staff, and conduct outreach on the H-1B 
+Selection Final Rule, DHS also considered an alternative to delaying 
+the H-1B Selection Final Rule, i.e. having USCIS suspend the 
+registration process for FY 2022 under 8 CFR 214.2(h)(8)(iv) and apply 
+the new rule to the petition-based selection process. However, USCIS 
+determined that suspending the registration process would have 
+deleterious impacts on the FY 2022 selection process, as applying the 
+new selection methodology to a petition-based selection process would 
+be exceedingly difficult and require even more time to operationalize, 
+particularly given COVID-19 and the difficulty the agency would face in 
+staffing up to pivot to in-person intake, sorting, and selection 
+process. For example, last year USCIS experienced significant 
+difficulty staffing the Service Centers with contract staff to intake 
+petitions during the petition filing season, even considering that the 
+registration-based selection process significantly reduced the number 
+of petitions filed at one time. Initial hiring of sufficient contractor 
+staff to support USCIS petition intake was incredibly difficult and, 
+due to COVID-19, data entry was significantly delayed. It took several 
+weeks to complete data entry and reject petitions that did not meet the 
+regulatory requirements (e.g. those filed with incorrect fees), which 
+eliminated the ability of some petitioners to refile their petitions 
+within the assigned filing window because of this delay. Suspending the 
+registration process entirely for FY 2022 would mean that, during the 
+first week of April, USCIS would receive petitions from all employers 
+seeking cap-subject H-1B workers (i.e., not only those whose 
+registrations are selected in advance) through a paper-based process 
+(e.g. U.S. mail, commercial courier), and would require a significant 
+ramping up in contractor staffing. Arranging timely contractor staffing 
+typically requires several months of advanced planning (e.g. announcing 
+positions, receiving applications, running background checks on 
+applicants, onboarding, and training), and therefore cannot be achieved 
+in a timely manner if USCIS were to retain the March 9, 2021 effective 
+date.\4\
+---------------------------------------------------------------------------
+
+    \4\ As indicated above, until very recently, USCIS had hoped 
+that it would be able to modify and thoroughly test the H-1B 
+registration system in time to implement the H-1B Selection Final 
+Rule on March 9, 2021. In reliance on that hope, and given COVID-19 
+related challenges, as well as ongoing budget constraints, USCIS has 
+not initiated steps to staff up for a possible suspension of the FY 
+2022 registration process, which would be the first in many steps 
+required to utilize this alternative for implementing the H-1B 
+Selection Final Rule. Therefore, this is not a viable option for 
+USCIS.
+---------------------------------------------------------------------------
+
+    Furthermore, because the selection process would be dependent on 
+wage level, the scope of work for contractor staff would require not 
+only initial review of petitions for completeness and correct filing 
+fees, but also to identify the wage levels that would be used to rank 
+them for purposes of the selection process. Petitions that do not 
+contain required wage information would have to be rejected. Because 
+the scope of intake work would significantly expand, the time to 
+complete intake would be lengthened.
+    Moreover, reverting to a paper-based selection process would re-
+introduce additional uncertainties into the H-1B selection process that 
+the electronic registration process eliminated. For example, in order 
+to conduct the paper-based selection process, USCIS would likely have 
+to suspend premium processing of H-1B petitions which would further 
+delay the processing of petitions.
+    The aforementioned problems are significantly aggravated by the 
+COVID-19 pandemic. In particular, to ensure sufficient physical 
+distancing of staff on premises, USCIS has already made plans to evenly 
+distribute the H-1B petition adjudication workload for FY 2022 between 
+four Service Centers: California Service Center, Nebraska Service 
+Center, Texas Service Center, and Vermont Service Center. If USCIS were 
+to suspend the electronic registration process in order to implement 
+the H-1B Selection Rule to conduct the FY 2022 selection process, USCIS 
+would require a significant amount of time to staff up and train staff 
+at the Nebraska and Texas Service Centers because those Service Centers 
+had never previously conducted petition-based intake and selection. 
+Additionally, because USCIS has already made plans to evenly distribute 
+the H-1B petition adjudication workload for FY 2022 between four 
+Service Centers, current budget and planning for the California Service 
+Center and Vermont Service Center does not provide enough resources 
+required for those two centers to handle the entire workload and to 
+quickly pivot to a petition-based filing system.
+    Finally, the petition-based process would require time for the 
+public to pivot and prepare H-1B petitions, including obtain certified 
+Labor Condition Applications (LCAs) from the U.S. Department of Labor 
+(DOL) for submission during the first week of April. This change could 
+impact DOL operations because a far larger number of LCAs than 
+anticipated with the registration-based system would be filed in a 
+compressed time period, and DOL would need to ensure they are processed 
+in accordance with the statutory and regulatory processing timeframe of 
+7 working days. 20 CFR 655.730(b). This is additional cost for the 
+public to prepare and submit petitions when they do not have notice as 
+to whether they are or will be selected. For these several reasons, 
+USCIS determined that reverting to a paper-based selection process in 
+order to implement the H-1B Selection Final Rule during FY 2022 was not 
+a viable alternative.
+    Therefore, to ensure USCIS will not be incapable of administering 
+the H-1B cap selection process and both avoid concerns associated with 
+reverting to a paper-based selection process, as well as applying two 
+separate regulatory schemes to the H-1B selection process, DHS believes 
+that delaying the effective date of the H-1B Selection Final Rule until 
+December 31, 2021, will provide sufficient time to complete the 
+selection process for the FY 2022 numerical allocations, thus avoiding 
+unnecessary confusion and possible inequitable results as well as more 
+time for USCIS to modify and test its systems, train staff, and conduct 
+public outreach. During the period of the delayed effective date, while 
+DHS works through the issues associated with implementation, DHS 
+leadership will also evaluate the January 8th rule and its associated 
+policies, as is typical of agencies at the beginning of a new 
+Administration.
+    Given the longer delay, USCIS expects that it will select from 
+among all of the registrations properly submitted toward the FY 2022 H-
+1B numerical allocations based on the current (random selection) 
+regulations that will be in effect when USCIS first begins accepting 
+registrations or petitions toward the FY 2022 numerical allocations.
+    DHS also believes that December 31, 2021, while most likely to 
+extend beyond when USCIS has determined that it has received enough 
+petitions projected as needed to reach the FY 2022 numerical 
+allocations, also balances the competing need to ensure that the 
+regulated public has sufficient advance notice and certainty as to the 
+rules that will be in effect for the FY 2023 H-1B numerical 
+allocations.
+
+[[Page 8546]]
+
+III. Statutory and Regulatory Requirements
+
+A. Administrative Procedure Act
+
+    This rule is being issued without prior notice and opportunity to 
+comment and with an immediate effective date pursuant to 5 U.S.C. 
+553(b)(B) and (d). The Administrative Procedure Act (APA), 5 U.S.C. 551 
+et seq., authorizes an agency to issue a rule without prior notice and 
+opportunity to comment when the agency, for good cause, finds that 
+those procedures are ``impracticable, unnecessary, or contrary to the 
+public interest.'' \5\ Similarly, the APA requires agencies to provide 
+at least a 30-day delayed effective date for substantive rules,\6\ 
+except where the agency provides good cause to forgo this requirement. 
+DHS has good cause to delay the H-1B Selection Final Rule's effective 
+date without advance notice and comment because immediate 
+implementation would be impracticable. Implementing the H-1B Selection 
+Final Rule on March 9, 2021, would require USCIS to make and test major 
+H-1B registration system modifications, revise internal procedures, 
+train staff, and offer training to the regulated public, before the 
+March 2021 start of FY 2022 H-1B cap filing season. While USCIS 
+initially assessed that it would have sufficient time to undertake 
+these changes and advised the regulated public accordingly in the H-1B 
+Selection Final Rule,\7\ upon further review, USCIS has determined that 
+it will not have sufficient time to ensure an orderly and effective 
+implementation of the changes to the H-1B registration system in time 
+for the FY 2022 H-1B cap season, including time to make and thoroughly 
+test system modifications, train staff, and conduct outreach. In 
+addition and as discussed in detail above, DHS determined that USCIS 
+suspending the registration process and instead applying the H-1B 
+Selection Final Rule through a paper-based petition selection process 
+is not a viable alternative because it would have deleterious effects 
+on both the regulated public and the agency.
+---------------------------------------------------------------------------
+
+    \5\ 5 U.S.C. 553(b)(B).
+    \6\ 5 U.S.C. 553(d).
+    \7\ 86 FR at 1710.
+---------------------------------------------------------------------------
+
+    In addition, DHS recognizes that commenters responding to the H-1B 
+Selection Notice of Proposed Rulemaking requested that DHS delay 
+implementation of the H-1B Selection Final Rule because of insufficient 
+time for them to adapt to a new regulatory regime. Commenters indicated 
+that immediate implementation would impose an unreasonable burden on 
+prospective petitioners and beneficiaries because changes so close to 
+the beginning of that cap season would adversely impact U.S. employers 
+and would create uncertainty and confusion. Multiple commenters said 
+companies already have made hiring decisions based on the existing 
+registration system, so delaying implementation until the FY 2023 cap 
+filing season (set to begin in March 2022) would give the regulated 
+community time to adjust. Some commenters disagreed, stating that there 
+was sufficient time for DHS, employers, and others to adjust to the 
+changes.\8\
+---------------------------------------------------------------------------
+
+    \8\ 86 FR at 1710.
+---------------------------------------------------------------------------
+
+    Upon further consideration of these comments, in addition to 
+concerns that USCIS lacks adequate time to make and thoroughly test 
+system modifications, revise internal procedures, train staff, and 
+offer training to the regulated public, and concerns that reverting to 
+a paper-based selection process also would have adverse effects on the 
+regulated public and the agency, DHS believes that providing the 
+regulated public with only 60 days (with a current effective date of 
+March 9, 2021) to adapt to new regulatory requirements and 
+modifications of the H-1B registration system before the FY 2022 H-1B 
+cap registration season would cause confusion and very likely would 
+significantly disrupt the orderly administration of the H-1B cap. This 
+is particularly so since, as described above, USCIS believes it can 
+neither stand-up, thoroughly test, and therefore deploy the H-1B 
+registration system changes and thus would not be able to conduct 
+outreach on such changes to the regulated public in advance of 
+implementation based on the current March 9, 2021 effective date, nor 
+can it successfully revert to a paper-based petition selection process 
+on this timeline. In addition, DHS believes that the possibility of 
+having two different regulatory schemes apply to the same fiscal year 
+would create significant confusion for the regulated public that would 
+not have been reasonably foreseeable; the same is true for reverting to 
+a paper-based petition selection process. Similarly, reverting to a 
+paper-based petition process in order to implement the H-1B Selection 
+Final Rule, with so little lead time to develop a process for sorting 
+and selecting from among potentially two hundred thousand petitions, 
+hiring temporary contract staff during the national health emergency to 
+handle intake of the petitions, and train staff on how to conduct a new 
+wage-based selection process in this context, as well as no lead time 
+to offer outreach to the regulated public, would similarly disrupt the 
+expectations of the regulated public, and adversely affect the ability 
+of at least some petitioners to participate in the selection process 
+for FY 2022. Therefore, DHS is delaying the effective date of the H-1B 
+Selection Final Rule to December 31, 2021.
+    Current regulations at 8 CFR 214.2(h)(8)(iii)(A)(3) require that 
+the registration period start at least 14 calendar days before the 
+earliest date on which H-1B cap-subject petitions may be filed for a 
+particular fiscal year (i.e., April 1, 2021, or shortly thereafter for 
+FY 2022). Therefore, USCIS must open the registration period some time 
+in early- to mid-March. Delaying the effective date of the H-1B 
+Selection Final Rule beyond March 9, 2021, necessarily requires that 
+USCIS apply the random selection regulations currently in place to the 
+FY 2022 initial registration period. As discussed above, DHS aims to 
+ensure an orderly and effective administration of the FY 2022 H-1B 
+numerical allocations. Because of this delay rule, the initial FY 2022 
+registration period will be administered under the current regulations. 
+DHS believes that it is best for the public that the same legal 
+standard is also applied to all of the FY 2022 H-1B numerical 
+allocations. If the H-1B Selection Final Rule were to take effect 
+during the initial registration period, or any subsequent registration 
+period during FY 2022, USCIS believes it would not be operationally 
+able to administer the H-1B numerical allocations under two different 
+regulatory standards.
+    Therefore, DHS is delaying the effective date of the H-1B Selection 
+Final Rule to December 31, 2021, to better ensure that the H-1B 
+Selection Final Rule will not take effect while USCIS is still 
+administering the FY 2022 numerical allocation selection process. This 
+delay and the application of the current regulations to the initial 
+registration period for the FY 2022 numerical allocations will provide 
+DHS with more time to modify and test the changes to the H-1B 
+registration system that will be needed to implement wage-level-based 
+selection, and to provide the regulated public with time to adapt to 
+new procedures arising from the new legal requirements and system 
+modifications.
+    DHS is aware that some prospective petitioners and beneficiaries 
+already may have changed their behavior in reliance on the H-1B 
+Selection Final Rule. However, given the short amount of time that has 
+passed since this rule was published on January 8, 2021, DHS
+
+[[Page 8547]]
+
+believes that any reliance is minimal and that such reliance interests 
+do not outweigh the need for DHS to ensure that USCIS has sufficient 
+time to implement the new regulations, and that the regulated public 
+has enough time to adjust to the new registration selection process.
+    Because it would be impracticable to provide for notice and comment 
+and a delayed effective date in advance of the March 9, 2021, effective 
+date, DHS is proceeding with this final rule. Accordingly, the 
+effective date of the H-1B Selection Final Rule, FR Doc. 2021-00183, 
+published on January 8, 2021, at 86 FR 1676, is delayed to December 31, 
+2021.
+
+B. Executive Order 12866, Regulatory Planning and Review, Executive 
+Order 13563 (Improving Regulation and Regulatory Review)
+
+    Executive Orders (E.O.) 12866 and 13563 direct agencies to assess 
+the costs, benefits, and transfers of available alternatives, and if 
+regulation is necessary, to select regulatory approaches that maximize 
+net benefits, including potential economic, environmental, public 
+health and safety effects, distributive impacts, and equity. E.O. 13563 
+emphasizes the importance of quantifying both costs and benefits, of 
+reducing costs, of harmonizing rules, and of promoting flexibility. 
+Pursuant to Executive Order 12866 (Regulatory Planning and Review), the 
+Office of Information and Regulatory Affairs (OIRA), of the Office of 
+Management and Budget (OMB) determined that this rule is ``economically 
+significant'' under E.O. 12866 and has reviewed this regulation.
+
+C. Regulatory Flexibility Act
+
+    The Regulatory Flexibility Act of 1980 (RFA), 5 U.S.C. 605(b), as 
+amended by the Small Business Regulatory Enforcement Fairness Act of 
+1996, Public Law 104-121 (March 29, 1996), requires Federal agencies to 
+consider the potential impact of regulations on small entities during 
+the development of their rules. ``Small entities'' are small 
+businesses, not-for-profit organizations that are not dominant in their 
+fields, and governmental jurisdictions with populations of less than 
+50,000. A regulatory flexibility analysis is not required when a rule 
+is exempt from notice and comment rulemaking. This final rule is exempt 
+from notice and comment rulemaking, as stated in the Administrative 
+Procedure Act, section of the preamble.
+
+D. Unfunded Mandates Reform Act
+
+    The Unfunded Mandates Reform Act of 1995 (UMRA) is intended, among 
+other things, to curb the practice of imposing unfunded Federal 
+mandates on State, local, and tribal governments. Title II of UMRA 
+requires each Federal agency to prepare a written statement assessing 
+the effects of any Federal mandate in a proposed or final agency rule 
+that may result in a $100 million or more expenditure (adjusted 
+annually for inflation) in any one year by State, local, and tribal 
+governments, in the aggregate, or by the private sector. The inflation-
+adjusted value equivalent of $100 million in 1995 adjusted for 
+inflation to 2019 levels by the Consumer Price Index for All Urban 
+Consumers (CPI-U) is approximately $168 million based on the Consumer 
+Price Index for All Urban Consumers.
+    Because the H-1B Selection Final Rule that is being delayed by this 
+final rule may result in the expenditure of more than $100 million by 
+the private sector annually, OIRA has determined that this rule may as 
+well. However, neither the H-1B Selection Final Rule nor this 
+rulemaking is a ``Federal mandate'' as defined for UMRA purposes. The 
+cost of preparation of H-1B petitions (including required evidence) and 
+the payment of H-1B nonimmigrant petition fees by petitioners or other 
+private sector entities is, to the extent it could be termed an 
+enforceable duty, one that arises from participation in a voluntary 
+Federal program, petitioning for classification of the beneficiary as 
+an H-1B nonimmigrant. This final rule does not contain such a mandate. 
+The requirements of Title II of UMRA, therefore, do not apply, and DHS 
+has not prepared a statement under UMRA. Therefore, no actions were 
+deemed necessary under the provisions of the UMRA.
+
+E. Congressional Review Act
+
+    The Office of Information and Regulatory Affairs determined that 
+the H-1B Selection final rule was a major rule as defined by 5 U.S.C. 
+804, also known as the ``Congressional Review Act'' (CRA), as enacted 
+in section 251 of the Small Business Regulatory Enforcement Fairness 
+Act of 1996, Public Law 104-121, 110 Stat. 847, 868-874, and codified 
+at 5 U.S.C. 801-808. Therefore, OIRA has determined that this rule 
+should have a ``major'' rule designation because its practical impact 
+is that it is delaying the implementation of a major rule to FY 2023. 
+The CRA requires that major rules have a 60-day delayed effective date. 
+5 U.S.C. 801(a)(3). However, pursuant to 5 U.S.C. 808(2), DHS is 
+forgoing the 60-day delayed effective date for the reasons articulated 
+in the Administrative Procedure Act section above. This final rule will 
+take effect immediately upon publication. DHS has complied with the 
+CRA's reporting requirements and has sent this final rule to Congress 
+and to the Comptroller General as required by 5 U.S.C. 801(a)(1).
+
+F. Executive Order 13132 (Federalism)
+
+    This final rule would not have substantial direct effects on the 
+states, on the relationship between the National Government and the 
+states, or on the distribution of power and responsibilities among the 
+various levels of government. Therefore, in accordance with section 6 
+of Executive Order 13132, DHS has determined that this final rule does 
+not have sufficient federalism implications to warrant the preparation 
+of a federalism summary impact statement.
+
+G. Executive Order 12988 (Civil Justice Reform)
+
+    This final rule meets the applicable standards set forth in 
+sections 3(a) and 3(b)(2) of Executive Order 12988.
+
+H. Executive Order 13175 (Consultation and Coordination With Indian 
+Tribal Governments)
+
+    This final rule does not have ``tribal implications'' because it 
+does not have substantial direct effects on one or more Indian tribes, 
+on the relationship between the Federal Government and Indian tribes, 
+or on the distribution of power and responsibilities between the 
+Federal Government and Indian tribes. Accordingly, E.O. 13175, 
+Consultation and Coordination with Indian Tribal Governments, requires 
+no further agency action or analysis.
+
+I. National Environmental Policy Act (NEPA)
+
+    DHS analyzes actions to determine whether the National 
+Environmental Policy Act, Public Law 91-190, 42 U.S.C. 4321 through 
+4347 (NEPA), applies to them and, if so, what degree of analysis is 
+required. DHS Directive 023-01 Rev. 01 (Directive) and Instruction 
+Manual 023-01-001-01 Rev. 01, Implementation of the National 
+Environmental Policy Act (Instruction Manual) establish the policies 
+and procedures that DHS and its components use to comply with NEPA and 
+the Council on Environmental Quality (CEQ) regulations for implementing 
+NEPA, 40 CFR parts 1500-1508.
+
+[[Page 8548]]
+
+    The CEQ regulations allow federal agencies to establish, with CEQ 
+review and concurrence, categories of actions (``categorical 
+exclusions'') that experience has shown do not individually or 
+cumulatively have a significant effect on the human environment and, 
+therefore, do not require an Environmental Assessment (EA) or 
+Environmental Impact Statement (EIS).\9\ Categorical exclusions 
+established by DHS are set forth in Appendix A of the Instruction 
+Manual. Under DHS NEPA implementing procedures, for an action to be 
+categorically excluded, it must satisfy each of the following three 
+conditions: (1) The entire action clearly fits within one or more of 
+the categorical exclusions; (2) the action is not a piece of a larger 
+action; and (3) no extraordinary circumstances exist that create the 
+potential for a significant environmental effect.\10\
+---------------------------------------------------------------------------
+
+    \9\ See 40 CFR 1507.3(b)(2)(ii), 1508.4.
+    \10\ Instruction Manual section V.B(2)(a)-(c).
+---------------------------------------------------------------------------
+
+    As discussed in more detail throughout this final rule, DHS is 
+issuing this final rule to delay the effective date and postpone the 
+implementation of the H-1B Selection Final Rule. That rule is amending 
+regulations governing the selection of registrations or petitions, as 
+applicable, toward the annual H-1B numerical allocations based on the 
+wage level that equals or exceeds the proffered wage based on 
+occupational classification and area of intended employment.
+    Generally, DHS believes NEPA does not apply to a rule intended to 
+change a discrete aspect of a visa program because any attempt to 
+analyze its potential impacts would be largely, if not completely, 
+speculative. The same applies to a rule delaying the effective date of 
+such a rule that does not change the rule's substance, but only 
+postpones its effective date, and consequently pushes out the date on 
+which it will be implemented. This final rule does not alter the 
+statutory limitations on the numbers of nonimmigrants who may be issued 
+initial H-1B visas or granted initial H-1B nonimmigrant status, or 
+those who consequently will be admitted into the United States as H-1B 
+nonimmigrants, or those who will be allowed to change their status to 
+H-1B, or will extend their stay in H-1B status. DHS does not believe, 
+and cannot reasonably estimate whether, the delay in a rule that 
+establishes a wage-level-based ranking approach to select H-1B 
+registrations (or petitions in any year in which the registration 
+requirement were suspended) that DHS is implementing will affect how 
+many petitions will be filed for workers to be employed in specialty 
+occupations or whether the regulatory amendments herein will result in 
+an overall change in the number of H-1B petitions that ultimately will 
+be approved, and the number of H-1B workers who will be employed in the 
+United States in any FY. DHS has no reason to believe that delaying 
+these amendments to H-1B regulations will change the environmental 
+effect, if any, of the existing regulations. Therefore, DHS has 
+determined that, even if NEPA applied to this action, this final rule 
+clearly fits within categorical exclusion A3(d) in the Instruction 
+Manual, which provides an exclusion for ``promulgation of rules . . . 
+that amend an existing regulation without changing its environmental 
+effect.'' This final rule only delays another final rule and will 
+maintain the current human environment. This final rule is not a part 
+of a larger action and presents no extraordinary circumstances creating 
+the potential for significant environmental effects. Therefore, this 
+action is categorically excluded and no further NEPA analysis is 
+required.
+
+IV. Paperwork Reduction Act
+
+    DHS is delaying the implementation of all changes to the H-1B 
+Registration Tool (OMB Control number 1615-0144) and Form I-129, 
+Petition for a Nonimmigrant Worker (Form I-129) (OMB Control number 
+1615-0009), associated with the H-1B Selection Final Rule until 
+December 31, 2021.
+
+Alejandro N. Mayorkas,
+Secretary, U.S. Department of Homeland Security.
+[FR Doc. 2021-02665 Filed 2-4-21; 4:15 pm]
+BILLING CODE 9111-97-P
+
+
+</pre></body>
+</html>
