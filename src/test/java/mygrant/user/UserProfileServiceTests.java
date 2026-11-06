@@ -204,6 +204,31 @@ class UserProfileServiceTests {
         );
     }
 
+    @Test
+    void withdrawingCitizenshipClearsValueAndConsentInsteadOfInferringAnotherCountry() {
+        User user = user();
+        UserProfile profile = profile(user);
+        profile.setCountryOfCitizenship("Malaysia");
+
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        when(userProfileRepository.findById(user.getId())).thenReturn(Optional.of(profile));
+        when(userProfileRepository.save(any(UserProfile.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        UpdateProfileRequest request = new UpdateProfileRequest(
+                null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null,
+                null, null,
+                Set.of("COUNTRY_OF_CITIZENSHIP"),
+                Set.of("COUNTRY_OF_CITIZENSHIP"));
+
+        ProfileResponse response = service().updateProfile(user.getEmail(), request);
+
+        assertThat(response.countryOfCitizenship()).isNull();
+        verify(consentRepository).deleteByUserIdAndFieldName(
+                user.getId(), ProfileFieldDefinition.COUNTRY_OF_CITIZENSHIP);
+    }
+
     private UserProfileService service() {
         return new UserProfileService(
                 userRepository,
