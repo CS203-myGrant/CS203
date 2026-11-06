@@ -45,6 +45,9 @@ import mygrant.rules.PolicyRuleStore.Rule;
  * or a secondary source linked by an identifier (HIGH confidence) reporting litigation or a stay,
  * which sets disputed and leaves the stage alone. Nothing is raised for a rule's first document,
  * for a document that changes nothing, for an older document arriving late, or by the backfill.
+ * Once an admin has cleared a dispute ({@link RuleDisputeService}), a report published on or before
+ * the date of the source that lifted the block is flagged for review instead of disputing the rule
+ * again; a later one disputes it as usual.
  *
  * <p>On a rule already final, only a document about the effective date ({@link DateNotice}), such as
  * a delay notice, moves the date. Any other final document is a separate final rule in the same
@@ -129,7 +132,10 @@ public class PolicyRuleTracker {
         } else if (LitigationSignal.reports(document.getTitle() + "\n" + document.getContent())) {
             // A title-only or ambiguous link is not certain enough to call a rule disputed.
             if (found.confidence() == Confidence.HIGH) {
-                change = applyDispute(document, rule, recordedBy);
+                notApplied = reportedBeforeBlockLifted(document, rule);
+                if (notApplied == null) {
+                    change = applyDispute(document, rule, recordedBy);
+                }
             } else {
                 notApplied = UNCONFIRMED_LITIGATION;
             }
@@ -327,6 +333,22 @@ public class PolicyRuleTracker {
         PolicyDocument primary = store.currentPrimaryDocumentId(rule.id()).flatMap(policies::findById)
                 .orElseThrow(() -> new IllegalStateException("Rule " + rule.id() + " has no primary document"));
         return Optional.of(event(rule, historyId.get(), before, after, report, primary));
+    }
+
+    /**
+     * A report published on or before the date of the source an admin cleared the rule's dispute
+     * with is about the block that was lifted, not a new one, so it does not dispute the rule again:
+     * it comes back as a review reason. Null when the report may dispute the rule.
+     */
+    private String reportedBeforeBlockLifted(PolicyDocument report, Rule rule) {
+        if (rule.state().disputed()) {
+            return null;
+        }
+        return store.lastDisputeClearedOn(rule.id())
+                .filter(liftedOn -> !report.getPublicationDate().isAfter(liftedOn))
+                .map(liftedOn -> "Litigation reported, but not applied: published on or before " + liftedOn
+                        + ", the date of the source an admin cleared the dispute with.")
+                .orElse(null);
     }
 
     private static PolicyChangedEvent event(Rule rule, long historyId, RuleState before, RuleState after,

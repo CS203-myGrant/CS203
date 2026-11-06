@@ -35,7 +35,10 @@ public class RuleTimelineController {
                     + "in `ownEffectiveDate`; the rule's `effectiveDate` stays. `disputed` is set by a linked "
                     + "secondary source (news, or a court order an admin recorded) reporting litigation or a stay, "
                     + "named in `disputedBy`. A disputed rule is never EFFECTIVE and has no TOOK_EFFECT step; "
-                    + "`effectiveDatePassedWhileDisputed` says its date has passed.")
+                    + "`effectiveDatePassedWhileDisputed` says its date has passed. Once a court lifts the block, an "
+                    + "admin clears the dispute (`POST /api/v1/policies/{id}/dispute/clear`): that is a DISPUTED step "
+                    + "back to false, and a rule whose date has passed is EFFECTIVE again, with TOOK_EFFECT after "
+                    + "that step.")
     @ApiResponse(responseCode = "200", description = "The rule's timeline")
     @ApiResponse(responseCode = "400", description = "The id is not a number")
     @ApiResponse(responseCode = "404", description = "No policy has this id, or the policy is in no rule, such as "

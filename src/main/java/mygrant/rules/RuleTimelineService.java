@@ -58,9 +58,11 @@ public class RuleTimelineService {
         RuleState state = rule.state();
         PolicyStatus currentStage = tookEffect(state, asOf) ? PolicyStatus.EFFECTIVE : state.primaryStage();
         boolean passedWhileDisputed = effectiveDatePassedWhileDisputed(state, asOf);
-        RuleSource disputedBy = steps.stream()
+        // The report behind the current dispute: the newest that set it, since an admin may have
+        // cleared an earlier one.
+        RuleSource disputedBy = !state.disputed() ? null : steps.stream()
                 .filter(step -> step.changes().contains(RuleChange.DISPUTED) && step.disputed())
-                .map(Step::source).findFirst().orElse(null);
+                .reduce((earlier, later) -> later).map(Step::source).orElse(null);
         List<RuleIdentifier> identifiers = List.copyOf(
                 store.primaryIdentifiers(Set.of(ruleId)).getOrDefault(ruleId, Set.of()));
         List<Document> documents = store.documents(ruleId).stream()
@@ -76,13 +78,15 @@ public class RuleTimelineService {
 
     /**
      * The stored history as ordered steps, each against the one before. The stage only moves
-     * forward, a step without an effective date keeps the one before, and disputed never clears;
-     * the same rules the tracker applies. A final document on a rule already final that is not
+     * forward and a step without an effective date keeps the one before; the same rules the tracker
+     * applies. Disputed is set by a secondary report and cleared only by an admin's step; a primary
+     * document leaves it as it was. A final document on a rule already final that is not
      * about the effective date is a separate final rule: an ADDITIONAL_FINAL_RULE step that shows
      * its own date in ownEffectiveDate and keeps the rule's. This is worked out here, in
      * publication order, so it holds even when the second final rule was imported first. A
      * TOOK_EFFECT step is added when the rule is final, not disputed, and its effective date is on
-     * or before asOf, after the step that set that date.
+     * or before asOf, after the step that set that date; if the rule was disputed when the date
+     * came, after the step that cleared the dispute instead.
      */
     static List<Step> steps(List<HistoryRow> rows, RuleState current, LocalDate asOf) {
         List<Step> steps = new ArrayList<>();
@@ -96,12 +100,15 @@ public class RuleTimelineService {
             RuleState after;
             if (state == null) {
                 after = stored;
+            } else if (row.recordedBy() == RecordedBy.ADMIN) {
+                // An admin's step only clears the dispute: the stage and date stay the documents'.
+                after = new RuleState(state.primaryStage(), state.effectiveDate(), stored.disputed());
             } else if (additional) {
-                after = new RuleState(state.primaryStage(), state.effectiveDate(), state.disputed() || stored.disputed());
+                after = new RuleState(state.primaryStage(), state.effectiveDate(), disputedAfter(state, row));
             } else {
                 after = new RuleState(RuleStages.next(state.primaryStage(), stored.primaryStage()),
                         stored.effectiveDate() != null ? stored.effectiveDate() : state.effectiveDate(),
-                        state.disputed() || stored.disputed());
+                        disputedAfter(state, row));
             }
             Set<RuleChange> changes = EnumSet.noneOf(RuleChange.class);
             changes.addAll(RuleChange.between(state, after));
@@ -118,6 +125,19 @@ public class RuleTimelineService {
             insertTookEffect(steps, current.effectiveDate());
         }
         return steps;
+    }
+
+    /**
+     * Whether the rule is disputed after a document's row: a secondary report of litigation sets
+     * it. A primary row stores the flag the rule had when the row was written, which may belong to
+     * a dispute that, in publication order, an admin's step has already cleared, so it leaves the
+     * flag as it was, as the tracker does.
+     */
+    private static boolean disputedAfter(RuleState before, HistoryRow row) {
+        if (row.source().sourceType() == SourceType.PRIMARY) {
+            return before.disputed();
+        }
+        return before.disputed() || row.state().disputed();
     }
 
     /** A final rule whose effective date has come, unless litigation or a court order disputes it. */
@@ -153,8 +173,19 @@ public class RuleTimelineService {
         while (position < steps.size() && !steps.get(position).observedOn().isAfter(placedAfter)) {
             position++;
         }
+        // Disputed when the date came: it took effect when an admin's step cleared the dispute.
+        boolean waitedForClearing = false;
+        while (position < steps.size() && steps.get(position - 1).disputed()) {
+            position++;
+            waitedForClearing = true;
+        }
         Step before = steps.get(position - 1);
-        steps.add(position, new Step(effectiveDate, null, true, PolicyStatus.FINAL, before.primaryStage(),
+        if (before.disputed()) {
+            // The steps end disputed although the rule is not: leave it out rather than guess when.
+            return;
+        }
+        LocalDate tookEffectOn = waitedForClearing ? before.observedOn() : effectiveDate;
+        steps.add(position, new Step(tookEffectOn, null, true, PolicyStatus.FINAL, before.primaryStage(),
                 effectiveDate, before.effectiveDate(), null, before.disputed(), List.of(RuleChange.TOOK_EFFECT),
                 steps.get(setter).source()));
     }

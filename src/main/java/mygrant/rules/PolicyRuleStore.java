@@ -10,8 +10,10 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -254,6 +256,68 @@ public class PolicyRuleStore {
                 ON CONFLICT (rule_id, dedupe_key) DO NOTHING
                 RETURNING id
                 """, params, (rs, row) -> rs.getLong(1)).stream().findFirst();
+    }
+
+    /** When an admin cleared a dispute: the step's id and when it was written. */
+    public record ClearedStep(long historyId, Instant recordedAt) {
+    }
+
+    /**
+     * Writes the step an admin records clearing the rule's dispute: the state before and after,
+     * the source that lifted the block, who cleared it and why. An admin step is never a repeat
+     * of another, so its dedupe key is unique.
+     */
+    ClearedStep appendDisputeCleared(long ruleId, RuleState previous, RuleState state, RuleSource source,
+            String actorEmail, String reason) {
+        MapSqlParameterSource params = state(state)
+                .addValue("ruleId", ruleId)
+                .addValue("previousStage", previous.primaryStage().name())
+                .addValue("previousDate", previous.effectiveDate(), Types.DATE)
+                .addValue("previousDisputed", previous.disputed())
+                .addValue("sourceExternalId", source.externalId())
+                .addValue("sourceType", source.sourceType().name())
+                .addValue("sourceUrl", source.url())
+                .addValue("sourceTitle", source.title())
+                .addValue("sourceAgency", source.agency())
+                .addValue("observedOn", source.publishedOn(), Types.DATE)
+                .addValue("recordedBy", RecordedBy.ADMIN.name())
+                .addValue("actorEmail", actorEmail)
+                .addValue("reason", reason)
+                .addValue("dedupeKey", ContentHash.sha256(String.join("|", RecordedBy.ADMIN.name(),
+                        "DISPUTE_CLEARED", source.externalId(), UUID.randomUUID().toString())));
+        return jdbc.queryForObject("""
+                INSERT INTO policy_rule_history
+                    (rule_id, primary_stage, effective_date, disputed, previous_primary_stage,
+                     previous_effective_date, previous_disputed, applied, alerted, about_effective_date,
+                     source_policy_id, source_external_id, source_type, source_url, source_title,
+                     source_agency, observed_on, recorded_by, actor_email, reason, dedupe_key)
+                VALUES (:ruleId, :stage, :effectiveDate, :disputed, :previousStage, :previousDate,
+                        :previousDisputed, TRUE, FALSE, FALSE, NULL, :sourceExternalId, :sourceType,
+                        :sourceUrl, :sourceTitle, :sourceAgency, :observedOn, :recordedBy, :actorEmail,
+                        :reason, :dedupeKey)
+                RETURNING id, recorded_at
+                """, params, (rs, row) -> new ClearedStep(rs.getLong("id"), rs.getTimestamp("recorded_at").toInstant()));
+    }
+
+    /**
+     * The source date of the newest step that set the rule disputed: a secondary report of
+     * litigation. Empty when none did.
+     */
+    Optional<LocalDate> lastDisputedOn(long ruleId) {
+        return jdbc.query("""
+                SELECT max(observed_on) FROM policy_rule_history
+                WHERE rule_id = :id AND source_type = 'SECONDARY' AND recorded_by <> 'ADMIN' AND disputed
+                """, Map.of("id", ruleId), (rs, row) -> rs.getObject(1, LocalDate.class))
+                .stream().filter(Objects::nonNull).findFirst();
+    }
+
+    /** The source date of the newest step in which an admin cleared the rule's dispute. Empty when none did. */
+    Optional<LocalDate> lastDisputeClearedOn(long ruleId) {
+        return jdbc.query("""
+                SELECT max(observed_on) FROM policy_rule_history
+                WHERE rule_id = :id AND recorded_by = 'ADMIN' AND NOT disputed
+                """, Map.of("id", ruleId), (rs, row) -> rs.getObject(1, LocalDate.class))
+                .stream().filter(Objects::nonNull).findFirst();
     }
 
     /**
