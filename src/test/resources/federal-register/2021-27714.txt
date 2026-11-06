@@ -1,0 +1,256 @@
+<html>
+<head>
+<title>Federal Register, Volume 86 Issue 243 (Wednesday, December 22, 2021)</title>
+</head>
+<body><pre>
+[Federal Register Volume 86, Number 243 (Wednesday, December 22, 2021)]
+[Rules and Regulations]
+[Pages 72516-72517]
+From the Federal Register Online via the Government Publishing Office [<a href="http://www.gpo.gov">www.gpo.gov</a>]
+[FR Doc No: 2021-27714]
+
+
+=======================================================================
+-----------------------------------------------------------------------
+
+DEPARTMENT OF HOMELAND SECURITY
+
+8 CFR Part 214
+
+RIN 1615-AC61
+
+
+Modification of Registration Requirement for Petitioners Seeking 
+To File Cap-Subject H-1B Petitions, Implementation of Vacatur
+
+AGENCY: U.S. Citizenship and Immigration Services, Department of 
+Homeland Security.
+
+ACTION: Final rule; withdrawal.
+
+-----------------------------------------------------------------------
+
+SUMMARY: This final rule withdraws the ``Modification of Registration 
+Requirement for Petitioners Seeking to File Cap-Subject H-1B 
+Petitions,'' final rule issued on January 8, 2021, because that rule 
+has been vacated by a Federal district court.
+
+DATES: The Department of Homeland Security is withdrawing the final 
+rule published January 8, 2021 (86 FR 1676), which was delayed by the 
+final rule published February 8, 2021 (86 FR 8543), as of December 22, 
+2021.
+
+FOR FURTHER INFORMATION CONTACT: Charles L. Nimick, Chief, Business and 
+Foreign Workers Division, Office of Policy and Strategy, U.S. 
+Citizenship and Immigration Services, Department of Homeland Security, 
+5900 Capital Gateway Drive, Mail Stop 2090, Camp Springs, MD 20588-
+0009. Telephone Number (240) 721-3000 (not a toll-free call).
+
+SUPPLEMENTARY INFORMATION:
+
+I. Background and Basis for Removal of Regulations
+
+    On January 8, 2021, after going through notice and comment 
+rulemaking, the Department of Homeland Security (DHS) issued a final 
+rule titled ``Modification of Registration Requirement for Petitioners 
+Seeking To File Cap-Subject H-1B Petitions'' (``H-1B Selection Final 
+Rule'').\1\ The rule was scheduled to go into effect on March 9, 2021. 
+On February 8, 2021, DHS issued a final rule delaying the effective 
+date of the H-1B Selection Final Rule to December 31, 2021.\2\ On March 
+19, 2021, Plaintiffs in ongoing litigation moved to file an amended 
+complaint in the U.S. District Court for the Northern District of 
+California adding the H-1B Selection Final Rule to the list of 
+challenged agency actions,\3\ which the court granted leave to file on 
+April 15, 2021.\4\ Following several months of litigation, on September 
+15, 2021, the court vacated the H-1B Selection Final Rule and remanded 
+the matter to DHS.\5\
+---------------------------------------------------------------------------
+
+    \1\ Modification of Registration Requirement for Petitioners 
+Seeking To File Cap-Subject H-1B Petitions, 86 FR 1676 (Jan. 8, 
+2021).
+    \2\ Modification of Registration Requirement for Petitioners 
+Seeking To File Cap-Subject H-1B Petitions; Delay of Effective Date, 
+86 FR 8543 (Feb. 8, 2021).
+    \3\ See Chamber of Commerce of the United States of America et 
+al. v. United States Department of Homeland Security, et al., No. 
+4:20-cv-07331 (N.D. Cal. March 19, 2021) (Amended Complaint).
+    \4\ See Chamber of Commerce of the United States of America et 
+al. v. United States Department of Homeland Security, et al., No. 
+4:20-cv-07331 (N.D. Cal. Apr. 15, 2021) (Order Permitting 
+Supplementation of Complaint and Extending Deadline to Submit Joint 
+Case Management Conference Statement).
+    \5\ See Chamber of Commerce of the United States of America et 
+al. v. United States Department of Homeland Security, et al., No. 
+4:20-cv-07331 (N.D. Cal. Sep. 15, 2021) (Order Granting Pl.'s Motion 
+for Summary Judgment and Denying Def.'s Cross-Motion for Summary 
+Judgment; Judgment). On November 12, 2021 a notice of appeal was 
+filed in the case. On November 30, 2021, the government filed a 
+motion to voluntarily dismiss the appeal, and the appeal was 
+dismissed on December 2, 2021. The district court's judgment is 
+final.
+---------------------------------------------------------------------------
+
+    DHS intends to comply with the court's decision vacating the H-1B 
+Selection Final Rule. Therefore, since regulatory changes promulgated 
+through the H-1B Selection Final Rule are scheduled to be codified in 
+the Code of Federal Regulations (CFR) at 8 CFR 214.2 on the rule's new 
+effective date, December 31, 2021, DHS is issuing this rule to withdraw 
+the vacated H-1B Selection Final Rule.
+    DHS is not required to provide notice and comment or delay the 
+effective date of this rule because this rule simply implements the 
+court's vacatur of the H-1B Selection Final Rule and ensures that the 
+vacated regulatory provisions are not codified in CFR. Following the 
+vacatur, the changes made by the H-1B Selection Final Rule do not have 
+any legal effect.
+    Moreover, good cause exists here for forgoing notice and comment 
+and a delayed effective date even if those procedures were otherwise 
+required. Notice and comment and a delayed effective date are 
+unnecessary for the implementation of the court's order vacating the 
+rule and would be impracticable in light of the agency's immediate need 
+to implement the final judgment. See 5 U.S.C. 553(b)(B), (d). 
+Furthermore, DHS believes that delaying this ministerial act would be 
+contrary to public interest because it could lead to vacated regulatory 
+provisions being codified and significant confusion among the regulated 
+public regarding the administration of the fiscal year (FY) 2023 H-1B 
+numerical allocations, generally known as the ``H-1B cap,'' which is 
+likely to begin in early March 2022.\6\
+---------------------------------------------------------------------------
+
+    \6\ See 8 CFR 214.2(h)(8)(iii)(A)(3) (explaining that the annual 
+initial registration period will start at least 14 calendar days 
+before the earliest date on which H-1B cap-subject petitions may be 
+filed, consistent with 8 CFR 214.2(h)(2)(i)(I). For the FY 2023 H-1B 
+numerical allocations, the earliest date that H-1B cap-subject 
+petitions may be filed is April 1, 2022, such that registration is 
+likely to commence in early March 2022).
+---------------------------------------------------------------------------
+
+    DHS has concluded that each of those three reasons--that notice and 
+comment and a delayed effective date are unnecessary, impracticable, 
+and contrary to the public interest--independently provides good cause 
+to bypass any otherwise applicable requirements of notice and comment 
+and a delayed effective date.
+
+II. Paperwork Reduction Act
+
+    Under the Paperwork Reduction Act of 1995, 44 U.S.C. 3501-3521, DHS 
+is required to submit to the Office of Management and Budget (OMB), for 
+review and approval, collections of information and changes to 
+collections of information. The following information collections are 
+impacted by the vacatur. DHS is withdrawing the
+
+[[Page 72517]]
+
+changes to these information collection instruments associated with the 
+H-1B Selection Final Rule.
+
+U.S. Citizenship and Immigration Services (USCIS) Form I-129
+
+    (1) Type of Information Collection: Revision of a Currently 
+Approved Collection.
+    (2) Title of the Form/Collection: Petition for a Nonimmigrant 
+Worker.
+    (3) Agency form number, if any, and the applicable component of the 
+DHS sponsoring the collection: I-129; USCIS.
+    (4) Affected public who will be asked or required to respond, as 
+well as a brief abstract: Primary: Business or other for profit. USCIS 
+uses the data collected on this form to determine eligibility for the 
+requested nonimmigrant petition and/or requests to extend or change 
+nonimmigrant status. An employer (or agent, where applicable) uses this 
+form to petition USCIS for a noncitizen to temporarily enter as a 
+nonimmigrant. An employer (or agent, where applicable) also uses this 
+form to request an extension of stay or change of status on behalf of 
+the noncitizen worker. The form serves the purpose of standardizing 
+requests for nonimmigrant workers and ensuring that basic information 
+required for assessing eligibility is provided by the petitioner while 
+requesting that beneficiaries be classified under certain nonimmigrant 
+employment categories. It also assists USCIS in compiling information 
+required by Congress annually to assess effectiveness and utilization 
+of certain nonimmigrant classifications. USCIS also uses the data to 
+determine continued eligibility. For example, the data collected is 
+used in compliance reviews and other inspections to ensure that all 
+program requirements are being met.
+    (5) An estimate of the total number of respondents and the amount 
+of time estimated for an average respondent to respond: I-129 is 
+294,751 and the estimated hour burden per response is 2.34 hours; the 
+estimated total number of respondents for the information collection E-
+1/E-2 Classification Supplement to Form I-129 is 4,760 and the 
+estimated hour burden per response is 0.67 hours; the estimated total 
+number of respondents for the information collection Trade Agreement 
+Supplement to Form I-129 is 3,057 and the estimated hour burden per 
+response is 0.67 hours; the estimated total number of respondents for 
+the information collection H Classification Supplement to Form I-129 is 
+96,291 and the estimated hour burden per response is 2 hours; the 
+estimated total number of respondents for the information collection H-
+1B and H-1B1 Data Collection and Filing Fee Exemption Supplement is 
+96,291 and the estimated hour burden per response is 1 hour; the 
+estimated total number of respondents for the information collection L 
+Classification Supplement to Form I-129 is 37,831 and the estimated 
+hour burden per response is 1.34 hours; the estimated total number of 
+respondents for the information collection O and P Classifications 
+Supplement to Form I-129 is 22,710 and the estimated hour burden per 
+response is 1 hour; the estimated total number of respondents for the 
+information collection Q-1 Classification Supplement to Form I-129 is 
+155 and the estimated hour burden per response is 0.34 hours; the 
+estimated total number of respondents for the information collection R-
+1 Classification Supplement to Form I-129 is 6,635 and the estimated 
+hour burden per response is 2.34 hours.
+    (6) An estimate of the total public burden (in hours) associated 
+with the collection: The total estimated annual hour burden associated 
+with this collection of information is 1,072,810 hours.
+    (7) An estimate of the total public burden (in cost) associated 
+with the collection: The estimated total annual cost burden associated 
+with this collection of information is $70,681,290.
+
+USCIS H-1B Registration Tool
+
+    (1) Type of Information Collection: Revision of a Currently 
+Approved Collection.
+    (2) Title of the Form/Collection: H-1B Registration Tool.
+    (3) Agency form number, if any, and the applicable component of the 
+DHS sponsoring the collection: OMB-64; USCIS.
+    (4) Affected public who will be asked or required to respond, as 
+well as a brief abstract: Primary: Business or other for profit. USCIS 
+will use the data collected through the H-1B Registration Tool to 
+select a sufficient number of registrations projected as needed to meet 
+the applicable H-1B cap allocations and to notify registrants whether 
+their registrations were selected.
+    (5) An estimate of the total number of respondents and the amount 
+of time estimated for an average respondent to respond: The estimated 
+total number of business or other for-profit respondents for the 
+information collection H-1B Registration Tool is 35,500 with an 
+estimated 3 responses per respondents and an estimated hour burden per 
+response of 0.5 hours. The estimated total number of attorney 
+respondents for the information collection H-1B Registration Tool is 
+4,500 with an estimated 38 responses per respondents and an estimated 
+hour burden per response of 0.5 hours.
+    (6) An estimate of the total public burden (in hours) associated 
+with the collection: The total estimated annual hour burden associated 
+with this collection of information is 138,750 hours.
+    (7) An estimate of the total public burden (in cost) associated 
+with the collection: The estimated total annual cost burden associated 
+with this collection of information is $0.
+
+List of Subjects in 8 CFR Part 214
+
+    Administrative practice and procedure, Aliens, Cultural exchange 
+program, Employment, Foreign officials, Health professions, Reporting 
+and recordkeeping requirements, Students.
+
+PART 214--NONIMMIGRANT CLASSES
+
+0
+Accordingly, the amendments to 8 CFR part 214, published in the Federal 
+Register on January 8, 2021 (86 FR 1676), which were to take effect on 
+December 31, 2021 (86 FR 8543, February 8, 2021), are withdrawn as of 
+December 22, 2021.
+
+Alejandro N. Mayorkas,
+Secretary of Homeland Security.
+[FR Doc. 2021-27714 Filed 12-21-21; 8:45 am]
+BILLING CODE 9111-97-P
+
+
+</pre></body>
+</html>

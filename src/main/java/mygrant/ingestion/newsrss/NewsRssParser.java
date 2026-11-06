@@ -73,7 +73,15 @@ public class NewsRssParser {
     private Article parseItem(Element item) {
         String title = field(item, "title").trim();
         String link = field(item, "link").trim();
-        String description = org.jsoup.Jsoup.parse(field(item, "description")).text().trim();
+        // The text drops hrefs, so the links are read from the raw HTML first. A federalregister.gov
+        // or regulations.gov link is how news is tied to a rule (CS203-86).
+        var descriptionHtml = org.jsoup.Jsoup.parse(field(item, "description"));
+        List<String> links = descriptionHtml.select("a[href]").stream()
+                .map(anchor -> anchor.attr("href").trim())
+                .filter(href -> href.startsWith("http://") || href.startsWith("https://"))
+                .distinct()
+                .toList();
+        String description = descriptionHtml.text().trim();
         String published = field(item, "pubDate").trim();
         if (title.isBlank() || description.isBlank() || published.isBlank()
                 || title.length() > 1000 || link.length() > 2048) {
@@ -99,7 +107,7 @@ public class NewsRssParser {
             throw new IllegalArgumentException("Invalid RSS publication date", exception);
         }
         String canonicalUrl = "https://www.theguardian.com" + uri.getRawPath();
-        return new Article(title, canonicalUrl, date, description);
+        return new Article(title, canonicalUrl, date, description, links);
     }
 
     private String field(Element parent, String name) {
@@ -107,6 +115,15 @@ public class NewsRssParser {
         return nodes.getLength() == 0 ? "" : nodes.item(0).getTextContent();
     }
 
-    public record Article(String title, String url, LocalDate publicationDate, String summary) {}
+    /** links are the absolute hrefs in the description, in order. */
+    public record Article(String title, String url, LocalDate publicationDate, String summary, List<String> links) {
+        public Article {
+            links = links == null ? List.of() : List.copyOf(links);
+        }
+
+        public Article(String title, String url, LocalDate publicationDate, String summary) {
+            this(title, url, publicationDate, summary, List.of());
+        }
+    }
     public record ParsedFeed(List<Article> articles, int invalidItems) {}
 }

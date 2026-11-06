@@ -26,6 +26,11 @@ import mygrant.policies.PolicyDocumentRepository;
 import mygrant.policies.PolicyIndexedEvent;
 import mygrant.policies.PolicyStatus;
 import mygrant.policies.SourceType;
+import mygrant.rules.PolicyChangedEvent;
+import mygrant.rules.PolicyRuleStore;
+import mygrant.rules.RuleChange;
+import mygrant.rules.RuleSource;
+import mygrant.rules.RuleState;
 import mygrant.testclock.TestClock;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
@@ -51,6 +56,9 @@ class NotificationServiceTests {
 
     @Mock
     private PolicyDocumentRepository policyRepository;
+
+    @Mock
+    private PolicyRuleStore ruleStore;
 
     private final TestClock testClock = new TestClock(true);
 
@@ -82,6 +90,80 @@ class NotificationServiceTests {
                     .contains("F-1, J-1", "Fixed Time Period of Admission", "2026-10-01");
             assertThat(notification.getReadAt()).isNull();
         });
+    }
+
+    @Test
+    void aPolicyThatMovedItsRuleGetsNoGenericAlert() {
+        service().onPolicyIndexed(new PolicyIndexedEvent(3L, "Fixed Time Period of Admission", List.of("F-1"),
+                LocalDate.parse("2026-09-15"), "Final rule.", LocalDate.parse("2026-07-17"), true));
+
+        verify(notificationRepository, org.mockito.Mockito.never()).saveAll(anyList());
+        verify(userRepository, org.mockito.Mockito.never()).findByRoleAndVisaTypeIn(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void aRuleChangeAlertSaysWhatMovedAndBelongsToTheDocumentThatMovedIt() {
+        User student = user(7L, "student@example.com");
+        when(userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("F-1", "J-1")))
+                .thenReturn(List.of(student));
+
+        service().onPolicyChanged(change(5L, new RuleState(PolicyStatus.FINAL, LocalDate.parse("2026-09-15"), false),
+                new RuleState(PolicyStatus.FINAL, LocalDate.parse("2026-11-01"), false), "Homeland Security Department"));
+
+        verify(notificationRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).singleElement().satisfies(notification -> {
+            assertThat(notification.getPolicyId()).isEqualTo(5L);
+            assertThat(notification.getMessage()).isEqualTo("Rule update for F-1, J-1: effective date moved from "
+                    + "15 Sep 2026 to 1 Nov 2026: Fixed Time Period of Admission");
+        });
+        verify(streamRegistry).publish(org.mockito.ArgumentMatchers.eq(7L), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void aRepeatedChangeEventSkipsReadersAlreadyAlerted() {
+        User alerted = user(7L, "student@example.com");
+        User other = user(8L, "other@example.com");
+        when(userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("F-1", "J-1")))
+                .thenReturn(List.of(alerted, other));
+        when(notificationRepository.findUserIdsByPolicyId(5L)).thenReturn(java.util.Set.of(7L));
+
+        service().onPolicyChanged(change(5L, new RuleState(PolicyStatus.PROPOSED, null, false),
+                new RuleState(PolicyStatus.FINAL, LocalDate.parse("2026-09-15"), false), "Homeland Security Department"));
+
+        verify(notificationRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).singleElement()
+                .satisfies(notification -> assertThat(notification.getUserId()).isEqualTo(8L));
+    }
+
+    @Test
+    void theTestClockSyncUsesTheChangeWordingForADocumentThatMovedItsRule() {
+        User student = user(7L, "student@example.com");
+        LocalDate today = LocalDate.parse("2026-09-30");
+        testClock.setUserDate(7L, today);
+        when(policyRepository.findBySourceTypeAndPublicationDateLessThanEqualOrderByPublicationDateAscIdAsc(
+                SourceType.PRIMARY, today)).thenReturn(List.of(policy(5L, "Fixed Time Period of Admission", "F-1,J-1")));
+        var row = new PolicyRuleStore.HistoryRow(1L, 9L, new RuleState(PolicyStatus.FINAL, LocalDate.parse("2026-09-15"), false),
+                new RuleState(PolicyStatus.PROPOSED, null, false), true, true, false,
+                new RuleSource(5L, "FR-5", SourceType.PRIMARY, "https://example.gov", "Fixed Time Period of Admission",
+                        "DHS", LocalDate.parse("2026-09-01")), mygrant.rules.RecordedBy.INGESTION, java.time.Instant.now());
+        when(ruleStore.alertedChangeFrom(5L)).thenReturn(Optional.of(
+                new PolicyRuleStore.AlertedChange("Fixed Time Period of Admission", row)));
+
+        service().syncToTestClock(student);
+
+        verify(notificationRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).singleElement().satisfies(notification -> assertThat(notification.getMessage())
+                .isEqualTo("Rule update for F-1, J-1: moved from proposed to final, effective 15 Sep 2026: "
+                        + "Fixed Time Period of Admission"));
+    }
+
+    private static PolicyChangedEvent change(long sourceId, RuleState previous, RuleState current, String agency) {
+        return new PolicyChangedEvent(9L, 1L, "Fixed Time Period of Admission", previous, current,
+                RuleChange.between(previous, current),
+                new RuleSource(sourceId, "FR-" + sourceId, SourceType.PRIMARY, "https://example.gov",
+                        "Fixed Time Period of Admission", agency, LocalDate.parse("2026-09-01")),
+                List.of("F-1", "J-1"), "Fixed Time Period of Admission", "Sets a fixed period of admission.");
     }
 
     @Test
@@ -305,6 +387,24 @@ class NotificationServiceTests {
     }
 
     @Test
+    void aDelayNoticesGenericAlertLeavesOutTheFederalRegistersEffectiveOn() {
+        // Sent only when its new date could not be read; effective_on is not that date.
+        User worker = user(7L, "worker@example.com");
+        when(userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("H-1B"))).thenReturn(List.of(worker));
+        String title = "Modification of Registration Requirement; Delay of Effective Date";
+
+        service().onPolicyIndexed(new PolicyIndexedEvent(3L, title, List.of("H-1B"), LocalDate.parse("2021-01-08"),
+                "ACTION: Final rule; delay of effective date.\n\nSUMMARY: The rule is delayed."));
+        service().onPolicyIndexed(new PolicyIndexedEvent(4L, "Fee schedule update", List.of("H-1B"),
+                LocalDate.parse("2021-03-09"), "ACTION: Final rule.\n\nSUMMARY: Adjusts filing fees."));
+
+        verify(notificationRepository, org.mockito.Mockito.times(2)).saveAll(saved.capture());
+        assertThat(saved.getAllValues()).extracting(batch -> batch.getFirst().getMessage()).containsExactly(
+                "New policy affecting H-1B: " + title,
+                "New policy affecting H-1B: Fee schedule update (effective 2021-03-09)");
+    }
+
+    @Test
     void doesNotFlagActionWhenTheUserHasNotFilledInTheAffectedField() {
         User student = user(7L, "student@example.com"); // no program end date, no academic level
         when(userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("F-1")))
@@ -451,7 +551,8 @@ class NotificationServiceTests {
                 new PolicyImpactRules(),
                 streamRegistry,
                 policyRepository,
-                testClock
+                testClock,
+                ruleStore
         );
     }
 

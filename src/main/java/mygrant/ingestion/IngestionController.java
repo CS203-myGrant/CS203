@@ -56,7 +56,11 @@ public class IngestionController {
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Index a policy from the request body",
             description = "Saves the policy, splits and embeds its text for RAG, and alerts affected "
-                    + "applicants. An unchanged policy with the same external id is reused.")
+                    + "applicants. An unchanged policy with the same external id is reused. A SECONDARY "
+                    + "source, such as a court order, joins the rule of any Federal Register document or "
+                    + "regulations.gov docket linked in its sourceUrl or sourceReferences; if its title or "
+                    + "content reports litigation or a stay, the rule is marked disputed and its applicants "
+                    + "get one alert.")
     @ApiResponse(responseCode = "201", description = "Indexed, or reused when unchanged")
     @ApiResponse(responseCode = "400", description = "A field is missing, too long or invalid")
     @ApiResponse(responseCode = "409", description = "A different policy already has this external id")

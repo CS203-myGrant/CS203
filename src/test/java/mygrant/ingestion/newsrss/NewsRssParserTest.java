@@ -27,6 +27,20 @@ class NewsRssParserTest {
     }
 
     @Test
+    void keepsTheDescriptionLinksThatTheTextDrops() throws Exception {
+        String xml;
+        try (var input = getClass().getResourceAsStream("/newsrss/synthetic-rule-coverage-feed.xml")) {
+            xml = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        var articles = parser.parse(xml).articles();
+
+        assertThat(articles.get(0).links()).containsExactly("https://www.federalregister.gov/d/2026-14439",
+                "https://www.regulations.gov/docket/ICEB-2025-0001");
+        assertThat(articles.get(0).summary()).doesNotContain("href").contains("preliminary injunction");
+        assertThat(articles.get(2).links()).isEmpty();
+    }
+
+    @Test
     void rejectsMalformedNonRssAndExternalEntityPayloads() {
         assertThatThrownBy(() -> parser.parse("<rss><channel>"))
                 .isInstanceOf(IllegalArgumentException.class);
