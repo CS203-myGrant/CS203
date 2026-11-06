@@ -1,6 +1,7 @@
 package mygrant.ingestion.federalregister;
 
 import java.time.Instant;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -20,6 +21,7 @@ import mygrant.impact.ProfileImpactAssessment;
 import mygrant.impact.ProfileImpactAssessmentService;
 import mygrant.policies.PolicyStatus;
 import mygrant.policies.SourceType;
+import mygrant.rules.RuleIdentifiers;
 
 /** Orchestrates Federal Register download, classification, and policy indexing. */
 @Service
@@ -97,12 +99,13 @@ public class FederalRegisterIngestionService
                 document.title(),
                 prepared.agency(),
                 String.join(",", classification.visaTypes()),
-                mapStatus(document.type()),
+                mapStatus(document.type(), document.action()),
                 source().type(),
                 document.publicationDate(),
                 document.effectiveDate(),
                 document.htmlUrl(),
-                content), content.substring(0, Math.min(content.length(), MAX_INDEX_CHARACTERS)));
+                content), content.substring(0, Math.min(content.length(), MAX_INDEX_CHARACTERS)),
+                RuleIdentifiers.fromFederalRegisterApi(document.docketIds(), document.regulationIdNumbers()));
 
         ProfileImpactAssessment impactAssessment = request.assessImpact()
                 ? impactAssessmentService.assess(request.userEmail(), document, prepared.agency(), content, classification)
@@ -153,13 +156,20 @@ public class FederalRegisterIngestionService
                 .distinct().collect(Collectors.joining("; "));
     }
 
-    private PolicyStatus mapStatus(String type) {
-        if ("Rule".equalsIgnoreCase(type)) {
+    /**
+     * A rule or proposed rule whose action withdraws it, such as "Proposed rule; withdrawal.", is
+     * WITHDRAWN. Otherwise a Rule (final, interim final, a delay or a correction) is FINAL and a
+     * Proposed Rule is PROPOSED; notices and anything else are UNKNOWN.
+     */
+    static PolicyStatus mapStatus(String type, String action) {
+        boolean rule = "Rule".equalsIgnoreCase(type);
+        boolean proposed = "Proposed Rule".equalsIgnoreCase(type);
+        if ((rule || proposed) && action != null && action.toLowerCase(Locale.ROOT).contains("withdraw")) {
+            return PolicyStatus.WITHDRAWN;
+        }
+        if (rule) {
             return PolicyStatus.FINAL;
         }
-        if ("Proposed Rule".equalsIgnoreCase(type)) {
-            return PolicyStatus.PROPOSED;
-        }
-        return PolicyStatus.UNKNOWN;
+        return proposed ? PolicyStatus.PROPOSED : PolicyStatus.UNKNOWN;
     }
 }

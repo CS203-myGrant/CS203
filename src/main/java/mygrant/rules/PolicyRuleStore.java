@@ -1,0 +1,272 @@
+package mygrant.rules;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.stereotype.Repository;
+
+import mygrant.common.Confidence;
+import mygrant.ingestion.connector.ContentHash;
+import mygrant.policies.PolicyStatus;
+import mygrant.policies.SourceType;
+
+/** JDBC access to policy rules, their documents and identifiers, and their stage history. */
+@Repository
+public class PolicyRuleStore {
+
+    /**
+     * Held for the rest of the transaction by whoever links a document, so two imports of the same
+     * new rulemaking cannot each start a rule. Single-key advisory locks do not share a key space
+     * with the two-key ones PolicyRecommendationStore takes.
+     */
+    private static final long LINKING_LOCK = 203_086L;
+
+    private final NamedParameterJdbcTemplate jdbc;
+
+    public PolicyRuleStore(NamedParameterJdbcTemplate jdbc) {
+        this.jdbc = jdbc;
+    }
+
+    public record Rule(long id, String title, RuleState state, LocalDate primaryAsOf) {
+    }
+
+    public record Link(long policyId, long ruleId, MatchMethod method, Confidence confidence, String matchedOn,
+            boolean needsReview, String reviewReason) {
+    }
+
+    /** One history row to write. previous is null for a rule's first entry. */
+    public record NewHistoryEntry(long ruleId, RuleState previous, RuleState state, boolean applied,
+            boolean alerted, RuleSource source, RecordedBy recordedBy) {
+    }
+
+    /** A stored history row. The previous values are what the rule held when the row was written. */
+    public record HistoryRow(long id, long ruleId, RuleState state, RuleState previous, boolean applied,
+            boolean alerted, RuleSource source, RecordedBy recordedBy, Instant recordedAt) {
+    }
+
+    void lockLinking() {
+        jdbc.getJdbcTemplate().execute("SELECT pg_advisory_xact_lock(" + LINKING_LOCK + ")");
+    }
+
+    public Optional<Link> findLink(long policyId) {
+        return jdbc.query("SELECT * FROM policy_rule_documents WHERE policy_id = :id",
+                Map.of("id", policyId), (rs, row) -> link(rs)).stream().findFirst();
+    }
+
+    public Optional<Rule> findRule(long ruleId) {
+        return jdbc.query("SELECT * FROM policy_rules WHERE id = :id", Map.of("id", ruleId),
+                (rs, row) -> new Rule(rs.getLong("id"), rs.getString("title"),
+                        new RuleState(PolicyStatus.valueOf(rs.getString("primary_stage")),
+                                rs.getObject("effective_date", LocalDate.class), rs.getBoolean("disputed")),
+                        rs.getObject("primary_as_of", LocalDate.class)))
+                .stream().findFirst();
+    }
+
+    long createRule(String title, RuleState state, LocalDate primaryAsOf) {
+        return jdbc.queryForObject("""
+                INSERT INTO policy_rules (title, primary_stage, effective_date, disputed, primary_as_of)
+                VALUES (:title, :stage, :effectiveDate, :disputed, :asOf)
+                RETURNING id
+                """, state(state).addValue("title", title).addValue("asOf", primaryAsOf, Types.DATE), Long.class);
+    }
+
+    void updateRule(long ruleId, RuleState state, LocalDate primaryAsOf) {
+        jdbc.update("""
+                UPDATE policy_rules SET primary_stage = :stage, effective_date = :effectiveDate,
+                    disputed = :disputed, primary_as_of = :asOf, updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                """, state(state).addValue("id", ruleId).addValue("asOf", primaryAsOf, Types.DATE));
+    }
+
+    void saveIdentifiers(long policyId, Collection<RuleIdentifier> identifiers) {
+        if (identifiers.isEmpty()) {
+            return;
+        }
+        jdbc.batchUpdate("""
+                INSERT INTO policy_document_identifiers (policy_id, kind, value) VALUES (:policyId, :kind, :value)
+                ON CONFLICT DO NOTHING
+                """, identifiers.stream().map(identifier -> new MapSqlParameterSource()
+                        .addValue("policyId", policyId)
+                        .addValue("kind", identifier.kind().name())
+                        .addValue("value", identifier.value()))
+                .toArray(MapSqlParameterSource[]::new));
+    }
+
+    public Set<RuleIdentifier> identifiersOf(long policyId) {
+        return new LinkedHashSet<>(jdbc.query("""
+                SELECT kind, value FROM policy_document_identifiers WHERE policy_id = :id ORDER BY kind, value
+                """, Map.of("id", policyId),
+                (rs, row) -> new RuleIdentifier(IdentifierKind.valueOf(rs.getString("kind")), rs.getString("value"))));
+    }
+
+    /**
+     * Rules that hold any of the identifiers, each with the identifiers it matched. A rule's
+     * identity comes from its primary documents only: a docket or RIN carried by linked news never
+     * pulls another document in. A Federal Register document number matches the rule holding the
+     * primary document with that number.
+     */
+    Map<Long, Set<RuleIdentifier>> rulesMatching(Collection<RuleIdentifier> identifiers) {
+        Map<Long, Set<RuleIdentifier>> matches = new LinkedHashMap<>();
+        List<String> keys = identifiers.stream()
+                .filter(identifier -> identifier.kind() != IdentifierKind.FR_DOCUMENT)
+                .map(identifier -> identifier.kind() + ":" + identifier.value())
+                .toList();
+        if (!keys.isEmpty()) {
+            jdbc.query("""
+                    SELECT DISTINCT d.rule_id, i.kind, i.value
+                    FROM policy_document_identifiers i
+                    JOIN policy_rule_documents d ON d.policy_id = i.policy_id
+                    JOIN policy_documents p ON p.id = i.policy_id
+                    WHERE p.source_type = 'PRIMARY' AND i.kind IN ('DOCKET', 'RIN')
+                      AND (i.kind || ':' || i.value) IN (:keys)
+                    ORDER BY d.rule_id
+                    """, Map.of("keys", keys), rs -> {
+                matches.computeIfAbsent(rs.getLong("rule_id"), id -> new LinkedHashSet<>())
+                        .add(new RuleIdentifier(IdentifierKind.valueOf(rs.getString("kind")), rs.getString("value")));
+            });
+        }
+        List<String> documentNumbers = identifiers.stream()
+                .filter(identifier -> identifier.kind() == IdentifierKind.FR_DOCUMENT)
+                .map(RuleIdentifier::value)
+                .toList();
+        if (!documentNumbers.isEmpty()) {
+            jdbc.query("""
+                    SELECT d.rule_id, upper(p.external_id) AS document_number
+                    FROM policy_documents p JOIN policy_rule_documents d ON d.policy_id = p.id
+                    WHERE p.source_type = 'PRIMARY' AND upper(p.external_id) IN (:numbers)
+                    ORDER BY d.rule_id
+                    """, Map.of("numbers", documentNumbers), rs -> {
+                matches.computeIfAbsent(rs.getLong("rule_id"), id -> new LinkedHashSet<>())
+                        .add(RuleIdentifier.federalRegisterDocument(rs.getString("document_number")));
+            });
+        }
+        return matches;
+    }
+
+    void link(long policyId, long ruleId, MatchMethod method, Confidence confidence, String matchedOn,
+            String reviewReason) {
+        jdbc.update("""
+                INSERT INTO policy_rule_documents
+                    (policy_id, rule_id, match_method, confidence, matched_on, needs_review, review_reason)
+                VALUES (:policyId, :ruleId, :method, :confidence, :matchedOn, :needsReview, :reason)
+                """, new MapSqlParameterSource()
+                .addValue("policyId", policyId)
+                .addValue("ruleId", ruleId)
+                .addValue("method", method.name())
+                .addValue("confidence", confidence.name())
+                .addValue("matchedOn", truncate(matchedOn, 500), Types.VARCHAR)
+                .addValue("needsReview", reviewReason != null)
+                .addValue("reason", truncate(reviewReason, 1000), Types.VARCHAR));
+    }
+
+    /**
+     * Writes a history row unless the same change from the same source is already there. Returns
+     * the new row's id, or empty for a repeat.
+     */
+    Optional<Long> appendHistory(NewHistoryEntry entry) {
+        RuleState previous = entry.previous();
+        RuleSource source = entry.source();
+        MapSqlParameterSource params = state(entry.state())
+                .addValue("ruleId", entry.ruleId())
+                .addValue("previousStage", previous == null ? null : previous.primaryStage().name(), Types.VARCHAR)
+                .addValue("previousDate", previous == null ? null : previous.effectiveDate(), Types.DATE)
+                .addValue("previousDisputed", previous == null ? null : previous.disputed(), Types.BOOLEAN)
+                .addValue("applied", entry.applied())
+                .addValue("alerted", entry.alerted())
+                .addValue("sourceId", source.policyId(), Types.BIGINT)
+                .addValue("sourceExternalId", source.externalId())
+                .addValue("sourceType", source.sourceType().name())
+                .addValue("sourceUrl", source.url())
+                .addValue("sourceTitle", source.title())
+                .addValue("sourceAgency", source.agency())
+                .addValue("observedOn", source.publishedOn(), Types.DATE)
+                .addValue("recordedBy", entry.recordedBy().name())
+                .addValue("dedupeKey", dedupeKey(entry));
+        return jdbc.query("""
+                INSERT INTO policy_rule_history
+                    (rule_id, primary_stage, effective_date, disputed, previous_primary_stage,
+                     previous_effective_date, previous_disputed, applied, alerted, source_policy_id,
+                     source_external_id, source_type, source_url, source_title, source_agency,
+                     observed_on, recorded_by, dedupe_key)
+                VALUES (:ruleId, :stage, :effectiveDate, :disputed, :previousStage, :previousDate,
+                        :previousDisputed, :applied, :alerted, :sourceId, :sourceExternalId, :sourceType,
+                        :sourceUrl, :sourceTitle, :sourceAgency, :observedOn, :recordedBy, :dedupeKey)
+                ON CONFLICT (rule_id, dedupe_key) DO NOTHING
+                RETURNING id
+                """, params, (rs, row) -> rs.getLong(1)).stream().findFirst();
+    }
+
+    /** The rule's history in timeline order: by source publication date, then as recorded. */
+    public List<HistoryRow> history(long ruleId) {
+        return jdbc.query("""
+                SELECT * FROM policy_rule_history WHERE rule_id = :id ORDER BY observed_on, recorded_at, id
+                """, Map.of("id", ruleId), (rs, row) -> historyRow(rs));
+    }
+
+    /** Documents not in any rule, primary first, each oldest first, so history is written in order. */
+    List<Long> unlinkedDocumentIds() {
+        return jdbc.query("""
+                SELECT p.id FROM policy_documents p
+                WHERE NOT EXISTS (SELECT 1 FROM policy_rule_documents d WHERE d.policy_id = p.id)
+                ORDER BY CASE p.source_type WHEN 'PRIMARY' THEN 0 ELSE 1 END, p.publication_date, p.id
+                """, Map.of(), (rs, row) -> rs.getLong(1));
+    }
+
+    /**
+     * Identifies one change: the source, the state before and the state after. Including the
+     * previous state means a rule that moves back to a value it once had still records the move.
+     */
+    static String dedupeKey(NewHistoryEntry entry) {
+        return ContentHash.sha256(String.join("|", entry.source().externalId(), describe(entry.previous()),
+                describe(entry.state()), String.valueOf(entry.applied())));
+    }
+
+    private static String describe(RuleState state) {
+        return state == null ? "-" : state.primaryStage() + "," + state.effectiveDate() + "," + state.disputed();
+    }
+
+    private static MapSqlParameterSource state(RuleState state) {
+        return new MapSqlParameterSource()
+                .addValue("stage", state.primaryStage().name())
+                .addValue("effectiveDate", state.effectiveDate(), Types.DATE)
+                .addValue("disputed", state.disputed());
+    }
+
+    private static Link link(ResultSet rs) throws SQLException {
+        return new Link(rs.getLong("policy_id"), rs.getLong("rule_id"), MatchMethod.valueOf(rs.getString("match_method")),
+                Confidence.valueOf(rs.getString("confidence")), rs.getString("matched_on"),
+                rs.getBoolean("needs_review"), rs.getString("review_reason"));
+    }
+
+    private static HistoryRow historyRow(ResultSet rs) throws SQLException {
+        String previousStage = rs.getString("previous_primary_stage");
+        RuleState previous = previousStage == null ? null : new RuleState(PolicyStatus.valueOf(previousStage),
+                rs.getObject("previous_effective_date", LocalDate.class), rs.getBoolean("previous_disputed"));
+        long sourceId = rs.getLong("source_policy_id");
+        RuleSource source = new RuleSource(rs.wasNull() ? null : sourceId, rs.getString("source_external_id"),
+                SourceType.valueOf(rs.getString("source_type")), rs.getString("source_url"),
+                rs.getString("source_title"), rs.getString("source_agency"),
+                rs.getObject("observed_on", LocalDate.class));
+        return new HistoryRow(rs.getLong("id"), rs.getLong("rule_id"),
+                new RuleState(PolicyStatus.valueOf(rs.getString("primary_stage")),
+                        rs.getObject("effective_date", LocalDate.class), rs.getBoolean("disputed")),
+                previous, rs.getBoolean("applied"), rs.getBoolean("alerted"), source,
+                RecordedBy.valueOf(rs.getString("recorded_by")), rs.getTimestamp("recorded_at").toInstant());
+    }
+
+    private static String truncate(String value, int max) {
+        return value == null || value.length() <= max ? value : value.substring(0, max - 1) + "…";
+    }
+}

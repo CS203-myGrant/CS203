@@ -3,6 +3,8 @@ package mygrant.ingestion;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.atLeastOnce;
@@ -28,6 +30,9 @@ import mygrant.policies.PolicyIndexedEvent;
 import mygrant.policies.PolicyStatus;
 import mygrant.policies.SourceType;
 import mygrant.policies.RestrictionCategory;
+import mygrant.rules.PolicyRuleTracker;
+import mygrant.rules.RecordedBy;
+import mygrant.rules.RuleIdentifier;
 
 /** Verifies policy storage, selected-excerpt indexing, and idempotent re-imports. */
 @ExtendWith(MockitoExtension.class)
@@ -42,6 +47,9 @@ class PolicyIngestionServiceTests {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private PolicyRuleTracker ruleTracker;
+
     @Test
     void indexesANewPolicyDocument() {
         IngestPolicyRequest request = request();
@@ -54,7 +62,7 @@ class PolicyIngestionServiceTests {
             return policy;
         });
 
-        PolicyIngestionService service = new PolicyIngestionService(repository, vectorStore, eventPublisher);
+        PolicyIngestionService service = new PolicyIngestionService(repository, vectorStore, eventPublisher, ruleTracker);
         var response = service.ingest(request);
 
         assertThat(response.policyId()).isEqualTo(1L);
@@ -64,6 +72,8 @@ class PolicyIngestionServiceTests {
         verify(vectorStore).add(any());
         verify(eventPublisher).publishEvent(argThat((Object event) -> event instanceof PolicyIndexedEvent indexed
                 && indexed.policyId().equals(1L) && indexed.visaTypes().equals(java.util.List.of("F-1"))));
+        verify(ruleTracker).track(argThat(policy -> policy.getId().equals(1L)), eq(java.util.Set.of()),
+                eq(RecordedBy.INGESTION));
     }
 
     @Test
@@ -83,7 +93,7 @@ class PolicyIngestionServiceTests {
             return policy;
         });
 
-        new PolicyIngestionService(repository, vectorStore, eventPublisher).ingest(request);
+        new PolicyIngestionService(repository, vectorStore, eventPublisher, ruleTracker).ingest(request);
 
         verify(repository, atLeastOnce()).save(argThat(policy -> policy.getAffectedCountries().equals(java.util.Set.of("MY", "US"))
                 && policy.getRestrictionCategories().equals(java.util.Set.of(RestrictionCategory.VISA_ISSUANCE))
@@ -104,7 +114,7 @@ class PolicyIngestionServiceTests {
                 base.sourceType(), base.publicationDate(), base.effectiveDate(), base.sourceUrl(), base.content(),
                 java.util.Set.of("Malaysia"), java.util.Set.of(), java.util.List.of());
 
-        assertThatThrownBy(() -> new PolicyIngestionService(repository, vectorStore, eventPublisher).ingest(request))
+        assertThatThrownBy(() -> new PolicyIngestionService(repository, vectorStore, eventPublisher, ruleTracker).ingest(request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("ISO 3166-1 alpha-2");
         verify(repository, never()).save(any(PolicyDocument.class));
@@ -118,7 +128,7 @@ class PolicyIngestionServiceTests {
                 base.sourceType(), base.publicationDate(), base.effectiveDate(), base.sourceUrl(), base.content(),
                 java.util.Set.of(), java.util.Set.of(), java.util.List.of("javascript:alert(1)"));
 
-        assertThatThrownBy(() -> new PolicyIngestionService(repository, vectorStore, eventPublisher).ingest(request))
+        assertThatThrownBy(() -> new PolicyIngestionService(repository, vectorStore, eventPublisher, ruleTracker).ingest(request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Invalid source reference URL");
         verify(repository, never()).save(any(PolicyDocument.class));
@@ -136,13 +146,35 @@ class PolicyIngestionServiceTests {
         existing.markIndexed(Instant.parse("2026-09-15T00:00:00Z"));
         when(repository.findByExternalId(request.externalId())).thenReturn(Optional.of(existing));
 
-        PolicyIngestionService service = new PolicyIngestionService(repository, vectorStore, eventPublisher);
+        PolicyIngestionService service = new PolicyIngestionService(repository, vectorStore, eventPublisher, ruleTracker);
         var response = service.ingest(request);
 
         assertThat(response.alreadyIndexed()).isTrue();
         assertThat(response.chunksIndexed()).isZero();
         verify(vectorStore, never()).add(any());
         verify(eventPublisher, never()).publishEvent(any(Object.class));
+        // A repeat import must not touch the rule, or it could add history twice.
+        verify(ruleTracker, never()).track(any(), any(), any());
+    }
+
+    @Test
+    void passesSourceIdentifiersToTheRuleTracker() {
+        IngestPolicyRequest request = request();
+        when(repository.findByExternalId(request.externalId())).thenReturn(Optional.empty());
+        when(repository.save(any(PolicyDocument.class))).thenAnswer(invocation -> {
+            PolicyDocument policy = invocation.getArgument(0);
+            if (policy.getId() == null) {
+                ReflectionTestUtils.setField(policy, "id", 1L);
+            }
+            return policy;
+        });
+        var identifiers = java.util.Set.of(RuleIdentifier.docket("ICEB-2025-0001"), RuleIdentifier.rin("1653-AA95"));
+
+        new PolicyIngestionService(repository, vectorStore, eventPublisher, ruleTracker)
+                .ingest(request, "Selected summary only.", identifiers);
+
+        verify(ruleTracker).track(argThat(policy -> policy.getId().equals(1L)), same(identifiers),
+                eq(RecordedBy.INGESTION));
     }
 
     @Test
@@ -157,7 +189,7 @@ class PolicyIngestionServiceTests {
             return policy;
         });
 
-        PolicyIngestionService service = new PolicyIngestionService(repository, vectorStore, eventPublisher);
+        PolicyIngestionService service = new PolicyIngestionService(repository, vectorStore, eventPublisher, ruleTracker);
         service.ingest(request, "Selected summary only.");
 
         verify(repository, atLeastOnce()).save(argThat(policy -> policy.getContent().equals(request.content())));
@@ -185,7 +217,7 @@ class PolicyIngestionServiceTests {
             return policy;
         });
 
-        new PolicyIngestionService(repository, vectorStore, eventPublisher).ingest(secondary);
+        new PolicyIngestionService(repository, vectorStore, eventPublisher, ruleTracker).ingest(secondary);
 
         verify(vectorStore).add(argThat(chunks -> chunks.stream()
                 .allMatch(chunk -> "SECONDARY".equals(chunk.getMetadata().get("sourceType")))));
