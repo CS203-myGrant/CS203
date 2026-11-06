@@ -80,7 +80,7 @@ public class FederalRegisterIngestionService
         String content = fetched.payload().content();
         VisaClassification classification = classifier.classify(document.title(), content);
         if (classification.visaTypes().isEmpty()) {
-            throw new IllegalArgumentException(
+            throw new UnsupportedVisaCategoryException(
                     "No supported visa category was detected; document was not ingested");
         }
         return new PreparedDocument(document, content, classification, agencyNames(document));

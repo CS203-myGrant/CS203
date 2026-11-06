@@ -695,6 +695,32 @@ Admins can inspect Federal Register's in-memory import health at
 `GET /api/v1/ingestion/federal-register/health`; it resets when the app restarts.
 `GET /api/v1/ingestion/status` returns health for every installed connector to admins.
 
+### Scheduled Federal Register sync and failed documents
+
+`SourceSyncScheduler` syncs each enabled policy source on its own interval, and an admin can run
+one with `POST /api/v1/ingestion/sync`. A Federal Register run searches from the date of the last
+completed run to today and imports each document found. One document failing no longer fails the
+run and holds back every later import:
+
+- The failure is logged with the document number, the source and the error, recorded in
+  `sync_failures`, and the run carries on with the rest. The run's summary line in the log, its
+  `error` in the sync response and its `lastError` in `GET /api/v1/ingestion/status` name the
+  documents that failed.
+- The run still completes, so the search window moves past the failed document. It is not lost:
+  every later run retries the `RETRYING` documents in `sync_failures`, whether or not the search
+  still finds them. One that imports becomes `RESOLVED`. After 5 failures in a row
+  (`mygrant.ingestion.max-document-attempts`) it becomes `PERMANENTLY_FAILED`, and later runs
+  skip it even when the search finds it again.
+- A search result that the classifier finds is about no supported visa type is not a failure:
+  it is counted in the summary, not recorded and not retried.
+- If the search itself fails, the whole run fails as before and the window does not move.
+
+Admins list failed documents, newest failure first, with `GET /api/v1/ingestion/sync-failures`;
+filter with `?status=RETRYING`, `PERMANENTLY_FAILED` or `RESOLVED`. Once the cause of a
+permanent failure is fixed, import the document with
+`POST /api/v1/ingestion/federal-register/{documentNumber}`. Its `sync_failures` entry stays
+`PERMANENTLY_FAILED` as the record of what the sync tried.
+
 ### USCIS processing-time observations
 
 The admin's existing “USCIS processing-time data” row in the prototype is a fixed

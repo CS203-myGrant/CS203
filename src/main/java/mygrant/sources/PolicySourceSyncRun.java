@@ -50,11 +50,16 @@ public class PolicySourceSyncRun {
         this.startedAt = startedAt;
     }
 
-    public void complete(Instant finishedAt, int documentsFetched, int chunksVectorised) {
+    /**
+     * The run finished. documentErrors names the documents it could not import, or is null when
+     * there were none; the run still counts as succeeded, because they no longer stop it.
+     */
+    public void complete(Instant finishedAt, int documentsFetched, int chunksVectorised, String documentErrors) {
         this.finishedAt = finishedAt;
         this.documentsFetched = documentsFetched;
         this.chunksVectorised = chunksVectorised;
         this.succeeded = true;
+        this.error = documentErrors;
     }
 
     public void fail(Instant finishedAt, String error) {

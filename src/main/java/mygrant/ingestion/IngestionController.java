@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -110,6 +111,21 @@ public class IngestionController {
     public Page<mygrant.ingestion.dto.IngestionStatusResponse> status(
             @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
         return Pages.of(sourceSyncService.status(), pageable);
+    }
+
+    /** Documents a source sync could not import, for admins. */
+    @GetMapping("/sync-failures")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Documents a source sync could not import",
+            description = "One entry per document that failed during a sync, with its attempts and last error. "
+                    + "A failed document no longer fails the whole run: the run imports the rest and moves on. "
+                    + "RETRYING documents are tried again on every later run; after maxAttempts failures in a row "
+                    + "(5 by default) a document is PERMANENTLY_FAILED and skipped. RESOLVED means a later run "
+                    + "imported it. Filter with status; newest failure first.")
+    public Page<mygrant.ingestion.dto.SyncFailureResponse> syncFailures(
+            @RequestParam(required = false) mygrant.sources.SyncFailure.Status status,
+            @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
+        return sourceSyncService.failures(status, pageable);
     }
 
     @PostMapping("/sync")
