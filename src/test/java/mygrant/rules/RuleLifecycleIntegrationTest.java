@@ -302,18 +302,10 @@ class RuleLifecycleIntegrationTest {
         events.clear();
 
         // No Federal Register document records the order, and the news about it carries no link, so
-        // an admin posts it as a secondary source that links the final rule.
-        String body = json.writeValueAsString(Map.of(
-                "externalId", COURT_ORDER,
-                "title", RuleFixtures.COURT_ORDER_TITLE,
-                "agency", RuleFixtures.COURT,
-                "visaType", "F-1,J-1",
-                "status", "CHALLENGED",
-                "sourceType", "SECONDARY",
-                "publicationDate", RuleFixtures.COURT_ORDER_PUBLISHED.toString(),
-                "sourceUrl", RuleFixtures.COURT_ORDER_URL,
-                "sourceReferences", List.of("https://www.federalregister.gov/d/" + FINAL_RULE),
-                "content", RuleFixtures.COURT_ORDER_SUMMARY));
+        // an admin posts it as a secondary source that links the final rule: the README's request body.
+        String body = RuleFixtures.text(RuleFixtures.COURT_ORDER_REQUEST);
+        assertThat(json.readTree(body).path("sourceReferences").get(0).asText())
+                .isEqualTo("https://www.federalregister.gov/d/" + FINAL_RULE);
         String created = mvc.perform(post("/api/v1/ingestion/documents").header("Authorization", token(admin))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
@@ -361,7 +353,7 @@ class RuleLifecycleIntegrationTest {
                 .andExpect(jsonPath("$.disputedBy.title").value(RuleFixtures.COURT_ORDER_TITLE))
                 .andExpect(jsonPath("$.disputedBy.agency").value(RuleFixtures.COURT))
                 .andExpect(jsonPath("$.disputedBy.url").value(RuleFixtures.COURT_ORDER_URL))
-                .andExpect(jsonPath("$.disputedBy.publishedOn").value("2026-09-14"))
+                .andExpect(jsonPath("$.disputedBy.publishedOn").value(RuleFixtures.COURT_ORDER_PUBLISHED.toString()))
                 .andExpect(jsonPath("$.documents[2].matchMethod").value("FR_DOCUMENT"))
                 .andExpect(jsonPath("$.documents[2].confidence").value("HIGH"))
                 .andExpect(jsonPath("$.steps.length()").value(3))
