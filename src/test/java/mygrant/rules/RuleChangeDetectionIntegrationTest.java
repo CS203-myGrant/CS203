@@ -3,6 +3,9 @@ package mygrant.rules;
 import static mygrant.rules.RuleFixtures.DATE_MOVE;
 import static mygrant.rules.RuleFixtures.FINAL_EFFECTIVE;
 import static mygrant.rules.RuleFixtures.FINAL_RULE;
+import static mygrant.rules.RuleFixtures.H1B_FINAL_RULE;
+import static mygrant.rules.RuleFixtures.H1B_PROPOSAL;
+import static mygrant.rules.RuleFixtures.H1B_REGISTRATION_RULE;
 import static mygrant.rules.RuleFixtures.MOVED_EFFECTIVE;
 import static mygrant.rules.RuleFixtures.OLD_PROPOSAL;
 import static mygrant.rules.RuleFixtures.PROPOSAL;
@@ -51,7 +54,8 @@ class RuleChangeDetectionIntegrationTest {
 
     @BeforeEach
     void isolateFixtures() {
-        RuleFixtures.isolate(jdbc, List.of(PROPOSAL, FINAL_RULE, OLD_PROPOSAL, DATE_MOVE, NOTICE));
+        RuleFixtures.isolate(jdbc, List.of(PROPOSAL, FINAL_RULE, OLD_PROPOSAL, DATE_MOVE, NOTICE, H1B_PROPOSAL,
+                H1B_REGISTRATION_RULE, H1B_FINAL_RULE));
     }
 
     @Test
@@ -110,6 +114,40 @@ class RuleChangeDetectionIntegrationTest {
             assertThat(change.previous()).isEqualTo(new RuleState(PolicyStatus.FINAL, FINAL_EFFECTIVE, false));
             assertThat(change.current()).isEqualTo(new RuleState(PolicyStatus.FINAL, MOVED_EFFECTIVE, false));
             assertThat(change.source().externalId()).isEqualTo(DATE_MOVE);
+        });
+        assertThat(store.history(store.findLink(delay).orElseThrow().ruleId()).getLast().aboutEffectiveDate()).isTrue();
+    }
+
+    @Test
+    void aSecondFinalRuleInTheRulemakingRaisesNothingAndKeepsTheRulesDate() {
+        ingest(RuleFixtures.h1b(H1B_PROPOSAL, RuleFixtures.H1B_TITLE, PolicyStatus.PROPOSED,
+                RuleFixtures.H1B_PROPOSAL_PUBLISHED, null));
+        ingest(RuleFixtures.h1b(H1B_REGISTRATION_RULE, RuleFixtures.H1B_REGISTRATION_TITLE, PolicyStatus.FINAL,
+                RuleFixtures.H1B_REGISTRATION_PUBLISHED, RuleFixtures.H1B_REGISTRATION_EFFECTIVE));
+        assertThat(changes()).singleElement().satisfies(change -> assertThat(change.current())
+                .isEqualTo(new RuleState(PolicyStatus.FINAL, RuleFixtures.H1B_REGISTRATION_EFFECTIVE, false)));
+        events.clear();
+
+        long second = ingest(RuleFixtures.h1b(H1B_FINAL_RULE, RuleFixtures.H1B_TITLE, PolicyStatus.FINAL,
+                RuleFixtures.H1B_FINAL_PUBLISHED, RuleFixtures.H1B_FINAL_EFFECTIVE));
+        long ruleId = store.findLink(second).orElseThrow().ruleId();
+
+        assertThat(changes()).isEmpty();
+        // So it gets the usual new-policy alert.
+        assertThat(events.stream(PolicyIndexedEvent.class)).singleElement()
+                .satisfies(indexed -> assertThat(indexed.ruleChanged()).isFalse());
+        assertThat(store.findLink(second).orElseThrow().method()).isEqualTo(MatchMethod.DOCKET_AND_RIN);
+        assertThat(store.findRule(ruleId).orElseThrow().state())
+                .isEqualTo(new RuleState(PolicyStatus.FINAL, RuleFixtures.H1B_REGISTRATION_EFFECTIVE, false));
+        assertThat(store.findRule(ruleId).orElseThrow().primaryAsOf()).isEqualTo(RuleFixtures.H1B_FINAL_PUBLISHED);
+        assertThat(store.history(ruleId)).hasSize(3).last().satisfies(row -> {
+            assertThat(row.source().externalId()).isEqualTo(H1B_FINAL_RULE);
+            assertThat(row.state()).isEqualTo(new RuleState(PolicyStatus.FINAL, RuleFixtures.H1B_FINAL_EFFECTIVE, false));
+            assertThat(row.previous())
+                    .isEqualTo(new RuleState(PolicyStatus.FINAL, RuleFixtures.H1B_REGISTRATION_EFFECTIVE, false));
+            assertThat(row.applied()).isTrue();
+            assertThat(row.alerted()).isFalse();
+            assertThat(row.aboutEffectiveDate()).isFalse();
         });
     }
 

@@ -2,6 +2,7 @@ package mygrant.rules;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
@@ -11,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import mygrant.policies.PolicyDocumentRepository;
 import mygrant.policies.PolicyNotFoundException;
 import mygrant.policies.PolicyStatus;
+import mygrant.policies.SourceType;
 import mygrant.rules.PolicyRuleStore.HistoryRow;
 import mygrant.rules.RuleTimelineResponse.Document;
 import mygrant.rules.RuleTimelineResponse.Step;
@@ -71,22 +73,41 @@ public class RuleTimelineService {
     /**
      * The stored history as ordered steps, each against the one before. The stage only moves
      * forward, a step without an effective date keeps the one before, and disputed never clears;
-     * the same rules the tracker applies. A TOOK_EFFECT step is added when the rule is final and
-     * its effective date is on or before asOf, after the step that set that date.
+     * the same rules the tracker applies. A final document on a rule already final that is not
+     * about the effective date is a separate final rule: an ADDITIONAL_FINAL_RULE step that shows
+     * its own date in ownEffectiveDate and keeps the rule's. This is worked out here, in
+     * publication order, so it holds even when the second final rule was imported first. A
+     * TOOK_EFFECT step is added when the rule is final and its effective date is on or before
+     * asOf, after the step that set that date.
      */
     static List<Step> steps(List<HistoryRow> rows, RuleState current, LocalDate asOf) {
         List<Step> steps = new ArrayList<>();
         RuleState state = null;
         for (HistoryRow row : rows) {
             RuleState stored = row.state();
-            RuleState after = state == null ? stored : new RuleState(
-                    RuleStages.next(state.primaryStage(), stored.primaryStage()),
-                    stored.effectiveDate() != null ? stored.effectiveDate() : state.effectiveDate(),
-                    state.disputed() || stored.disputed());
+            // A news row stores the rule's stage, so only a primary row can be a final rule.
+            boolean additional = state != null && row.source().sourceType() == SourceType.PRIMARY
+                    && RuleStages.isAdditionalFinalRule(state.primaryStage(), stored.primaryStage(),
+                            row.aboutEffectiveDate());
+            RuleState after;
+            if (state == null) {
+                after = stored;
+            } else if (additional) {
+                after = new RuleState(state.primaryStage(), state.effectiveDate(), state.disputed() || stored.disputed());
+            } else {
+                after = new RuleState(RuleStages.next(state.primaryStage(), stored.primaryStage()),
+                        stored.effectiveDate() != null ? stored.effectiveDate() : state.effectiveDate(),
+                        state.disputed() || stored.disputed());
+            }
+            Set<RuleChange> changes = EnumSet.noneOf(RuleChange.class);
+            changes.addAll(RuleChange.between(state, after));
+            if (additional) {
+                changes.add(RuleChange.ADDITIONAL_FINAL_RULE);
+            }
             steps.add(new Step(row.source().publishedOn(), row.recordedAt(), false, after.primaryStage(),
                     state == null ? null : state.primaryStage(), after.effectiveDate(),
-                    state == null ? null : state.effectiveDate(), after.disputed(),
-                    List.copyOf(RuleChange.between(state, after)), row.source()));
+                    state == null ? null : state.effectiveDate(), additional ? stored.effectiveDate() : null,
+                    after.disputed(), List.copyOf(changes), row.source()));
             state = after;
         }
         if (tookEffect(current, asOf)) {
@@ -120,7 +141,7 @@ public class RuleTimelineService {
         }
         Step before = steps.get(position - 1);
         steps.add(position, new Step(effectiveDate, null, true, PolicyStatus.FINAL, before.primaryStage(),
-                effectiveDate, before.effectiveDate(), before.disputed(), List.of(RuleChange.TOOK_EFFECT),
+                effectiveDate, before.effectiveDate(), null, before.disputed(), List.of(RuleChange.TOOK_EFFECT),
                 steps.get(setter).source()));
     }
 }

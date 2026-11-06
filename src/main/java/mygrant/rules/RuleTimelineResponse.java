@@ -58,9 +58,14 @@ public record RuleTimelineResponse(
             LocalDate effectiveDate,
             @Schema(description = "The effective date after the step before it")
             LocalDate previousEffectiveDate,
+            @Schema(description = "Only on an ADDITIONAL_FINAL_RULE step: that separate final rule's own effective "
+                    + "date. effectiveDate stays the rule's. Null on every other step.", example = "2025-01-17")
+            LocalDate ownEffectiveDate,
             @Schema(description = "Whether the rule is disputed after this step")
             boolean disputed,
-            @Schema(description = "What moved against the step before. A step can be empty when an older "
+            @Schema(description = "What moved against the step before: STAGE, EFFECTIVE_DATE, DISPUTED, the derived "
+                    + "TOOK_EFFECT, or ADDITIONAL_FINAL_RULE for a separate final rule in the same rulemaking, which "
+                    + "changes neither the stage nor the rule's effective date. A step can be empty when an older "
                     + "document arrived after a newer one and repeats what is already known.")
             List<RuleChange> changes,
             @Schema(description = "The document this step came from; for a derived step, the one that set the "

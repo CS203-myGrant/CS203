@@ -42,6 +42,11 @@ import mygrant.rules.PolicyRuleStore.Rule;
  * or news linked by an identifier (HIGH confidence) reporting litigation or a stay, which sets
  * disputed and leaves the stage alone. Nothing is raised for a rule's first document, for a
  * document that changes nothing, for an older document arriving late, or by the backfill.
+ *
+ * <p>On a rule already final, only a document about the effective date ({@link DateNotice}), such as
+ * a delay notice, moves the date. Any other final document is a separate final rule in the same
+ * rulemaking: it is recorded as its own step with its own effective date, the rule's date stays,
+ * and nothing is raised, so it gets the usual new-policy alert.
  */
 @Service
 public class PolicyRuleTracker {
@@ -216,7 +221,8 @@ public class PolicyRuleTracker {
         // Without a docket or RIN nothing ties later documents to this one, so starting a rule is a guess.
         store.link(document.getId(), ruleId, MatchMethod.NEW_RULE,
                 identifiers.isEmpty() ? Confidence.MEDIUM : Confidence.HIGH, describe(identifiers), null);
-        store.appendHistory(new NewHistoryEntry(ruleId, null, state, true, false, RuleSource.of(document), recordedBy));
+        store.appendHistory(new NewHistoryEntry(ruleId, null, state, true, false, aboutEffectiveDate(document),
+                RuleSource.of(document), recordedBy));
         return ruleId;
     }
 
@@ -224,24 +230,36 @@ public class PolicyRuleTracker {
      * Applies a primary document to its rule. A document published before the one behind the
      * current state is recorded in order but changes nothing. Otherwise the stage moves forward
      * only, and a document without an effective date keeps the stored one. A document that would
-     * move the stage backwards is not applied and comes back with a review reason.
+     * move the stage backwards is not applied and comes back with a review reason. A separate
+     * final rule on a rule already final is recorded with its own effective date and changes
+     * neither the stage nor the rule's date.
      */
     private Applied applyPrimary(PolicyDocument document, Rule rule, RecordedBy recordedBy) {
         RuleState before = rule.state();
         PolicyStatus docStage = RuleStages.of(document.getStatus());
         LocalDate docDate = effectiveDate(document, docStage);
         RuleSource source = RuleSource.of(document);
+        boolean aboutDate = aboutEffectiveDate(document);
 
         if (document.getPublicationDate().isBefore(rule.primaryAsOf())) {
             if (RuleStages.isStage(docStage) || docDate != null) {
                 store.appendHistory(new NewHistoryEntry(rule.id(), before, new RuleState(docStage, docDate, false),
-                        false, false, source, recordedBy));
+                        false, false, aboutDate, source, recordedBy));
             }
             return Applied.NOTHING;
         }
         if (RuleStages.isBackward(before.primaryStage(), docStage)) {
             return new Applied("Stage not changed: a " + lower(docStage) + " document published after the rule became "
                     + lower(before.primaryStage()) + ".", Optional.empty());
+        }
+        if (RuleStages.isAdditionalFinalRule(before.primaryStage(), docStage, aboutDate)) {
+            // Its row holds its own effective date; the rule keeps its own. It is applied, so it
+            // becomes the newest primary document, and an older one arriving later is late.
+            store.updateRule(rule.id(), before, document.getPublicationDate());
+            store.appendHistory(new NewHistoryEntry(rule.id(), before,
+                    new RuleState(PolicyStatus.FINAL, docDate, before.disputed()), true, false, aboutDate,
+                    source, recordedBy));
+            return Applied.NOTHING;
         }
         RuleState after = new RuleState(RuleStages.next(before.primaryStage(), docStage),
                 docDate != null ? docDate : before.effectiveDate(), before.disputed());
@@ -253,7 +271,7 @@ public class PolicyRuleTracker {
         // generic new-policy alert covers it.
         boolean alerted = recordedBy == RecordedBy.INGESTION && RuleStages.isStage(before.primaryStage());
         Optional<Long> historyId = store.appendHistory(
-                new NewHistoryEntry(rule.id(), before, after, true, alerted, source, recordedBy));
+                new NewHistoryEntry(rule.id(), before, after, true, alerted, aboutDate, source, recordedBy));
         if (!alerted || historyId.isEmpty()) {
             return Applied.NOTHING;
         }
@@ -273,7 +291,7 @@ public class PolicyRuleTracker {
         store.updateRule(rule.id(), after, rule.primaryAsOf());
         boolean alerted = recordedBy == RecordedBy.INGESTION;
         Optional<Long> historyId = store.appendHistory(
-                new NewHistoryEntry(rule.id(), before, after, true, alerted, RuleSource.of(report), recordedBy));
+                new NewHistoryEntry(rule.id(), before, after, true, alerted, false, RuleSource.of(report), recordedBy));
         if (!alerted || historyId.isEmpty()) {
             return Optional.empty();
         }
@@ -290,6 +308,11 @@ public class PolicyRuleTracker {
         return new PolicyChangedEvent(rule.id(), historyId, rule.title(), before, after,
                 RuleChange.between(before, after), RuleSource.of(source), visaTypes, primary.getTitle(),
                 primary.getContent());
+    }
+
+    /** Whether a primary document is about the effective date: a delay, postponement or correction. */
+    private static boolean aboutEffectiveDate(PolicyDocument document) {
+        return DateNotice.concernsEffectiveDate(document.getTitle(), document.getContent());
     }
 
     /** Only a final rule's effective date is the rule's; a proposal or notice can carry its own. */

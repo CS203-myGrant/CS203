@@ -54,4 +54,13 @@ final class RuleStages {
     static boolean isBackward(PolicyStatus current, PolicyStatus docStage) {
         return isStage(docStage) && isStage(current) && rank(docStage) < rank(current);
     }
+
+    /**
+     * True when a final document on a rule already final is a separate final rule in the same
+     * rulemaking, not a change to the rule: it is not about the effective date ({@link DateNotice}).
+     * DHS finalised the 2023 H-1B proposal as two final rules, each with its own effective date.
+     */
+    static boolean isAdditionalFinalRule(PolicyStatus current, PolicyStatus docStage, boolean aboutEffectiveDate) {
+        return current == PolicyStatus.FINAL && docStage == PolicyStatus.FINAL && !aboutEffectiveDate;
+    }
 }

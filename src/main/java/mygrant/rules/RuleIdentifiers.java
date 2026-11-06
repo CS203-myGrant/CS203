@@ -165,7 +165,8 @@ public final class RuleIdentifiers {
         return dockets;
     }
 
-    private static String header(String content) {
+    /** The text before "SUMMARY:", where the header's docket, RIN and ACTION lines are. */
+    static String header(String content) {
         int summary = content.indexOf("SUMMARY:");
         int end = summary < 0 ? content.length() : summary;
         return content.substring(0, Math.min(end, MAX_HEADER_CHARACTERS));

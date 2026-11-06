@@ -2,6 +2,9 @@ package mygrant.rules;
 
 import static mygrant.rules.RuleFixtures.DATE_MOVE;
 import static mygrant.rules.RuleFixtures.FINAL_RULE;
+import static mygrant.rules.RuleFixtures.H1B_FINAL_RULE;
+import static mygrant.rules.RuleFixtures.H1B_PROPOSAL;
+import static mygrant.rules.RuleFixtures.H1B_REGISTRATION_RULE;
 import static mygrant.rules.RuleFixtures.PROPOSAL;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -60,7 +63,9 @@ import mygrant.user.UserRole;
 /**
  * CS203-136: the real proposal (2025-16554) and final rule (2026-14439) end to end, then a synthetic
  * delay notice and a synthetic news report of an injunction, through the Federal Register and news
- * connectors, the alerts, email, the live stream, reassessment and the timeline endpoint.
+ * connectors, the alerts, email, the live stream, reassessment and the timeline endpoint. Also the
+ * real 2023 H-1B proposal and the two final rules DHS issued on it, the second of which is a
+ * separate final rule, not an effective-date move.
  *
  * <p>Not @Transactional, because alerts and reassessment run after commit; every row it creates is
  * removed afterwards. It needs a database where these documents do not exist yet, as in CI, and is
@@ -71,7 +76,10 @@ import mygrant.user.UserRole;
 @RecordApplicationEvents
 class RuleLifecycleIntegrationTest {
 
-    private static final List<String> DOCUMENTS = List.of(PROPOSAL, FINAL_RULE, DATE_MOVE);
+    private static final List<String> DOCUMENTS = List.of(PROPOSAL, FINAL_RULE, DATE_MOVE, H1B_PROPOSAL,
+            H1B_REGISTRATION_RULE, H1B_FINAL_RULE);
+    private static final List<String> FIXED_TIME_DOCKETS = List.of("DHS Docket No. ICEB-2025-0001");
+    private static final List<String> FIXED_TIME_RINS = List.of("1653-AA95");
     private static final String CHANGE_PREFIX = "Rule update for F-1, J-1: ";
 
     @Autowired FederalRegisterIngestionService federalRegister;
@@ -106,12 +114,26 @@ class RuleLifecycleIntegrationTest {
         Assumptions.assumeTrue(existing == 0, "This database already holds the CS203-86 fixture documents; "
                 + "run against an empty database, as CI does");
         stubFederalRegister(PROPOSAL, RuleFixtures.TITLE, "Proposed Rule", "Notice of proposed rulemaking (NPRM).",
-                RuleFixtures.PROPOSAL_PUBLISHED, null, "federal-register/" + PROPOSAL + ".txt");
+                RuleFixtures.PROPOSAL_PUBLISHED, null, "federal-register/" + PROPOSAL + ".txt",
+                FIXED_TIME_DOCKETS, FIXED_TIME_RINS);
         stubFederalRegister(FINAL_RULE, RuleFixtures.TITLE, "Rule", "Final rule.", RuleFixtures.FINAL_PUBLISHED,
-                RuleFixtures.FINAL_EFFECTIVE, "federal-register/" + FINAL_RULE + ".txt");
+                RuleFixtures.FINAL_EFFECTIVE, "federal-register/" + FINAL_RULE + ".txt", FIXED_TIME_DOCKETS,
+                FIXED_TIME_RINS);
         stubFederalRegister(DATE_MOVE, RuleFixtures.TITLE + "; Delay of Effective Date", "Rule",
                 "Final rule; delay of effective date.", RuleFixtures.DATE_MOVE_PUBLISHED, RuleFixtures.MOVED_EFFECTIVE,
-                "federal-register/synthetic-2026-99950-delay.txt");
+                "federal-register/synthetic-2026-99950-delay.txt", FIXED_TIME_DOCKETS, FIXED_TIME_RINS);
+        // The real Federal Register API metadata of the three H-1B documents.
+        stubFederalRegister(H1B_PROPOSAL, RuleFixtures.H1B_TITLE, "Proposed Rule", "Notice of proposed rulemaking.",
+                RuleFixtures.H1B_PROPOSAL_PUBLISHED, null, "federal-register/" + H1B_PROPOSAL + ".txt",
+                List.of("CIS No. 2745-23", "DHS Docket No. USCIS-2023-0005"), List.of("1615-AC70"));
+        stubFederalRegister(H1B_REGISTRATION_RULE, RuleFixtures.H1B_REGISTRATION_TITLE, "Rule", "Final rulemaking.",
+                RuleFixtures.H1B_REGISTRATION_PUBLISHED, RuleFixtures.H1B_REGISTRATION_EFFECTIVE,
+                "federal-register/" + H1B_REGISTRATION_RULE + ".txt",
+                List.of("CIS No. 2766-24", "DHS Docket No. USCIS-2023-0005"), List.of("1615-AC70"));
+        stubFederalRegister(H1B_FINAL_RULE, RuleFixtures.H1B_TITLE, "Rule", "Final rule.",
+                RuleFixtures.H1B_FINAL_PUBLISHED, RuleFixtures.H1B_FINAL_EFFECTIVE,
+                "federal-register/" + H1B_FINAL_RULE + ".txt",
+                List.of("CIS No. 2766-24", "DHS Docket No. USCIS-2023-0005"), List.of("1615-AC70"));
         when(assessments.assess(any(), any(), any(), any(), any())).thenAnswer(invocation -> {
             assessmentThreads.add(Thread.currentThread().getName());
             return new ProfileImpactAssessment(ImpactUrgency.MEDIUM, 80, "Your admission period becomes fixed.",
@@ -250,6 +272,64 @@ class RuleLifecycleIntegrationTest {
     }
 
     @Test
+    void aSecondFinalRuleInTheSameRulemakingIsItsOwnStepNotADateMove() throws Exception {
+        User worker = applicant("H-1B");
+        long proposal = importDocument(H1B_PROPOSAL);
+        assertThat(alertsFor(worker, proposal)).containsExactly("New policy affecting F-1, H-1B: " + RuleFixtures.H1B_TITLE);
+        long registration = importDocument(H1B_REGISTRATION_RULE);
+        long ruleId = store.findLink(registration).orElseThrow().ruleId();
+
+        // The first final rule moves the proposal to final, with one change alert.
+        assertThat(events.stream(PolicyChangedEvent.class)).singleElement().satisfies(change -> {
+            assertThat(change.source().externalId()).isEqualTo(H1B_REGISTRATION_RULE);
+            assertThat(change.changes()).containsExactlyInAnyOrder(RuleChange.STAGE, RuleChange.EFFECTIVE_DATE);
+        });
+        assertThat(alertsFor(worker, registration)).containsExactly(
+                "Rule update for H-1B: moved from proposed to final, effective 4 Mar 2024: " + RuleFixtures.H1B_TITLE);
+        events.clear();
+
+        // The second final rule joins the same rule as its own step: no date move, no change event.
+        long secondFinal = importDocument(H1B_FINAL_RULE);
+
+        assertThat(store.findLink(secondFinal).orElseThrow().ruleId()).isEqualTo(ruleId);
+        assertThat(store.findLink(proposal).orElseThrow().ruleId()).isEqualTo(ruleId);
+        assertThat(events.stream(PolicyChangedEvent.class)).isEmpty();
+        assertThat(store.findRule(ruleId).orElseThrow().state()).isEqualTo(
+                new RuleState(mygrant.policies.PolicyStatus.FINAL, RuleFixtures.H1B_REGISTRATION_EFFECTIVE, false));
+        assertThat(alertsFor(worker, secondFinal)).containsExactly(
+                "New policy affecting F-1, H-1B: " + RuleFixtures.H1B_TITLE + " (effective 2025-01-17)");
+        assertThat(messages(worker)).hasSize(3).noneMatch(message -> message.contains("effective date moved"));
+
+        clock.setUserDate(worker.getId(), LocalDate.of(2026, 11, 6));
+        mvc.perform(get("/api/v1/policies/{id}/timeline", secondFinal).header("Authorization", token(worker)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ruleId").value(ruleId))
+                .andExpect(jsonPath("$.primaryStage").value("FINAL"))
+                .andExpect(jsonPath("$.currentStage").value("EFFECTIVE"))
+                .andExpect(jsonPath("$.effectiveDate").value("2024-03-04"))
+                .andExpect(jsonPath("$.identifiers[*].value").value(org.hamcrest.Matchers.contains("USCIS-2023-0005",
+                        "1615-AC70")))
+                .andExpect(jsonPath("$.documents[*].externalId").value(org.hamcrest.Matchers.contains(H1B_PROPOSAL,
+                        H1B_REGISTRATION_RULE, H1B_FINAL_RULE)))
+                .andExpect(jsonPath("$.steps.length()").value(4))
+                .andExpect(jsonPath("$.steps[0].primaryStage").value("PROPOSED"))
+                .andExpect(jsonPath("$.steps[0].source.externalId").value(H1B_PROPOSAL))
+                .andExpect(jsonPath("$.steps[1].primaryStage").value("FINAL"))
+                .andExpect(jsonPath("$.steps[1].changes").value(org.hamcrest.Matchers.contains("STAGE", "EFFECTIVE_DATE")))
+                .andExpect(jsonPath("$.steps[1].effectiveDate").value("2024-03-04"))
+                .andExpect(jsonPath("$.steps[1].source.externalId").value(H1B_REGISTRATION_RULE))
+                .andExpect(jsonPath("$.steps[2].changes").value(org.hamcrest.Matchers.contains("TOOK_EFFECT")))
+                .andExpect(jsonPath("$.steps[2].observedOn").value("2024-03-04"))
+                .andExpect(jsonPath("$.steps[3].changes").value(org.hamcrest.Matchers.contains("ADDITIONAL_FINAL_RULE")))
+                .andExpect(jsonPath("$.steps[3].primaryStage").value("FINAL"))
+                .andExpect(jsonPath("$.steps[3].previousPrimaryStage").value("FINAL"))
+                .andExpect(jsonPath("$.steps[3].effectiveDate").value("2024-03-04"))
+                .andExpect(jsonPath("$.steps[3].previousEffectiveDate").value("2024-03-04"))
+                .andExpect(jsonPath("$.steps[3].ownEffectiveDate").value("2025-01-17"))
+                .andExpect(jsonPath("$.steps[3].source.externalId").value(H1B_FINAL_RULE));
+    }
+
+    @Test
     void theTimelineReportsMissingPoliciesAndPoliciesInNoRule() throws Exception {
         news.importSaved(RuleFixtures.text(RuleFixtures.NEWS_FEED));
         long unlinked = newsId("Universities sue over F-1 student admission limits");
@@ -281,11 +361,11 @@ class RuleLifecycleIntegrationTest {
     }
 
     private void stubFederalRegister(String number, String title, String type, String action, LocalDate published,
-            LocalDate effective, String resource) {
+            LocalDate effective, String resource, List<String> dockets, List<String> rins) {
         var document = new FederalRegisterDocument(number, title, type, published, effective,
                 "https://www.federalregister.gov/d/" + number, "https://example.test/" + number + ".txt",
                 List.of(new FederalRegisterDocument.Agency("Homeland Security Department", "homeland-security-department")),
-                action, List.of("DHS Docket No. ICEB-2025-0001"), List.of("1653-AA95"));
+                action, dockets, rins);
         when(client.getDocument(number)).thenReturn(document);
         when(client.downloadFullText(document.rawTextUrl())).thenReturn(RuleFixtures.text(resource));
     }

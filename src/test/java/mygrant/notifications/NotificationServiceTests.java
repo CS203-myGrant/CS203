@@ -144,7 +144,7 @@ class NotificationServiceTests {
         when(policyRepository.findBySourceTypeAndPublicationDateLessThanEqualOrderByPublicationDateAscIdAsc(
                 SourceType.PRIMARY, today)).thenReturn(List.of(policy(5L, "Fixed Time Period of Admission", "F-1,J-1")));
         var row = new PolicyRuleStore.HistoryRow(1L, 9L, new RuleState(PolicyStatus.FINAL, LocalDate.parse("2026-09-15"), false),
-                new RuleState(PolicyStatus.PROPOSED, null, false), true, true,
+                new RuleState(PolicyStatus.PROPOSED, null, false), true, true, false,
                 new RuleSource(5L, "FR-5", SourceType.PRIMARY, "https://example.gov", "Fixed Time Period of Admission",
                         "DHS", LocalDate.parse("2026-09-01")), mygrant.rules.RecordedBy.INGESTION, java.time.Instant.now());
         when(ruleStore.alertedChangeFrom(5L)).thenReturn(Optional.of(

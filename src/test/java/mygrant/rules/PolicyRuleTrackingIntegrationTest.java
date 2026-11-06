@@ -105,7 +105,7 @@ class PolicyRuleTrackingIntegrationTest {
         long finalRule = ingest(RuleFixtures.finalRule());
         long ruleId = store.findLink(finalRule).orElseThrow().ruleId();
         var entry = new PolicyRuleStore.NewHistoryEntry(ruleId, new RuleState(PolicyStatus.PROPOSED, null, false),
-                new RuleState(PolicyStatus.FINAL, FINAL_EFFECTIVE, false), true, false,
+                new RuleState(PolicyStatus.FINAL, FINAL_EFFECTIVE, false), true, false, false,
                 RuleSource.of(policies.findById(finalRule).orElseThrow()), RecordedBy.INGESTION);
 
         assertThat(store.appendHistory(entry)).isPresent();

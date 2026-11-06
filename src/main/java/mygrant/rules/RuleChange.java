@@ -10,9 +10,18 @@ public enum RuleChange {
     EFFECTIVE_DATE,
     DISPUTED,
     /** Only in the timeline: the caller's date has reached a final rule's effective date. Never stored. */
-    TOOK_EFFECT;
+    TOOK_EFFECT,
+    /**
+     * Only in the timeline: a final rule on a rule that was already final, not about the effective
+     * date. It is a separate final rule in the same rulemaking with its own effective date, and the
+     * rule's stage and effective date are unchanged. Never raised in a PolicyChangedEvent.
+     */
+    ADDITIONAL_FINAL_RULE;
 
-    /** The stored changes from one state to the next; everything is new when there was no state. */
+    /**
+     * The changes from one state to the next: STAGE, EFFECTIVE_DATE and DISPUTED only. Everything
+     * is new when there was no state.
+     */
     public static Set<RuleChange> between(RuleState previous, RuleState current) {
         Set<RuleChange> changes = EnumSet.noneOf(RuleChange.class);
         if (previous == null || previous.primaryStage() != current.primaryStage()) {

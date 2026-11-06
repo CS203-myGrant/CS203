@@ -46,14 +46,18 @@ public class PolicyRuleStore {
             boolean needsReview, String reviewReason) {
     }
 
-    /** One history row to write. previous is null for a rule's first entry. */
+    /**
+     * One history row to write. previous is null for a rule's first entry. aboutEffectiveDate says
+     * whether the source is about the effective date ({@link DateNotice}).
+     */
     public record NewHistoryEntry(long ruleId, RuleState previous, RuleState state, boolean applied,
-            boolean alerted, RuleSource source, RecordedBy recordedBy) {
+            boolean alerted, boolean aboutEffectiveDate, RuleSource source, RecordedBy recordedBy) {
     }
 
     /** A stored history row. The previous values are what the rule held when the row was written. */
     public record HistoryRow(long id, long ruleId, RuleState state, RuleState previous, boolean applied,
-            boolean alerted, RuleSource source, RecordedBy recordedBy, Instant recordedAt) {
+            boolean alerted, boolean aboutEffectiveDate, RuleSource source, RecordedBy recordedBy,
+            Instant recordedAt) {
     }
 
     void lockLinking() {
@@ -227,6 +231,7 @@ public class PolicyRuleStore {
                 .addValue("previousDisputed", previous == null ? null : previous.disputed(), Types.BOOLEAN)
                 .addValue("applied", entry.applied())
                 .addValue("alerted", entry.alerted())
+                .addValue("aboutEffectiveDate", entry.aboutEffectiveDate())
                 .addValue("sourceId", source.policyId(), Types.BIGINT)
                 .addValue("sourceExternalId", source.externalId())
                 .addValue("sourceType", source.sourceType().name())
@@ -239,12 +244,13 @@ public class PolicyRuleStore {
         return jdbc.query("""
                 INSERT INTO policy_rule_history
                     (rule_id, primary_stage, effective_date, disputed, previous_primary_stage,
-                     previous_effective_date, previous_disputed, applied, alerted, source_policy_id,
-                     source_external_id, source_type, source_url, source_title, source_agency,
-                     observed_on, recorded_by, dedupe_key)
+                     previous_effective_date, previous_disputed, applied, alerted, about_effective_date,
+                     source_policy_id, source_external_id, source_type, source_url, source_title,
+                     source_agency, observed_on, recorded_by, dedupe_key)
                 VALUES (:ruleId, :stage, :effectiveDate, :disputed, :previousStage, :previousDate,
-                        :previousDisputed, :applied, :alerted, :sourceId, :sourceExternalId, :sourceType,
-                        :sourceUrl, :sourceTitle, :sourceAgency, :observedOn, :recordedBy, :dedupeKey)
+                        :previousDisputed, :applied, :alerted, :aboutEffectiveDate, :sourceId,
+                        :sourceExternalId, :sourceType, :sourceUrl, :sourceTitle, :sourceAgency, :observedOn,
+                        :recordedBy, :dedupeKey)
                 ON CONFLICT (rule_id, dedupe_key) DO NOTHING
                 RETURNING id
                 """, params, (rs, row) -> rs.getLong(1)).stream().findFirst();
@@ -346,7 +352,8 @@ public class PolicyRuleStore {
         return new HistoryRow(rs.getLong("id"), rs.getLong("rule_id"),
                 new RuleState(PolicyStatus.valueOf(rs.getString("primary_stage")),
                         rs.getObject("effective_date", LocalDate.class), rs.getBoolean("disputed")),
-                previous, rs.getBoolean("applied"), rs.getBoolean("alerted"), source,
+                previous, rs.getBoolean("applied"), rs.getBoolean("alerted"), rs.getBoolean("about_effective_date"),
+                source,
                 RecordedBy.valueOf(rs.getString("recorded_by")), rs.getTimestamp("recorded_at").toInstant());
     }
 
