@@ -1,16 +1,15 @@
 package mygrant.account;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import mygrant.actions.ActionItemService;
@@ -77,7 +76,6 @@ class AccountPurgeServiceTests {
         user.setEmail("student@example.com");
         user.setPasswordHash("password-hash");
         user.setWorkosUserId("user_workos_123");
-        user.setVisaType("F-1");
 
         purgeService = new AccountPurgeService(
                 userRepository,
@@ -138,7 +136,6 @@ class AccountPurgeServiceTests {
         assertThat(user.getEmail()).isNull();
         assertThat(user.getPasswordHash()).isNull();
         assertThat(user.getWorkosUserId()).isNull();
-        assertThat(user.getVisaType()).isNull();
     }
 
     @Test
@@ -149,6 +146,7 @@ class AccountPurgeServiceTests {
         purgeService.purge(USER_ID);
         purgeService.purge(USER_ID);
 
+        verify(userProfileRepository, times(2)).deleteById(USER_ID);
         verify(auditRepository, times(1))
                 .save(org.mockito.ArgumentMatchers.any(AccountDeletionAudit.class));
         verify(notificationStreamRegistry, times(2)).closeAll(USER_ID);

@@ -22,6 +22,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * Matches users by role and visa type. Registration stores the visa type verbatim, so
      * both sides are upper-cased and trimmed; callers pass values normalized the same way.
      */
-    @Query("select u from User u where u.role = :role and upper(trim(u.visaType)) in :visaTypes")
-    List<User> findByRoleAndVisaTypeIn(@Param("role") UserRole role, @Param("visaTypes") List<String> visaTypes);
+    @Query("""
+            select u
+            from User u
+            join UserProfile p on p.userId = u.id
+            where u.role = :role
+            and upper(trim(p.visaType)) in :visaTypes
+            """)
+    List<User> findByRoleAndVisaTypeIn(
+            @Param("role") UserRole role,
+            @Param("visaTypes") List<String> visaTypes);
 }

@@ -88,7 +88,7 @@ public class NotificationService {
         List<Notification> saved = notificationRepository.saveAll(affected.stream()
                 .map(user -> toNotification(
                         user,
-                        profilesByUserId.getOrDefault(user.getId(), UserProfile.fromUser(user)),
+                        profilesByUserId.getOrDefault(user.getId(), UserProfile.empty(user.getId())),
                         event,
                         message,
                         fieldsByVisaType))
@@ -108,13 +108,17 @@ public class NotificationService {
     public InboxSync syncToTestClock(User user) {
         LocalDate today = testClock.today(user.getId());
         int removed = notificationRepository.deleteForPoliciesPublishedAfter(user.getId(), today);
-        String visaType = PolicyImpactRules.normalizeVisaType(user.getVisaType());
+
+        UserProfile profile = userProfileRepository.findById(user.getId())
+                .orElse(null);
+
+        String visaType = PolicyImpactRules.normalizeVisaType(
+                profile == null ? null : profile.getVisaType()
+        );
+
         if (user.getRole() != UserRole.APPLICANT || visaType.isEmpty()) {
             return new InboxSync(0, removed);
         }
-
-        UserProfile profile = userProfileRepository.findById(user.getId())
-                .orElseGet(() -> UserProfile.fromUser(user));
         Set<Long> alreadyNotified = notificationRepository.findPolicyIdsByUserId(user.getId());
         // Only official policies raise alerts, as at ingestion.
         List<Notification> missing = policyRepository
@@ -164,8 +168,10 @@ public class NotificationService {
         PolicyIndexedEvent event,
         String message,
         Map<String, Set<ProfileField>> fieldsByVisaType) {
-        Set<ProfileField> policyFields = fieldsByVisaType
-                .getOrDefault(PolicyImpactRules.normalizeVisaType(user.getVisaType()), Set.of());
+        Set<ProfileField> policyFields = fieldsByVisaType.getOrDefault(
+                PolicyImpactRules.normalizeVisaType(profile.getVisaType()),
+                Set.of()
+        );
         List<ProfileField> toReview = policyFields.stream().filter(field -> field.isFilledIn(profile)).toList();
         if (toReview.isEmpty()) {
             return new Notification(

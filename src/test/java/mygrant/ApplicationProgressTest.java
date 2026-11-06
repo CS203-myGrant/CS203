@@ -20,9 +20,12 @@ class ApplicationProgressTest {
     void newTrackerUsesSignedInUsersVisaWithoutInventingProgress() {
         var jdbc=mock(JdbcTemplate.class);
         var users=mock(UserRepository.class);
-        var user=new User(); user.setId(4L); user.setVisaType("F-1");
+        var profiles=mock(UserProfileRepository.class);
+        var user=new User(); user.setId(4L);
+        var profile=UserProfile.registrationProfile(4L,"F-1",null,null,null,null);
         when(users.findByEmail("owner")).thenReturn(Optional.of(user));
-        var result=new ApplicationProgressService(jdbc,users).get("owner");
+        when(profiles.findById(4L)).thenReturn(Optional.of(profile));
+        var result=new ApplicationProgressService(jdbc,users,profiles).get("owner");
         assertEquals("F-1",result.details().visaType());
         assertTrue(result.details().completedSteps().isEmpty());
         assertNull(result.updatedAt());
@@ -33,12 +36,13 @@ class ApplicationProgressTest {
     void savesCompletedStepsAsMaskAndReadsBackUsingAuthenticatedOwner() {
         var jdbc=mock(JdbcTemplate.class);
         var users=mock(UserRepository.class);
+        var profiles=mock(UserProfileRepository.class);
         var user=new User(); user.setId(9L);
         when(users.findByEmail("owner")).thenReturn(Optional.of(user));
         var details=new ApplicationProgressService.Details("F-1","Singapore","AA123",null,null,"Notes",List.of(1,3,7));
         var saved=new ApplicationProgressService.Progress(details,Instant.now());
         when(jdbc.query(anyString(),org.mockito.ArgumentMatchers.<RowMapper<ApplicationProgressService.Progress>>any(),eq(9L))).thenReturn(List.of(saved));
-        assertEquals(saved,new ApplicationProgressService(jdbc,users).save("owner",details));
+        assertEquals(saved,new ApplicationProgressService(jdbc,users,profiles).save("owner",details));
         verify(jdbc).update(anyString(),eq(9L),eq("F-1"),eq("Singapore"),eq("AA123"),isNull(),isNull(),eq("Notes"),eq(69));
     }
 

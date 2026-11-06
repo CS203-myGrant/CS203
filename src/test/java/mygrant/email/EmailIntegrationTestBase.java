@@ -33,6 +33,8 @@ import mygrant.policies.SourceType;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
 import mygrant.user.UserRole;
+import mygrant.user.UserProfile;
+import mygrant.user.UserProfileRepository;
 
 /**
  * Runs the email code against the local PostgreSQL with a fake provider. These tests are not
@@ -56,6 +58,7 @@ abstract class EmailIntegrationTestBase {
 
     @Autowired protected FakeEmailSender sender;
     @Autowired protected UserRepository users;
+    @Autowired protected UserProfileRepository profiles;
     @Autowired protected PolicyDocumentRepository policies;
     @Autowired protected NotificationRepository notifications;
     @Autowired protected NotificationService notificationService;
@@ -90,10 +93,18 @@ abstract class EmailIntegrationTestBase {
     /** An applicant signed in through WorkOS, so their address counts as verified. */
     protected User applicant() {
         String suffix = UUID.randomUUID().toString();
-        User user = new User("Email test", "email-test-" + suffix + "@example.com", null, visaType, null, null);
+        User user = new User("Email test", "email-test-" + suffix + "@example.com", null);
         user.setRole(UserRole.APPLICANT);
         user.setWorkosUserId("user_email_test_" + suffix);
         user = users.saveAndFlush(user);
+        profiles.saveAndFlush(UserProfile.registrationProfile(
+                user.getId(),
+                visaType,
+                null,
+                null,
+                null,
+                null
+        ));
         createdUsers.add(user.getId());
         return user;
     }

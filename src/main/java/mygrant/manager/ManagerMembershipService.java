@@ -9,15 +9,19 @@ import mygrant.user.User;
 import mygrant.user.UserNotFoundException;
 import mygrant.user.UserRepository;
 import mygrant.user.UserRole;
+import mygrant.user.UserProfileRepository;
 
 @Service
 public class ManagerMembershipService {
     private final ManagerMembershipRepository memberships;
     private final UserRepository users;
+    private final UserProfileRepository profiles;
 
-    public ManagerMembershipService(ManagerMembershipRepository memberships, UserRepository users) {
-        this.memberships = memberships;
-        this.users = users;
+    public ManagerMembershipService(ManagerMembershipRepository memberships,
+        UserRepository users, UserProfileRepository profiles) {
+    this.memberships = memberships;
+    this.users = users;
+    this.profiles = profiles;
     }
 
     @Transactional(readOnly = true)
@@ -25,7 +29,12 @@ public class ManagerMembershipService {
         User manager = manager(managerEmail);
         List<Long> ids = memberships.findAllByManagerIdOrderByCreatedAtAscUserIdAsc(manager.getId())
                 .stream().map(ManagerMembership::getUserId).toList();
-        return users.findAllById(ids).stream().map(ManagerMemberResponse::from).toList();
+        return users.findAllById(ids).stream()
+                .map(user -> ManagerMemberResponse.from(
+                        user,
+                        profiles.findById(user.getId()).orElse(null)
+                ))
+                .toList();
     }
 
     @Transactional
@@ -40,7 +49,10 @@ public class ManagerMembershipService {
         } catch (DataIntegrityViolationException exception) {
             throw new ManagerMembershipConflictException(userId);
         }
-        return ManagerMemberResponse.from(user);
+        return ManagerMemberResponse.from(
+                user,
+                profiles.findById(user.getId()).orElse(null)
+        );
     }
 
     @Transactional

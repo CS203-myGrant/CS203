@@ -183,7 +183,7 @@ class OpenApiContractTest {
 
     private String token() {
         User user = new User("Contract test", "contract-test-" + UUID.randomUUID() + "@example.com",
-                "unused-test-password-hash", "F-1", null, null);
+                "unused-test-password-hash");
         user.setRole(UserRole.APPLICANT);
         users.saveAndFlush(user);
         return "Bearer " + jwt.generateAccessToken(user);

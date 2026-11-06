@@ -8,16 +8,15 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import mygrant.user.dto.LoginResponse;
 import mygrant.user.dto.UserCreation;
 import mygrant.user.dto.UserLogin;
+import mygrant.user.dto.LoginResponse;
 import mygrant.user.dto.RefreshTokenRequest;
 
 
@@ -26,14 +25,10 @@ import mygrant.user.dto.RefreshTokenRequest;
 public class UserController {
 
     private final UserService userService;
-    private final UserRepository userRepository;
 
-    public UserController(
-        UserService userService,
-        UserRepository userRepository) {
-    this.userService = userService;
-    this.userRepository = userRepository;
-    }   
+    public UserController(UserService userService) {
+        this.userService = userService;
+    }
 
     @PostMapping("/api/v1/auth/register")
     @SecurityRequirements
@@ -86,14 +81,12 @@ public class UserController {
 
     @GetMapping("/api/v1/users/me")
     @Operation(summary = "Get the signed-in user",
-            description = "The token fields are empty. Works before onboarding is finished.")
+                description = "The token fields are empty. Works before onboarding is finished.")
     @ApiResponse(responseCode = "200", description = "The signed-in user")
     @ApiResponse(responseCode = "404", description = "The account no longer exists")
     public ResponseEntity<LoginResponse> getCurrentUser(
-            Authentication authentication) {
-        return userRepository.findByEmail(authentication.getName())
-                .map(user -> ResponseEntity.ok(new LoginResponse(user)))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        Authentication authentication) {
+        return ResponseEntity.ok(userService.currentUser(authentication.getName()));
     }
 
 }

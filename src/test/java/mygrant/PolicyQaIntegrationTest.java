@@ -33,11 +33,27 @@ class PolicyQaIntegrationTest {
     @MockBean VectorStore vectors;
     @MockBean OpenAiGenerationService generator;
     @MockBean ImpactJudgeService judge;
+    @Autowired UserProfileRepository profiles;
 
-    String account(String visa){
-        var user=new User("QA test","qa-"+UUID.randomUUID()+"@example.org","unused",visa,null,null);
-        users.saveAndFlush(user);
-        return "Bearer "+jwt.generateAccessToken(user);
+    String account(String visa) {
+        User user = new User(
+                "QA test",
+                "qa-" + UUID.randomUUID() + "@example.org",
+                "unused"
+        );
+
+        user = users.saveAndFlush(user);
+
+        profiles.saveAndFlush(UserProfile.registrationProfile(
+                user.getId(),
+                visa,
+                null,
+                null,
+                null,
+                null
+        ));
+
+        return "Bearer " + jwt.generateAccessToken(user);
     }
 
     @Test void generalQaIgnoresSpoofedVisaAndPersistsOnlyCallersHistory() throws Exception {

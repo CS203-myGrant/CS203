@@ -165,7 +165,7 @@ class ImpactFeedIntegrationTest {
 
     private User account(UserRole role) {
         User user = new User("Impact test", "impact-" + UUID.randomUUID() + "@example.org",
-                "unused", "F-1", null, null);
+                "unused");
         user.setRole(role);
         return users.saveAndFlush(user);
     }

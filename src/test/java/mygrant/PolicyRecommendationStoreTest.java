@@ -25,7 +25,7 @@ class PolicyRecommendationStoreTest {
     final ActionItemService actions = mock(ActionItemService.class);
     final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
     final User user = new User();
-    final UserProfile profile = UserProfile.fromUser(user);
+    final UserProfile profile = UserProfile.empty(1L);
     final PolicyDocument policy = new PolicyDocument("doc", "Policy", "Agency", "F-1", PolicyStatus.FINAL,
             SourceType.PRIMARY, LocalDate.of(2026, 7, 17), null, "https://example.org", "Text", "hash");
     final ProfileImpactAssessment result = new ProfileImpactAssessment(ImpactUrgency.LOW, 90, "Summary",

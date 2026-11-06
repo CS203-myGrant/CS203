@@ -58,11 +58,6 @@ public class UserService {
         User user = new User();
         user.setFullName(userName);
         user.setEmail(email);
-        user.setVisaType(userCreation.getVisaType());
-        user.setAcademicLevel(userCreation.getAcademicLevel());
-        user.setProgramEndDate(userCreation.getProgramEndDate());
-        user.setCurrentLocation(userCreation.getCurrentLocation());
-        user.setUpcomingTravelDate(userCreation.getUpcomingTravelDate());
         user.setRole(UserRole.APPLICANT);
         user.setProfileComplete(false);
         user.setPasswordHash(passwordEncoder.encode(userCreation.getUserPassword()));
@@ -75,8 +70,17 @@ public class UserService {
         } catch (DataIntegrityViolationException exception) {
             throw new DuplicateEmailException();
         }
-        userProfileRepository.save(UserProfile.fromUser(savedUser));
-        return tokens(savedUser);
+        UserProfile profile = userProfileRepository.save(
+                UserProfile.registrationProfile(
+                        savedUser.getId(),
+                        userCreation.getVisaType(),
+                        userCreation.getAcademicLevel(),
+                        userCreation.getProgramEndDate(),
+                        userCreation.getCurrentLocation(),
+                        userCreation.getUpcomingTravelDate()
+                )
+        );
+        return tokens(savedUser, profile);
     }
 
     public LoginResponse loginUser(UserLogin userLogin) {
@@ -94,7 +98,7 @@ public class UserService {
             throw new InvalidCredentialsException("Invalid email or password");
         }
 
-        return tokens(user);
+        return tokens(user, profileFor(user));
     }
 
     public LoginResponse loginWorkOsUser(WorkOsUser workOsUser) {
@@ -118,7 +122,7 @@ public class UserService {
             user = userRepository.save(user);
         }
 
-        return tokens(user);
+        return tokens(user, profileFor(user));
     }
 
     @Transactional
@@ -143,7 +147,7 @@ public class UserService {
                 .orElseThrow(() -> new InvalidCredentialsException("Invalid refresh token"));
         stored.revoke();
         refreshTokenRepository.save(stored);
-        return tokens(user);
+        return tokens(user, profileFor(user));
     }
 
     @Transactional
@@ -161,12 +165,16 @@ public class UserService {
                 });
     }
 
-    private LoginResponse tokens(User user) {
+    private UserProfile profileFor(User user) {
+    return userProfileRepository.findById(user.getId()).orElse(null);
+    }
+
+    private LoginResponse tokens(User user, UserProfile profile) {
         String accessToken = jwtService.generateAccessToken(user);
         String refreshToken = jwtService.generateRefreshToken(user);
         refreshTokenRepository.save(new RefreshToken(user.getId(), hash(refreshToken),
                 jwtService.extractExpiration(refreshToken)));
-        return new LoginResponse(user, accessToken, refreshToken);
+        return new LoginResponse(user, profile, accessToken, refreshToken);
     }
 
     private String hash(String token) {
@@ -183,16 +191,39 @@ public class UserService {
         }
     }
 
-    public LoginResponse completeProfile(String email, ProfileCompletion profile) {
+    @Transactional
+    public LoginResponse completeProfile(String email, ProfileCompletion completion) {
         User user = userRepository.findByEmail(email.trim().toLowerCase())
-                .orElseThrow(() -> new IllegalStateException("Authenticated user no longer exists"));
-        user.setVisaType(profile.getVisaType().trim());
-        user.setAcademicLevel(profile.getAcademicLevel());
-        user.setProgramEndDate(profile.getProgramEndDate());
-        user.setCurrentLocation(profile.getCurrentLocation());
-        user.setUpcomingTravelDate(profile.getUpcomingTravelDate());
+                .orElseThrow(() -> new IllegalStateException(
+                        "Authenticated user no longer exists"));
+
+        UserProfile profile = userProfileRepository.findById(user.getId())
+                .orElseGet(() -> UserProfile.empty(user.getId()));
+
+        profile.setVisaType(completion.getVisaType().trim());
+        profile.setAcademicLevel(completion.getAcademicLevel());
+        profile.setProgramEndDate(completion.getProgramEndDate());
+        profile.setCurrentLocation(completion.getCurrentLocation());
+        profile.setUpcomingTravelDate(completion.getUpcomingTravelDate());
+
         user.setProfileComplete(true);
-        return new LoginResponse(userRepository.save(user));
+
+        User savedUser = userRepository.save(user);
+        UserProfile savedProfile = userProfileRepository.save(profile);
+
+        return new LoginResponse(savedUser, savedProfile);
+    }
+
+    @Transactional(readOnly = true)
+    public LoginResponse currentUser(String email) {
+        User user = userRepository.findByEmail(email.trim().toLowerCase())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Authenticated user no longer exists"));
+
+        UserProfile profile = userProfileRepository.findById(user.getId())
+                .orElse(null);
+
+        return new LoginResponse(user, profile);
     }
 
     @Transactional
@@ -200,15 +231,25 @@ public class UserService {
         if (role == null) {
             throw new IllegalArgumentException("Role is required");
         }
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
+
         user.setRole(role);
-        return new LoginResponse(userRepository.save(user));
+
+        User saved = userRepository.save(user);
+        UserProfile profile = userProfileRepository.findById(saved.getId())
+                .orElse(null);
+
+        return new LoginResponse(saved, profile);
     }
 
     @Transactional(readOnly = true)
     public Page<LoginResponse> listUsers(Pageable pageable) {
         return userRepository.findAllByActiveTrueOrderByIdAsc(pageable)
-                .map(LoginResponse::new);
+                .map(user -> new LoginResponse(
+                        user,
+                        userProfileRepository.findById(user.getId()).orElse(null)
+                ));
     }
-}
+    }

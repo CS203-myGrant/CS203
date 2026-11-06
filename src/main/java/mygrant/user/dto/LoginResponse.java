@@ -4,6 +4,7 @@ import java.time.LocalDate;
 
 import mygrant.user.User;
 import mygrant.user.UserRole;
+import mygrant.user.UserProfile;
 
 public class LoginResponse {
 
@@ -23,26 +24,30 @@ public class LoginResponse {
     public LoginResponse() {}
 
     // Constructor to quickly map from the User entity
-    public LoginResponse(User user) {
+    public LoginResponse(User user, UserProfile profile) {
         this.userId = user.getId();
         this.userName = user.getFullName();
         this.userEmail = user.getEmail();
-        this.visaType = user.getVisaType();
-        this.academicLevel = user.getAcademicLevel();
-        this.programEndDate = user.getProgramEndDate();
-        this.currentLocation = user.getCurrentLocation();
-        this.upcomingTravelDate = user.getUpcomingTravelDate();
         this.role = user.getRole();
         this.profileComplete = user.isProfileComplete();
+
+        if (profile != null) {
+            this.visaType = profile.getVisaType();
+            this.academicLevel = profile.getAcademicLevel();
+            this.programEndDate = profile.getProgramEndDate();
+            this.currentLocation = profile.getCurrentLocation();
+            this.upcomingTravelDate = profile.getUpcomingTravelDate();
+        }
     }
 
-    public LoginResponse(User user, String token) {
-        this(user);
+    public LoginResponse(User user, UserProfile profile, String token) {
+        this(user, profile);
         this.token = token;
     }
 
-    public LoginResponse(User user, String token, String refreshToken) {
-        this(user, token);
+    public LoginResponse(User user, UserProfile profile,
+            String token, String refreshToken) {
+        this(user, profile, token);
         this.refreshToken = refreshToken;
     }
 

@@ -30,6 +30,7 @@ class SupportIntegrationTest {
     @Autowired UserRepository users;
     @Autowired JwtService jwt;
     @Autowired ObjectMapper json;
+    @Autowired UserProfileRepository profiles;
     @MockBean VectorStore vectors;
 
     @Test
@@ -91,10 +92,26 @@ class SupportIntegrationTest {
     }
 
     private String account(UserRole role) {
-        User user = new User("Support test", "support-test-" + UUID.randomUUID() + "@example.com",
-                "unused-test-password-hash", "F-1", null, null);
+        User user = new User(
+                "Support test",
+                "support-test-" + UUID.randomUUID() + "@example.com",
+                "unused-test-password-hash"
+        );
+
         user.setRole(role);
-        users.saveAndFlush(user);
+        user = users.saveAndFlush(user);
+
+        if (role == UserRole.APPLICANT) {
+                profiles.saveAndFlush(UserProfile.registrationProfile(
+                        user.getId(),
+                        "F-1",
+                        null,
+                        null,
+                        null,
+                        null
+                ));
+        }
+
         return "Bearer " + jwt.generateAccessToken(user);
     }
 }

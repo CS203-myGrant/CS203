@@ -76,16 +76,25 @@ public class UserProfile {
     protected UserProfile() {
     }
 
-    public static UserProfile fromUser(User user) {
+    public static UserProfile registrationProfile(Long userId,
+            String visaType,
+            String academicLevel,
+            LocalDate programEndDate,
+            String currentLocation,
+            LocalDate upcomingTravelDate) {
         UserProfile profile = new UserProfile();
+        profile.setUserId(userId);
+        profile.setVisaType(visaType);
+        profile.setAcademicLevel(academicLevel);
+        profile.setProgramEndDate(programEndDate);
+        profile.setCurrentLocation(currentLocation);
+        profile.setUpcomingTravelDate(upcomingTravelDate);
+        return profile;
+    }
 
-        profile.setUserId(user.getId());
-        profile.setVisaType(user.getVisaType());
-        profile.setAcademicLevel(user.getAcademicLevel());
-        profile.setProgramEndDate(user.getProgramEndDate());
-        profile.setCurrentLocation(user.getCurrentLocation());
-        profile.setUpcomingTravelDate(user.getUpcomingTravelDate());
-
+    public static UserProfile empty(Long userId) {
+        UserProfile profile = new UserProfile();
+        profile.setUserId(userId);
         return profile;
     }
 

@@ -107,7 +107,7 @@ class ListEndpointsPaginationTest {
 
     private String token(UserRole role) {
         User user = new User("Paging test", "paging-test-" + UUID.randomUUID() + "@example.com",
-                "unused-test-password-hash", "F-1", null, null);
+                "unused-test-password-hash");
         user.setRole(role);
         users.saveAndFlush(user);
         return "Bearer " + jwt.generateAccessToken(user);
