@@ -1,6 +1,7 @@
 package mygrant.ingestion;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -26,6 +27,7 @@ import mygrant.policies.PolicyDocumentRepository;
 import mygrant.policies.PolicyIndexedEvent;
 import mygrant.policies.PolicyStatus;
 import mygrant.policies.SourceType;
+import mygrant.policies.RestrictionCategory;
 
 /** Verifies policy storage, selected-excerpt indexing, and idempotent re-imports. */
 @ExtendWith(MockitoExtension.class)
@@ -62,6 +64,64 @@ class PolicyIngestionServiceTests {
         verify(vectorStore).add(any());
         verify(eventPublisher).publishEvent(argThat((Object event) -> event instanceof PolicyIndexedEvent indexed
                 && indexed.policyId().equals(1L) && indexed.visaTypes().equals(java.util.List.of("F-1"))));
+    }
+
+    @Test
+    void normalizesAndPersistsPolicyCountryAndSourceMetadata() {
+        IngestPolicyRequest base = request();
+        IngestPolicyRequest request = new IngestPolicyRequest(
+                base.externalId(), base.title(), base.agency(), base.visaType(), base.status(),
+                base.sourceType(), base.publicationDate(), base.effectiveDate(), base.sourceUrl(), base.content(),
+                java.util.Set.of("my", "US"), java.util.Set.of(RestrictionCategory.VISA_ISSUANCE),
+                java.util.List.of(" https://example.gov/rule "));
+        when(repository.findByExternalId(request.externalId())).thenReturn(Optional.empty());
+        when(repository.save(any(PolicyDocument.class))).thenAnswer(invocation -> {
+            PolicyDocument policy = invocation.getArgument(0);
+            if (policy.getId() == null) {
+                ReflectionTestUtils.setField(policy, "id", 1L);
+            }
+            return policy;
+        });
+
+        new PolicyIngestionService(repository, vectorStore, eventPublisher).ingest(request);
+
+        verify(repository, atLeastOnce()).save(argThat(policy -> policy.getAffectedCountries().equals(java.util.Set.of("MY", "US"))
+                && policy.getRestrictionCategories().equals(java.util.Set.of(RestrictionCategory.VISA_ISSUANCE))
+                && policy.getSourceReferences().equals(java.util.List.of("https://example.gov/rule"))));
+        verify(vectorStore).add(argThat(chunks -> chunks.stream().allMatch(chunk ->
+                chunk.getMetadata().get("affectedCountries").equals(java.util.Set.of("MY", "US"))
+                && chunk.getMetadata().get("restrictionCategories")
+                        .equals(java.util.List.of("VISA_ISSUANCE"))
+                && chunk.getMetadata().get("sourceReferences")
+                        .equals(java.util.List.of("https://example.gov/rule")))));
+    }
+
+    @Test
+    void rejectsUnknownCountryIdentifiersBeforeSavingPolicy() {
+        IngestPolicyRequest base = request();
+        IngestPolicyRequest request = new IngestPolicyRequest(
+                base.externalId(), base.title(), base.agency(), base.visaType(), base.status(),
+                base.sourceType(), base.publicationDate(), base.effectiveDate(), base.sourceUrl(), base.content(),
+                java.util.Set.of("Malaysia"), java.util.Set.of(), java.util.List.of());
+
+        assertThatThrownBy(() -> new PolicyIngestionService(repository, vectorStore, eventPublisher).ingest(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ISO 3166-1 alpha-2");
+        verify(repository, never()).save(any(PolicyDocument.class));
+    }
+
+    @Test
+    void rejectsNonHttpPolicySourceReferencesBeforeSavingPolicy() {
+        IngestPolicyRequest base = request();
+        IngestPolicyRequest request = new IngestPolicyRequest(
+                base.externalId(), base.title(), base.agency(), base.visaType(), base.status(),
+                base.sourceType(), base.publicationDate(), base.effectiveDate(), base.sourceUrl(), base.content(),
+                java.util.Set.of(), java.util.Set.of(), java.util.List.of("javascript:alert(1)"));
+
+        assertThatThrownBy(() -> new PolicyIngestionService(repository, vectorStore, eventPublisher).ingest(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid source reference URL");
+        verify(repository, never()).save(any(PolicyDocument.class));
     }
 
     @Test

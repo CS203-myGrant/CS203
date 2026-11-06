@@ -11,6 +11,15 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OrderColumn;
+import java.util.LinkedHashSet;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 
 /** Persisted source policy, including its complete text and indexing status. */
 @Entity
@@ -56,6 +65,23 @@ public class PolicyDocument {
     @Column(name = "content_hash", nullable = false, length = 64)
     private String contentHash;
 
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "policy_affected_countries", joinColumns = @JoinColumn(name = "policy_id"))
+    @Column(name = "country_code", nullable = false, length = 2)
+    private Set<String> affectedCountries = new LinkedHashSet<>();
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "policy_restriction_categories", joinColumns = @JoinColumn(name = "policy_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "category", nullable = false, length = 40)
+    private Set<RestrictionCategory> restrictionCategories = new LinkedHashSet<>();
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "policy_source_references", joinColumns = @JoinColumn(name = "policy_id"))
+    @OrderColumn(name = "reference_order")
+    @Column(name = "source_reference", nullable = false, length = 2048)
+    private List<String> sourceReferences = new ArrayList<>();
+
     @Column(name = "indexed_at")
     private Instant indexedAt;
 
@@ -65,6 +91,15 @@ public class PolicyDocument {
     public PolicyDocument(String externalId, String title, String agency, String visaType,
             PolicyStatus status, SourceType sourceType, LocalDate publicationDate,
             LocalDate effectiveDate, String sourceUrl, String content, String contentHash) {
+        this(externalId, title, agency, visaType, status, sourceType, publicationDate,
+                effectiveDate, sourceUrl, content, contentHash, Set.of(), Set.of(), List.of());
+    }
+
+    public PolicyDocument(String externalId, String title, String agency, String visaType,
+            PolicyStatus status, SourceType sourceType, LocalDate publicationDate,
+            LocalDate effectiveDate, String sourceUrl, String content, String contentHash,
+            Set<String> affectedCountries, Set<RestrictionCategory> restrictionCategories,
+            List<String> sourceReferences) {
         this.externalId = externalId;
         this.title = title;
         this.agency = agency;
@@ -76,6 +111,9 @@ public class PolicyDocument {
         this.sourceUrl = sourceUrl;
         this.content = content;
         this.contentHash = contentHash;
+        this.affectedCountries = new LinkedHashSet<>(affectedCountries);
+        this.restrictionCategories = new LinkedHashSet<>(restrictionCategories);
+        this.sourceReferences = new ArrayList<>(sourceReferences);
     }
 
     public Long getId() { return id; }
@@ -90,6 +128,9 @@ public class PolicyDocument {
     public String getSourceUrl() { return sourceUrl; }
     public String getContent() { return content; }
     public String getContentHash() { return contentHash; }
+    public Set<String> getAffectedCountries() { return Set.copyOf(affectedCountries); }
+    public Set<RestrictionCategory> getRestrictionCategories() { return Set.copyOf(restrictionCategories); }
+    public List<String> getSourceReferences() { return List.copyOf(sourceReferences); }
     public Instant getIndexedAt() { return indexedAt; }
 
     public void markIndexed(Instant indexedAt) {

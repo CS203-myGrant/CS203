@@ -247,12 +247,7 @@ class ProfileImpactAssessmentServiceTests {
         when(users.findByEmail("student@example.com")).thenReturn(Optional.of(user));
         when(profiles.findById(7L)).thenReturn(Optional.of(profile));
         when(consents.findByUserId(7L)).thenReturn(List.of(
-                new ProfileFieldConsent(7L, ProfileFieldDefinition.VISA_TYPE, Instant.now()),
-                new ProfileFieldConsent(
-                        7L,
-                        ProfileFieldDefinition.COUNTRY_OF_CITIZENSHIP,
-                        Instant.now()
-                )
+                new ProfileFieldConsent(7L, ProfileFieldDefinition.VISA_TYPE, Instant.now())
         ));
         when(judge.evaluate(anyString(), any()))
                 .thenReturn(new JudgeEvaluation(
@@ -262,7 +257,7 @@ class ProfileImpactAssessmentServiceTests {
                 ));
 
         server.expect(requestTo("https://api.openai.test/chat/completions"))
-                .andExpect(content().string(containsString("Malaysia")))
+                .andExpect(content().string(not(containsString("Malaysia"))))
                 .andExpect(content().string(not(containsString("Secret Employer"))))
                 .andRespond(withSuccess(
                         new ObjectMapper().writeValueAsString(Map.of(
