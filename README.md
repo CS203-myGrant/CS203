@@ -535,6 +535,7 @@ POST /api/v1/ingestion/documents
   -> split the policy into chunks
   -> create OpenAI embeddings
   -> store chunks and citation metadata in pgvector
+  -> link the policy to its rule and record any stage change (policy_rules, CS203-86)
 
 POST /api/v1/rag/query
   -> embed the question
@@ -1086,6 +1087,225 @@ Known limits:
   A backfilled item containing those characters counts as a new action the next time
   its assessment is revised.
 
+## Rule stages and timeline (CS203-86)
+
+A rule reaches the Federal Register in stages, and each stage is a separate document: the
+proposed rule, the final rule, perhaps a notice that delays it. myGrant groups those documents
+into a **policy rule** and keeps the rule's stage, effective date and history. When the stage or
+the effective date changes, affected applicants get one alert that says what moved, such as
+"effective date moved from 15 Sep 2026 to 1 Nov 2026", instead of another "New policy" alert.
+Rules are in `policy_rules`. `policy_rule_documents` says which rule each document is in and
+how it was matched, `policy_document_identifiers` holds the dockets and RINs, and
+`policy_rule_history` holds every step with its source.
+
+How documents are linked:
+
+- **Identifiers.** A Federal Register import takes the API's `docket_ids` and
+  `regulation_id_numbers`. Every document's header is read as well, so documents stored earlier
+  and the saved fixtures link the same way offline: `[DHS Docket No. ICEB-2025-0001]` and
+  `RIN 1653-AA95`. Only the text before `SUMMARY:` is read, because the body of a long rule cites
+  other rulemakings. A docket is kept without its agency label, as `ICEB-2025-0001`.
+- **News.** Articles rarely quote a docket, so the links in an article's description count:
+  `federalregister.gov/d/<number>`, `federalregister.gov/documents/<date>/<number>/…` and
+  `regulations.gov/docket/<id>`. A labelled docket or a `RIN` written in the text counts too.
+- **Matching.** A document joins the rule whose primary documents share any one of its
+  identifiers. When its identifiers point to more than one rule, it joins the rule matched by
+  docket (else RIN, else document number) with `MEDIUM` confidence, flagged for review with the
+  other rules named.
+- **Title fallback.** Used only when no identifier matches. Both titles are lower-cased, a
+  trailing part that names the document's stage is dropped (`; Proposed Rule`, `; Final Rule`,
+  `; Correction`, `; Delay of Effective Date` and the like), the rest is split into words
+  (hyphenated words such as `f-1` stay whole), and these stopwords are removed: a, an, and,
+  are, as, at, be, by, for, from, in, into, is, its, of, on, or, than, that, the, their, this,
+  to, under, with, within. The score is the Jaccard similarity: the words both titles share
+  divided by all the words either has. At **0.8** or above the rule is suggested with `LOW`
+  confidence and always flagged for review. For the fixture rule's 17-word title, one replaced
+  word scores 0.89 and still matches; two replaced words score 0.79 and do not.
+- **Conflicting identifiers beat a similar title.** The fallback never suggests a rule with a
+  docket or RIN that differs from the document's. That is why `2020-20845`, the 2020 proposal
+  with the same title on docket ICEB-2019-0006, starts a rule of its own.
+- A primary document that matches nothing starts a new rule. A news item never does; it stays
+  unlinked.
+- **Review flag.** `needs_review` and `review_reason` on `policy_rule_documents`, and a
+  `RuleLinkFlaggedEvent`, mark a title-only match, identifiers pointing to several rules, a
+  stage that would move backwards, and litigation reported on a link that is not certain.
+  Nothing consumes the event yet: anomaly review (CS203-90) will. There is no UI.
+
+Stages:
+
+- A Federal Register `Proposed Rule` is `PROPOSED` and a `Rule` (final, interim final, a delay
+  or a correction) is `FINAL`; either is `WITHDRAWN` when its action mentions a withdrawal.
+  Notices and anything else carry no stage: they can start a rule but never move one.
+- The stage only moves forward: `PROPOSED`, then `FINAL`, then `WITHDRAWN`. A proposal published
+  after the rule became final joins the rule but is not applied, and is flagged for review.
+- Only a final rule's effective date is the rule's. A document without an effective date never
+  changes or clears the stored one.
+- A document published before the one behind the current state, such as the proposal imported
+  after the final rule, is recorded in the history in date order but changes nothing.
+- `EFFECTIVE` is never stored. The timeline reports it once the rule is `FINAL` and the reader's
+  date on the test clock (their own, else the admin's, else today) has reached the effective date. Reaching
+  the date sends no alert: readers were told the date when it was set.
+- **Disputed** is a separate flag. It is set when a news item linked by an identifier (`HIGH`
+  confidence) reports litigation or a stay, and it never changes the primary stage. The
+  litigation phrases include lawsuit, sue, sued, injunction, enjoined, restraining order,
+  vacated, judge blocks and blocked by a judge or court; the full list is
+  `LitigationSignal.PHRASES`. A stay counts only as "stay of the rule", "stayed the rule" or
+  "court stay", because "stay" alone is everywhere in immigration text ("length of stay"). A report on a `MEDIUM` or `LOW` link is flagged for review and not
+  applied. Once set, disputed stays set; clearing it is follow-up work for CS203-90. The
+  `CHALLENGED` status is not used for rules.
+
+A meaningful change raises one `PolicyChangedEvent`, handled after the change commits, with
+the old and new stage, effective date and disputed flag and the source document. It is one of:
+
+- a primary document moves a staged rule forward (`PROPOSED` to `FINAL`, or to `WITHDRAWN`);
+- a primary document changes the effective date, or gives a final rule its first one;
+- linked news marks the rule disputed.
+
+Nothing is raised for a rule's first document (its usual "New policy" alert covers it), for a
+document that changes nothing, for an older document arriving late, for importing a document
+again, or by the backfill. Repeats stay idempotent three ways: a document already in a rule is
+never tracked again, each history row has a unique key made from its source and the state
+before and after, and the event is raised only when that row is actually written, which marks
+it `alerted`.
+
+Alerts and reassessment:
+
+- A change alert goes to the same applicants as a "New policy" alert, through the same
+  `notifications` rows, so the inbox, the live stream and the immediate and digest emails pick
+  it up unchanged. It belongs to the document that caused the change: the new Federal Register
+  document, or the news item behind a dispute. That document gets no "New policy" alert, so
+  each reader gets one alert per change within `UNIQUE (user_id, policy_id)`. A reader who
+  already holds an alert for that document, because the event arrived twice, is skipped and
+  logged; any other clash fails loudly.
+- The wording, with the usual "Action needed: review your …" suffix when the rule touches a
+  field the reader has filled in:
+  - `Rule update for F-1, J-1: moved from proposed to final, effective 15 Sep 2026: <title>`
+  - `Rule update for F-1, J-1: effective date moved from 15 Sep 2026 to 1 Nov 2026: <title>`
+  - `Rule update for F-1, J-1: status disputed: news reports litigation or a stay (The Guardian). The official status is still final, effective 1 Nov 2026: <title>`
+- After the change commits, a background thread reassesses the users that
+  `RuleReassessmentScope` names, against the document that caused the change. By default that
+  is everyone with a saved assessment of an earlier document of the same rule, whose advice is
+  now stale. It goes through `PolicyRecommendationStore`, the path behind **See how this impacts
+  me**, so a result is published only when the judge approves it, otherwise it waits in the
+  review queue, and its checklist items follow. The import never waits for it, and the import's
+  own preview assessment is unchanged. CS203-153 will widen the scope to every matching profile.
+
+Documents stored before this change are linked by a backfill that runs in the background once
+the app has started. It takes unlinked documents, primary first and oldest first, applies the
+same rules, marks its history `BACKFILL` and sends no alerts and no reassessments. Running it
+again changes nothing, and a failure is logged without stopping the app. It also retries news
+that matched no rule when it arrived. Set `RULES_BACKFILL_ON_STARTUP=false` to skip it.
+
+### The timeline endpoint
+
+`GET /api/v1/policies/{id}/timeline` returns the history of the rule that policy document `{id}`
+is in. Any document in the rule works, news included. As with `GET /api/v1/policies/{id}`, any
+signed-in user may call it. Steps are oldest first by source publication date, each with its
+source, and each step's previous values are those of the step before. `primaryStage` is the
+stored stage from primary sources; `currentStage` is `EFFECTIVE` once a `FINAL` rule's effective
+date is on or before `asOf`, the reader's date, and a derived `TOOK_EFFECT` step shows when.
+`disputedBy` names the news item that set `disputed`. Errors use the usual `ApiError` body:
+
+- 404 `Policy document 57 was not found` when no policy has the id;
+- 404 `Policy document 57 is not part of a tracked rule` for a document in no rule, such as news
+  that matched none;
+- 400 for an id that is not a number, and 401 without a token.
+
+The real proposal and final rule, read on 6 Nov 2026 (long titles shortened):
+
+```json
+{
+  "ruleId": 7,
+  "title": "Establishing a Fixed Time Period of Admission and an Extension of Stay Procedure for …",
+  "primaryStage": "FINAL",
+  "currentStage": "EFFECTIVE",
+  "asOf": "2026-11-06",
+  "effectiveDate": "2026-09-15",
+  "disputed": false,
+  "disputedBy": null,
+  "identifiers": [{"kind": "DOCKET", "value": "ICEB-2025-0001"}, {"kind": "RIN", "value": "1653-AA95"}],
+  "documents": [
+    {"policyId": 41, "externalId": "2025-16554", "sourceType": "PRIMARY", "title": "Establishing …",
+     "publishedOn": "2025-08-28", "matchMethod": "NEW_RULE", "confidence": "HIGH",
+     "matchedOn": "DOCKET ICEB-2025-0001; RIN 1653-AA95", "needsReview": false, "reviewReason": null},
+    {"policyId": 42, "externalId": "2026-14439", "sourceType": "PRIMARY", "title": "Establishing …",
+     "publishedOn": "2026-07-17", "matchMethod": "DOCKET_AND_RIN", "confidence": "HIGH",
+     "matchedOn": "DOCKET ICEB-2025-0001; RIN 1653-AA95", "needsReview": false, "reviewReason": null}
+  ],
+  "steps": [
+    {"observedOn": "2025-08-28", "recordedAt": "2026-11-02T09:14:05.120Z", "derived": false,
+     "primaryStage": "PROPOSED", "previousPrimaryStage": null,
+     "effectiveDate": null, "previousEffectiveDate": null, "disputed": false, "changes": ["STAGE"],
+     "source": {"policyId": 41, "externalId": "2025-16554", "sourceType": "PRIMARY",
+                "url": "https://www.federalregister.gov/d/2025-16554", "title": "Establishing …",
+                "agency": "Homeland Security Department", "publishedOn": "2025-08-28"}},
+    {"observedOn": "2026-07-17", "recordedAt": "2026-11-02T09:15:41.877Z", "derived": false,
+     "primaryStage": "FINAL", "previousPrimaryStage": "PROPOSED",
+     "effectiveDate": "2026-09-15", "previousEffectiveDate": null, "disputed": false,
+     "changes": ["STAGE", "EFFECTIVE_DATE"],
+     "source": {"policyId": 42, "externalId": "2026-14439", "sourceType": "PRIMARY",
+                "url": "https://www.federalregister.gov/d/2026-14439", "title": "Establishing …",
+                "agency": "Homeland Security Department", "publishedOn": "2026-07-17"}},
+    {"observedOn": "2026-09-15", "recordedAt": null, "derived": true,
+     "primaryStage": "FINAL", "previousPrimaryStage": "FINAL",
+     "effectiveDate": "2026-09-15", "previousEffectiveDate": "2026-09-15", "disputed": false,
+     "changes": ["TOOK_EFFECT"],
+     "source": {"policyId": 42, "externalId": "2026-14439", "sourceType": "PRIMARY",
+                "url": "https://www.federalregister.gov/d/2026-14439", "title": "Establishing …",
+                "agency": "Homeland Security Department", "publishedOn": "2026-07-17"}}
+  ]
+}
+```
+
+Read on 1 Sep 2026 instead, the same rule has `"currentStage": "FINAL"` and no `TOOK_EFFECT`
+step; `primaryStage` is `FINAL` either way. For a `NEW_RULE` document, `matchedOn` lists the
+identifiers it started the rule with.
+
+### Try the rule timeline locally
+
+With the app running and `$ADMIN_TOKEN` and an F-1 applicant's `$TOKEN` set as in
+[Run locally in WSL](#run-locally-in-wsl):
+
+```bash
+# The 2025 proposal starts a rule. F-1 and J-1 applicants get "New policy affecting F-1, J-1: …".
+curl -s -X POST -H "Authorization: Bearer $ADMIN_TOKEN" \
+  http://localhost:8080/api/v1/ingestion/federal-register/2025-16554
+# The 2026 final rule joins it by docket and RIN. The same applicants get one alert:
+# "Rule update for F-1, J-1: moved from proposed to final, effective 15 Sep 2026: …".
+curl -s -X POST -H "Authorization: Bearer $ADMIN_TOKEN" \
+  http://localhost:8080/api/v1/ingestion/federal-register/2026-14439
+# The timeline. Use either import's "ingestion": {"policyId": …}.
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/policies/POLICY_ID/timeline
+```
+
+Then:
+
+- Import `2026-14439` again: the response says `"alreadyIndexed":true`, and there is no new
+  alert and no new step.
+- Import `2020-20845`: it has the same title but its own docket and RIN, so it starts its own
+  rule, whose timeline has one step.
+- Move your own date with the test clock, under profile settings or with
+  `PUT /api/v1/test-clock/me` and `{"date":"2026-09-01"}`: the timeline's `currentStage` is
+  `FINAL`. From `2026-09-15` on it is `EFFECTIVE`.
+- To see a dispute, import the synthetic news feed the tests use. Its articles are made up, so
+  do this only on a local database:
+
+  ```bash
+  curl -s -X POST -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/xml' \
+    --data-binary @src/test/resources/newsrss/synthetic-rule-coverage-feed.xml \
+    http://localhost:8080/api/v1/ingestion/news-rss/saved
+  ```
+
+  The injunction article links to `2026-14439` and to the regulations.gov docket, so the rule
+  becomes `disputed`, its `primaryStage` stays `FINAL`, and applicants get the "status disputed"
+  alert. The explainer article joins the rule without changing it, and the third article
+  matches no rule.
+
+The effective-date move is tested with a synthetic delay notice,
+`src/test/resources/federal-register/synthetic-2026-99950-delay.txt`, because no real one
+exists for this rule. `RuleLifecycleIntegrationTest` runs the whole sequence. It needs a
+database that does not already hold these documents, as in CI, and is skipped otherwise.
+
 ## Test policy change notifications
 
 Importing a policy alerts every applicant whose visa category it affects. An alert is
@@ -1095,12 +1315,15 @@ upcoming travel date, and the employer or employment status.
 That mapping is a deterministic keyword heuristic like the visa classifier, **not** an LLM
 decision, and it is a prompt to review rather than a legal determination.
 
-Two behaviours surprise people:
+Three behaviours surprise people:
 
 - Alerts are created **at ingestion time**. An account registered after a document was
   imported receives nothing for it.
 - Importing the same document twice alerts nobody the second time; the response reports
   `"alreadyIndexed":true` and no new alert is generated.
+- A document that moves a rule already stored, such as `2026-14439` after `2025-16554`, gets a
+  "Rule update" alert saying what moved instead of "New policy". See
+  [Rule stages and timeline](#rule-stages-and-timeline-cs203-86).
 
 ### 1. Sign in as an applicant whose profile has dates
 
