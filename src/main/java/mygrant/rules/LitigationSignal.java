@@ -14,7 +14,8 @@ import java.util.stream.Collectors;
  * <p>Headlines about a court order name the court or judge and what it did, with a word or two
  * between: "Court Temporarily Blocks Rule …", "Federal Court Postpones Effective Date …". So
  * "court" or "judge" followed, within the next three words, by one of {@link #COURT_ACTIONS}
- * counts. An agency doing the same ("DHS postpones the effective date") does not.
+ * counts. An agency doing the same ("DHS postpones the effective date") does not, and neither does
+ * a court that "stays out of" a dispute.
  */
 final class LitigationSignal {
 
@@ -31,9 +32,12 @@ final class LitigationSignal {
             .map(phrase -> phrase.replace(" ", "\\s+"))
             .collect(Collectors.joining("|", "(?i)\\b(?:", ")\\b")));
 
-    /** "court" or "judge", up to two words, then the action: "US federal judge blocks", "court temporarily blocks". */
+    /**
+     * "court" or "judge", up to two words, then the action: "US federal judge blocks", "court
+     * temporarily blocks". Not when "out" follows: "Supreme Court stays out of student visa fight".
+     */
     private static final Pattern COURT_ACTION = Pattern.compile("(?i)\\b(?:courts?|judges?)\\b"
-            + "(?:\\s+[\\p{L}\\p{N}'’.-]+){0,2}?\\s+(?:" + String.join("|", COURT_ACTIONS) + ")\\b");
+            + "(?:\\s+[\\p{L}\\p{N}'’.-]+){0,2}?\\s+(?:" + String.join("|", COURT_ACTIONS) + ")\\b(?!\\s+out\\b)");
 
     private LitigationSignal() {
     }

@@ -51,6 +51,9 @@ class LitigationSignalTest {
             "Pursue a degree in the United States.",
             "Immigration lawyer Sue Lee said F-1 students should keep their I-20 up to date.",
             "SUE LEE, an adviser at the university, explained the new admission period.",
+            // A court staying out of a dispute is not a court stay.
+            "Supreme Court stays out of student visa fight",
+            "The appeals court stayed out of the dispute over the rule.",
             // The action must be within three words of the court or judge.
             "The immigration judge said the student's stays were lawful."})
     void ignoresOrdinaryImmigrationText(String text) {
