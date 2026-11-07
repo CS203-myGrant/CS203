@@ -202,7 +202,7 @@ class RuleLifecycleIntegrationTest {
         // The proposal starts the rule and gets the usual new-policy alert.
         long proposal = importDocument(PROPOSAL);
         assertThat(messages(student)).containsExactly(
-                "New policy affecting F-1, J-1: " + RuleFixtures.TITLE);
+                "New policy that may affect F-1, J-1: " + RuleFixtures.TITLE);
         // The reader asked how the proposal affects them, so the final rule makes that advice stale.
         assessedEarlier(reader, proposal);
 
@@ -322,7 +322,7 @@ class RuleLifecycleIntegrationTest {
     void aRealDelayNoticeMovesTheDateItsDatesTextGivesAndTheRuleIsThenWithdrawn() throws Exception {
         User worker = applicant("H-1B");
         long proposal = importDocument(AC61_PROPOSAL);
-        assertThat(alertsFor(worker, proposal)).containsExactly("New policy affecting H-1B: " + AC61_TITLE);
+        assertThat(alertsFor(worker, proposal)).containsExactly("New policy that may affect H-1B: " + AC61_TITLE);
         long finalRule = importDocument(AC61_FINAL_RULE);
         long delay = importDocument(AC61_DELAY);
         long withdrawal = importDocument(AC61_WITHDRAWAL);
@@ -501,7 +501,7 @@ class RuleLifecycleIntegrationTest {
     void aSecondFinalRuleInTheSameRulemakingIsItsOwnStepNotADateMove() throws Exception {
         User worker = applicant("H-1B");
         long proposal = importDocument(H1B_PROPOSAL);
-        assertThat(alertsFor(worker, proposal)).containsExactly("New policy affecting F-1, H-1B: " + RuleFixtures.H1B_TITLE);
+        assertThat(alertsFor(worker, proposal)).containsExactly("New policy that may affect F-1, H-1B: " + RuleFixtures.H1B_TITLE);
         long registration = importDocument(H1B_REGISTRATION_RULE);
         long ruleId = store.findLink(registration).orElseThrow().ruleId();
 
@@ -523,7 +523,7 @@ class RuleLifecycleIntegrationTest {
         assertThat(store.findRule(ruleId).orElseThrow().state()).isEqualTo(
                 new RuleState(mygrant.policies.PolicyStatus.FINAL, RuleFixtures.H1B_REGISTRATION_EFFECTIVE, false));
         assertThat(alertsFor(worker, secondFinal)).containsExactly(
-                "New policy affecting F-1, H-1B: " + RuleFixtures.H1B_TITLE + " (effective 2025-01-17)");
+                "New policy that may affect F-1, H-1B: " + RuleFixtures.H1B_TITLE + " (effective 2025-01-17)");
         assertThat(messages(worker)).hasSize(3).noneMatch(message -> message.contains("effective date moved"));
 
         clock.setUserDate(worker.getId(), LocalDate.of(2026, 11, 6));

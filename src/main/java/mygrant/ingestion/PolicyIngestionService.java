@@ -108,7 +108,9 @@ public class PolicyIngestionService {
                 request.externalId(), request.title(), request.agency(), normalizeVisaType(request.visaType()),
                 request.status(), request.sourceType(), request.publicationDate(), request.effectiveDate(),
                 request.sourceUrl(), request.content(), contentHash, new java.util.LinkedHashSet<>(affectedCountries),
-                restrictionCategories, sourceReferences);
+                restrictionCategories, sourceReferences,
+                request.countryRestrictions() == null ? List.of() : request.countryRestrictions(),
+                request.extractionReviewRequired(), request.specialDocumentHolderRule());
 
         PolicyDocument saved = policyRepository.save(policy);
         List<Document> sources = Arrays.stream(saved.getVisaType().split(","))
@@ -153,6 +155,9 @@ public class PolicyIngestionService {
         metadata.put("restrictionCategories", policy.getRestrictionCategories().stream()
                 .map(Enum::name).toList());
         metadata.put("sourceReferences", policy.getSourceReferences());
+        metadata.put("countryRestrictions", policy.getCountryRestrictions().stream().map(rule -> Map.of(
+                "countryCode", rule.getCountryCode(), "scope", rule.getScope().name(),
+                "sourceReference", rule.getSourceReference(), "exemptionWording", rule.getExemptionWording())).toList());
         if (policy.getEffectiveDate() != null) {
             metadata.put("effectiveDate", policy.getEffectiveDate().toString());
         }

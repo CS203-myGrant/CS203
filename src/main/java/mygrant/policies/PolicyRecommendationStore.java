@@ -16,6 +16,7 @@ import mygrant.impact.ProfileImpactAssessment;
 import mygrant.user.UserProfile;
 import mygrant.user.UserProfileRepository;
 import mygrant.user.UserRepository;
+import mygrant.user.User;
 
 /** Durable per-user assessments; source or profile edits invalidate the saved result. */
 @Service
@@ -83,6 +84,33 @@ public class PolicyRecommendationStore {
             }
         }
         return result;
+    }
+
+    /** Queues an uncertain source extraction in the existing CS203-6 per-profile review queue. */
+    @Transactional
+    public void queueExtractionForReview(User user, PolicyDocument policy, String reason) {
+        String hash;
+        try {
+            hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(("extraction-review:" + policy.getId() + ":" + reason)
+                            .getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException exception) {
+            throw new IllegalStateException(exception);
+        }
+        var draft = new ProfileImpactAssessment(ImpactUrgency.MEDIUM, 0,
+                "Policy extraction needs human review before matching: " + reason,
+                List.of("Source: " + policy.getSourceUrl(), "Policy: " + policy.getTitle()),
+                List.of("Verify the extracted restriction scope and affected document-holder cases."),
+                List.of("Affected countries and document-holder scope are not confirmed."),
+                true, "Policy extractor", "deterministic", new mygrant.impact.JudgeEvaluation(
+                        mygrant.impact.JudgeEvaluation.Verdict.NO,
+                        "Extraction was ambiguous; no automatic match was made.", "System"), 0);
+        jdbc.update("""
+                INSERT INTO policy_recommendations
+                    (user_id, policy_id, input_hash, assessment_json, publication_status, severity)
+                VALUES (?, ?, ?, ?, 'PENDING_REVIEW', 'INFO')
+                ON CONFLICT (user_id, policy_id, input_hash) DO NOTHING
+                """, user.getId(), policy.getId(), hash, json(draft));
     }
 
     private String fingerprint(UserProfile profile, PolicyDocument policy) {

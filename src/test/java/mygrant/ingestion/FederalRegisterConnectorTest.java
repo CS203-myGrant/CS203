@@ -138,6 +138,50 @@ class FederalRegisterConnectorTest {
     }
 
     @Test
+    void aRuleCitingAnEntryProclamationIsNotTreatedAsOne() throws Exception {
+        String content;
+        try (var stream = getClass().getResourceAsStream("/federal-register/2026-14439.txt")) {
+            content = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        assertThat(content).contains("Proclamation 10949, Restricting the Entry");
+        var document = new FederalRegisterDocument("2026-14439", "Fixed time period of admission", "Rule",
+                LocalDate.of(2026, 7, 17), null, "https://www.federalregister.gov/d/2026-14439",
+                "https://example.com/2026-14439.txt", List.of());
+
+        var prepared = transform(document, content);
+
+        assertThat(prepared.restrictions().proclamation()).isFalse();
+        assertThat(prepared.restrictions().requiresReview()).isFalse();
+        assertThat(prepared.classification().visaTypes()).contains("F-1", "J-1");
+    }
+
+    @Test
+    void aPresidentialProclamationHasItsCountriesExtracted() {
+        String content = "Proclamation restricting the entry of foreign nationals.\n"
+                + "Sec. 2. Full Suspension of Entry. Entry of nationals of Afghanistan is suspended.\n"
+                + "Sec. 6. Exceptions. This restriction does not apply to lawful permanent residents.\n"
+                + "Sec. 7. Effective Date.";
+        var document = new FederalRegisterDocument("2026-99001", "Restricting the Entry of Foreign Nationals",
+                "Presidential Document", LocalDate.of(2026, 6, 4), null,
+                "https://www.federalregister.gov/d/2026-99001", "https://example.com/2026-99001.txt", List.of());
+
+        var prepared = transform(document, content);
+
+        assertThat(prepared.restrictions().proclamation()).isTrue();
+        assertThat(prepared.restrictions().affectedCountries()).containsExactly("AF");
+    }
+
+    private FederalRegisterIngestionService.PreparedDocument transform(FederalRegisterDocument document,
+            String content) {
+        when(client.getDocument(document.documentNumber())).thenReturn(document);
+        when(client.downloadFullText(document.rawTextUrl())).thenReturn(content);
+        var connector = new FederalRegisterIngestionService(client, new VisaTypeClassifier(),
+                policyIngestion, impactAssessment);
+        var request = new FederalRegisterImportRequest(document.documentNumber(), "admin@example.com");
+        return connector.transform(connector.fetch(request), request);
+    }
+
+    @Test
     void passesTheApiDocketAndRinToIngestionAndMapsWithdrawals() {
         var document = new FederalRegisterDocument("2026-12345", "F-1 student rule", "Proposed Rule",
                 LocalDate.of(2026, 10, 1), null, "https://www.federalregister.gov/d/2026-12345",

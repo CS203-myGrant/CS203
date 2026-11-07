@@ -13,5 +13,7 @@ public interface ImmigrationDocumentRepository
 
     Optional<ImmigrationDocument> findByIdAndUserId(Long id, Long userId);
 
+    java.util.List<ImmigrationDocument> findByUserIdAndPolicyMatchingConsentTrue(Long userId);
+
     void deleteAllByUserId(Long userId);
 }

@@ -1448,7 +1448,7 @@ With the app running and `$ADMIN_TOKEN` and an F-1 applicant's `$TOKEN` set as i
 [Run locally in WSL](#run-locally-in-wsl):
 
 ```bash
-# The 2025 proposal starts a rule. F-1 and J-1 applicants get "New policy affecting F-1, J-1: …".
+# The 2025 proposal starts a rule. F-1 and J-1 applicants get "New policy that may affect F-1, J-1: …".
 curl -s -X POST -H "Authorization: Bearer $ADMIN_TOKEN" \
   http://localhost:8080/api/v1/ingestion/federal-register/2025-16554
 # The 2026 final rule joins it by docket and RIN. The same applicants get one alert:
@@ -1693,7 +1693,7 @@ Each entry reports whether it needs attention and which profile fields it refers
 {
   "id": 7,
   "policyId": 5,
-  "message": "New policy affecting F-1: ... Action needed: review your program end date.",
+  "message": "New policy that may affect F-1: ... Action needed: review your program end date.",
   "read": false,
   "actionRequired": true,
   "affectedFields": ["program end date"]
