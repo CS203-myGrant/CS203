@@ -91,8 +91,7 @@ class EntryRestrictionReviewIntegrationTest {
     }
 
     private User account(UserRole role, String prefix) {
-        User user = new User("Review test", prefix + "-" + UUID.randomUUID() + "@example.org",
-                "unused", "F-1", null, null);
+        User user = new User("Review test", prefix + "-" + UUID.randomUUID() + "@example.org", "unused");
         user.setRole(role);
         return users.saveAndFlush(user);
     }

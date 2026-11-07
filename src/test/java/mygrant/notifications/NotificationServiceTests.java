@@ -217,9 +217,9 @@ class NotificationServiceTests {
     void entryRestrictionDoesNotNotifyVisaMatchesOutsideAffectedCountries() {
         User affectedCitizen = user(7L, "affected@example.com");
         User incidentalVisaMention = user(8L, "other@example.com");
-        UserProfile affectedProfile = UserProfile.fromUser(affectedCitizen);
+        UserProfile affectedProfile = profile(affectedCitizen, "F-1", null, null, null, null);
         affectedProfile.setCountryOfCitizenship("Afghanistan");
-        UserProfile otherProfile = UserProfile.fromUser(incidentalVisaMention);
+        UserProfile otherProfile = profile(incidentalVisaMention, "F-1", null, null, null, null);
         otherProfile.setCountryOfCitizenship("Malaysia");
         when(userRepository.findByRole(UserRole.APPLICANT))
                 .thenReturn(List.of(affectedCitizen, incidentalVisaMention));
@@ -247,7 +247,7 @@ class NotificationServiceTests {
     @Test
     void entryRestrictionDoesNotMatchCitizenshipWithoutConsent() {
         User applicant = user(7L, "applicant@example.com");
-        UserProfile profile = UserProfile.fromUser(applicant);
+        UserProfile profile = profile(applicant, "F-1", null, null, null, null);
         profile.setCountryOfCitizenship("Afghanistan");
         when(userRepository.findByRole(UserRole.APPLICANT)).thenReturn(List.of(applicant));
         new NotificationService(notificationRepository, userRepository, userProfileRepository,
