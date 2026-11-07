@@ -1,6 +1,7 @@
 package mygrant.ingestion.federalregister;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -38,6 +39,9 @@ public class FederalRegisterIngestionService
     // effective-date discussion for the first demo's focused RAG queries.
     private static final int MAX_INDEX_CHARACTERS = 6_000;
     private static final SourceIdentity SOURCE = new SourceIdentity("FEDERAL_REGISTER", SourceType.PRIMARY);
+    private static final String PRESIDENTIAL_DOCUMENT = "Presidential Document";
+    private static final EntryRestrictionExtractor.Extraction NO_RESTRICTIONS =
+            new EntryRestrictionExtractor.Extraction(false, false, false, List.of(), List.of(), List.of(), List.of());
 
     private final FederalRegisterClient client;
     private final VisaTypeClassifier classifier;
@@ -92,7 +96,12 @@ public class FederalRegisterIngestionService
         FederalRegisterDocument document = fetched.payload().document();
         String content = fetched.payload().content();
         VisaClassification classification = classifier.classify(document.title(), content);
-        var restrictions = restrictionExtractor.extract(document.title(), content, document.htmlUrl());
+        // Only a presidential document can be an entry proclamation. Rules and notices often cite
+        // one, such as "Presidential Proclamation 10949, Restricting the Entry of Foreign Nationals",
+        // without restricting entry, and would otherwise be held for review with no alert sent.
+        var restrictions = PRESIDENTIAL_DOCUMENT.equalsIgnoreCase(document.type())
+                ? restrictionExtractor.extract(document.title(), content, document.htmlUrl())
+                : NO_RESTRICTIONS;
         if (classification.visaTypes().isEmpty() && !restrictions.proclamation()) {
             throw new UnsupportedVisaCategoryException(
                     "No supported visa category was detected; document was not ingested");
