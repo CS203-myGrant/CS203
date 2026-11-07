@@ -4,17 +4,30 @@ import java.security.Principal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import mygrant.ingestion.dto.IngestionStatusResponse;
 import mygrant.ingestion.dto.IngestionSyncResponse;
+import mygrant.ingestion.dto.SyncFailureResponse;
 import mygrant.ingestion.federalregister.FederalRegisterClient;
 import mygrant.ingestion.federalregister.FederalRegisterImportRequest;
 import mygrant.ingestion.federalregister.FederalRegisterIngestionResponse;
 import mygrant.ingestion.federalregister.FederalRegisterIngestionService;
+import mygrant.ingestion.federalregister.UnsupportedVisaCategoryException;
 import mygrant.ingestion.newsrss.NewsRssConnector;
 import mygrant.ingestion.uscis.UscisProcessingTimeImporter;
 import mygrant.ingestion.visabulletin.VisaBulletinImporter;
@@ -25,32 +38,45 @@ import mygrant.sources.PolicySourceRepository;
 import mygrant.sources.PolicySourceSyncRun;
 import mygrant.sources.PolicySourceSyncRunRepository;
 import mygrant.sources.PolicySourceType;
+import mygrant.sources.SyncFailure;
+import mygrant.sources.SyncFailureRepository;
 
 @Service
 public class SourceSyncService {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(SourceSyncService.class);
+
     private final PolicySourceRepository sourceRepository;
     private final PolicySourceSyncRunRepository runRepository;
+    private final SyncFailureRepository failureRepository;
     private final FederalRegisterClient federalRegisterClient;
     private final FederalRegisterIngestionService federalRegister;
     private final VisaBulletinImporter visaBulletin;
     private final NewsRssConnector newsRss;
     private final UscisProcessingTimeImporter uscis;
     private final ConnectorStatusService connectorStatusService;
+    private final int maxDocumentAttempts;
 
     public SourceSyncService(PolicySourceRepository sourceRepository,
-            PolicySourceSyncRunRepository runRepository, FederalRegisterClient federalRegisterClient,
+            PolicySourceSyncRunRepository runRepository, SyncFailureRepository failureRepository,
+            FederalRegisterClient federalRegisterClient,
             FederalRegisterIngestionService federalRegister, VisaBulletinImporter visaBulletin,
             NewsRssConnector newsRss, UscisProcessingTimeImporter uscis,
-            ConnectorStatusService connectorStatusService) {
+            ConnectorStatusService connectorStatusService,
+            @Value("${mygrant.ingestion.max-document-attempts:5}") int maxDocumentAttempts) {
+        if (maxDocumentAttempts < 1) {
+            throw new IllegalArgumentException("mygrant.ingestion.max-document-attempts must be at least 1");
+        }
         this.sourceRepository = sourceRepository;
         this.runRepository = runRepository;
+        this.failureRepository = failureRepository;
         this.federalRegisterClient = federalRegisterClient;
         this.federalRegister = federalRegister;
         this.visaBulletin = visaBulletin;
         this.newsRss = newsRss;
         this.uscis = uscis;
         this.connectorStatusService = connectorStatusService;
+        this.maxDocumentAttempts = maxDocumentAttempts;
     }
 
     @Transactional(readOnly = true)
@@ -100,12 +126,12 @@ public class SourceSyncService {
                 case USCIS -> syncUscis(source);
             };
             Instant finishedAt = Instant.now();
-            run.complete(finishedAt, counts.documentsFetched(), counts.chunksVectorised());
+            run.complete(finishedAt, counts.documentsFetched(), counts.chunksVectorised(), counts.documentErrors());
             runRepository.save(run);
             source.recordSuccess(finishedAt);
             sourceRepository.save(source);
             return new IngestionSyncResponse(source.getId(), startedAt, finishedAt,
-                    counts.documentsFetched(), counts.chunksVectorised(), true, null);
+                    counts.documentsFetched(), counts.chunksVectorised(), true, counts.documentErrors());
         } catch (RuntimeException exception) {
             Instant finishedAt = Instant.now();
             String error = errorMessage(exception);
@@ -118,18 +144,105 @@ public class SourceSyncService {
         }
     }
 
+    /**
+     * Imports what the Federal Register search finds since the last completed run, and retries the
+     * documents earlier runs failed on. A document that fails is logged and recorded in
+     * sync_failures, and the run carries on with the rest. It is tried again on every later run,
+     * whether or not the search still finds it, until it imports or has failed maxDocumentAttempts
+     * times in a row; then it is PERMANENTLY_FAILED and skipped. The run still completes, so the
+     * search window (lastSuccessAt) moves past failed documents: sync_failures, not the window,
+     * brings them back. A candidate the classifier finds is about no supported visa type is not a
+     * failure. A failure of the search itself still fails the run, and the window stays put.
+     */
     private SyncCounts syncFederalRegister(PolicySource source, String userEmail) {
         LocalDate to = LocalDate.now();
         LocalDate from = source.getLastSuccessAt() == null
                 ? to.minusDays(1) : source.getLastSuccessAt().atZone(java.time.ZoneOffset.UTC).toLocalDate();
-        List<String> documents = federalRegisterClient.searchDocumentNumbers(from, to, 100);
+        Set<String> documents = new LinkedHashSet<>(federalRegisterClient.searchDocumentNumbers(from, to, 100));
+        documents.addAll(failureRepository.findDocumentIds(source.getId(), SyncFailure.Status.RETRYING));
+        Map<String, SyncFailure> failures = documents.isEmpty() ? Map.of()
+                : failureRepository.findBySource_IdAndDocumentIdIn(source.getId(), documents).stream()
+                        .collect(Collectors.toMap(SyncFailure::getDocumentId, Function.identity()));
+
+        int attempted = 0;
+        int imported = 0;
+        int unsupported = 0;
         int chunks = 0;
+        List<String> failed = new ArrayList<>();
+        List<String> skipped = new ArrayList<>();
         for (String documentNumber : documents) {
-            FederalRegisterIngestionResponse response = federalRegister.ingest(
-                    new FederalRegisterImportRequest(documentNumber, userEmail, false));
-            chunks += response.ingestion().chunksIndexed();
+            SyncFailure failure = failures.get(documentNumber);
+            if (failure != null && failure.isPermanentlyFailed()) {
+                skipped.add(documentNumber);
+                continue;
+            }
+            attempted++;
+            try {
+                FederalRegisterIngestionResponse response = federalRegister.ingest(
+                        new FederalRegisterImportRequest(documentNumber, userEmail, false));
+                chunks += response.ingestion().chunksIndexed();
+                imported++;
+            } catch (UnsupportedVisaCategoryException exception) {
+                // The search only finds candidates; the classifier decided this one is out of scope.
+                unsupported++;
+            } catch (RuntimeException exception) {
+                failed.add(recordFailure(source, documentNumber, failure, exception));
+                continue;
+            }
+            if (failure != null && failure.getStatus() == SyncFailure.Status.RETRYING) {
+                failure.resolve(Instant.now());
+                failureRepository.save(failure);
+                LOGGER.info("Federal Register sync for source {} ({}): document {} imported after {} failed "
+                        + "attempt(s)", source.getId(), source.getName(), documentNumber, failure.getAttempts());
+            }
         }
-        return new SyncCounts(documents.size(), chunks);
+
+        String documentErrors = failed.isEmpty() ? null
+                : failed.size() + " of " + attempted + " documents failed: " + String.join("; ", failed);
+        String summary = "Federal Register sync for source " + source.getId() + " (" + source.getName()
+                + ") completed: " + attempted + " documents tried, " + imported + " imported, " + unsupported
+                + " about no supported visa type, " + failed.size() + " failed, " + skipped.size()
+                + " skipped as permanently failed" + (skipped.isEmpty() ? "" : " " + skipped);
+        if (documentErrors == null) {
+            LOGGER.info(summary);
+        } else {
+            LOGGER.warn("{}. {}", summary, documentErrors);
+        }
+        return new SyncCounts(attempted, chunks, documentErrors);
+    }
+
+    /**
+     * Records one more failed attempt at a document and logs it. Returns how the run summary
+     * describes it.
+     */
+    private String recordFailure(PolicySource source, String documentNumber, SyncFailure previous,
+            RuntimeException exception) {
+        Instant now = Instant.now();
+        String error = errorMessage(exception);
+        SyncFailure failure = previous;
+        if (failure == null) {
+            failure = new SyncFailure(source, documentNumber, error, now, maxDocumentAttempts);
+        } else {
+            failure.failedAgain(error, now, maxDocumentAttempts);
+        }
+        failureRepository.save(failure);
+        String outcome = failure.isPermanentlyFailed() ? "will not be retried" : "will be retried on the next run";
+        LOGGER.warn("Federal Register sync for source {} ({}): document {} failed on attempt {} of {} and {}: {}",
+                source.getId(), source.getName(), documentNumber, failure.getAttempts(), maxDocumentAttempts,
+                outcome, error, exception);
+        return documentNumber + " (attempt " + failure.getAttempts() + " of " + maxDocumentAttempts + ", "
+                + outcome + "): " + error;
+    }
+
+    /** Documents a sync failed on, for admins, newest failure first. */
+    @Transactional(readOnly = true)
+    public Page<SyncFailureResponse> failures(SyncFailure.Status status, Pageable pageable) {
+        Page<SyncFailure> page = status == null ? failureRepository.findAllByOrderByLastFailedAtDescIdDesc(pageable)
+                : failureRepository.findByStatusOrderByLastFailedAtDescIdDesc(status, pageable);
+        return page.map(failure -> new SyncFailureResponse(failure.getId(), failure.getSource().getId(),
+                failure.getSource().getName(), failure.getDocumentId(), failure.getStatus(), failure.getAttempts(),
+                maxDocumentAttempts, failure.getLastError(), failure.getFirstFailedAt(), failure.getLastFailedAt(),
+                failure.getResolvedAt()));
     }
 
     private SyncCounts syncVisaBulletin() {
@@ -185,6 +298,10 @@ public class SourceSyncService {
                 : message.substring(0, Math.min(message.length(), 2000));
     }
 
-    private record SyncCounts(int documentsFetched, int chunksVectorised) {
+    /** documentErrors names the documents that failed, or is null when none did. */
+    private record SyncCounts(int documentsFetched, int chunksVectorised, String documentErrors) {
+        SyncCounts(int documentsFetched, int chunksVectorised) {
+            this(documentsFetched, chunksVectorised, null);
+        }
     }
 }
