@@ -77,14 +77,18 @@ class IngestionControllerSecurityTest {
     @Test
     void adminCanIngestPolicy() throws Exception {
         stubToken(UserRole.ADMIN);
-        when(ingestionService.ingest(any()))
+        when(ingestionService.ingestRecordedByAdmin(any()))
                 .thenReturn(new IngestionResponse(1L, "policy-1", 1, Instant.now(), false));
 
         mockMvc.perform(post("/api/v1/ingestion/documents")
                         .header("Authorization", "Bearer token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequest()))
-                .andExpect(status().isCreated());
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.policyId").value(1));
+        // Marked as the admin's, so a court order posted here can dispute a rule an admin cleared.
+        org.mockito.Mockito.verify(ingestionService).ingestRecordedByAdmin(any());
+        org.mockito.Mockito.verify(ingestionService, org.mockito.Mockito.never()).ingest(any());
     }
 
     @Test

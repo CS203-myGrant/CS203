@@ -94,7 +94,8 @@ class PolicyRuleTrackingIntegrationTest {
         assertThat(ingestion.ingest(RuleFixtures.proposal()).alreadyIndexed()).isTrue();
         assertThat(ingestion.ingest(RuleFixtures.finalRule()).alreadyIndexed()).isTrue();
         // Tracking a document already in a rule is a no-op too.
-        var again = tracker.track(policies.findById(proposal).orElseThrow(), Set.of(), RecordedBy.INGESTION);
+        var again = tracker.track(policies.findById(proposal).orElseThrow(), Set.of(), RecordedBy.INGESTION,
+                DocumentOrigin.AUTOMATIC);
 
         assertThat(again).isEqualTo(new PolicyRuleTracker.Result(ruleId, false, false));
         assertThat(store.history(ruleId)).isEqualTo(before);

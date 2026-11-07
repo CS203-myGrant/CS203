@@ -16,6 +16,7 @@ import mygrant.policies.PolicyDocumentRepository;
  * same tracker as ingestion. Primary documents go first, oldest first, so their history is written
  * in order. Entries are marked BACKFILL and raise no events, so nobody is alerted about old
  * documents again. A document already in a rule is skipped, so running it twice changes nothing.
+ * Nothing records who posted a document, so every one counts as {@link DocumentOrigin#AUTOMATIC}.
  */
 @Service
 public class PolicyRuleBackfill {
@@ -48,7 +49,8 @@ public class PolicyRuleBackfill {
         for (Long id : ids) {
             try {
                 Boolean joined = transaction.execute(status -> policies.findById(id)
-                        .map(document -> tracker.track(document, Set.of(), RecordedBy.BACKFILL).linked())
+                        .map(document -> tracker.track(document, Set.of(), RecordedBy.BACKFILL,
+                                DocumentOrigin.AUTOMATIC).linked())
                         .orElse(false));
                 if (Boolean.TRUE.equals(joined)) {
                     linked++;

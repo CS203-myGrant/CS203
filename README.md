@@ -1121,7 +1121,8 @@ into a **policy rule** and keeps the rule's stage, effective date and history. W
 the effective date changes, affected applicants get one alert that says what moved, such as
 "effective date moved from 15 Sep 2026 to 1 Nov 2026", instead of another "New policy" alert.
 Litigation and court orders are tracked separately, as a **disputed** flag set by news or by a
-court order an admin records.
+court order an admin records, and cleared by an admin once a court lifts the block. After that,
+only a court order an admin records can set it again.
 Rules are in `policy_rules`. `policy_rule_documents` says which rule each document is in and
 how it was matched, `policy_document_identifiers` holds the dockets and RINs, and
 `policy_rule_history` holds every step with its source.
@@ -1162,8 +1163,12 @@ How documents are linked:
   unlinked.
 - **Review flag.** `needs_review` and `review_reason` on `policy_rule_documents`, and a
   `RuleLinkFlaggedEvent`, mark a title-only match, identifiers pointing to several rules, a
-  stage that would move backwards, and litigation reported on a link that is not certain.
-  Nothing consumes the event yet: anomaly review (CS203-90) will. There is no UI.
+  stage that would move backwards, litigation reported on a link that is not certain, and
+  litigation held because an admin cleared the rule's dispute (see **Disputed** below).
+  Nothing consumes the event yet, so a flag sends no alert: anomaly review (CS203-90) will
+  consume it. There is no UI and no list of flagged documents. A flagged document shows only in
+  its rule's timeline, under `documents` with `needsReview` and `reviewReason`, and in
+  `policy_rule_documents`.
 
 Stages:
 
@@ -1216,8 +1221,32 @@ Stages:
   "sue" is not on the list: it would hit the name Sue. A stay otherwise counts only as "stay of
   the rule", "stayed the rule" or "court stay", because "stay" alone is everywhere in immigration
   text ("length of stay"). A report on a `MEDIUM` or `LOW` link is flagged for review and not
-  applied. Once set, disputed stays set; clearing it is follow-up work for CS203-90. The
-  `CHALLENGED` status is not used for rules.
+  applied. Once set, disputed stays set until an admin clears it because a court lifted the
+  block (see [Clear a dispute](#clear-a-dispute)). The `CHALLENGED` status is not used for
+  rules.
+- **After an admin clears a dispute, news never disputes the rule again.** News of the lift
+  itself ("Appeals court lifts injunction on …") reads as litigation, and nothing tells it apart
+  from news of a new block. So a report of litigation from the news feed, whatever its date, is
+  held for review:
+  - the rule stays not disputed;
+  - its link has `needs_review` set, with a `review_reason` saying an admin cleared the dispute
+    and giving the lift date;
+  - `policy_rule_history` records a step with `applied = false`, the rule's state unchanged
+    before and after, and the same text in `reason`;
+  - it sends no alert and starts no reassessment, like any other document held for review.
+
+  Only a court order an admin records with `POST /api/v1/ingestion/documents` (see
+  [Record a court order](#record-a-court-order)) disputes the rule again, with the usual "status
+  disputed" alert. It must be dated after the source that lifted the block: one dated on or
+  before it is about the block that was lifted, so it is held the same way. After a further
+  clearing, news is held again. A rule no admin has cleared is unaffected: news still disputes
+  it.
+
+  News and admin court orders are both `SECONDARY` documents with the same fields, so neither
+  the fields nor the wording tell them apart. The endpoint does: only a document posted to
+  `POST /api/v1/ingestion/documents`, which is ADMIN only, counts as an admin's. The news feed,
+  Federal Register imports and the backfill never do. This is not stored, so a court order
+  posted while no rule matched it, and linked later by the backfill, counts as news.
 
 A meaningful change raises one `PolicyChangedEvent`, handled after the change commits, with
 the old and new stage, effective date and disputed flag and the source document. It is one of:
@@ -1229,7 +1258,8 @@ the old and new stage, effective date and disputed flag and the source document.
 
 Nothing is raised for a rule's first document (its usual "New policy" alert covers it), for a
 separate final rule in the same rulemaking (the same), for a document that changes nothing, for
-an older document arriving late, for importing a document again, or by the backfill. Repeats
+an older document arriving late, for importing a document again, by the backfill, or when an
+admin clears a dispute. Repeats
 stay idempotent three ways: a document already in a rule is never tracked again, each history
 row has a unique key made from its source and the state before and after, and the event is
 raised only when that row is actually written, which marks it `alerted`.
@@ -1281,6 +1311,14 @@ before.
   `disputedBy` names. `effectiveDatePassedWhileDisputed` is `true` when a disputed rule's
   effective date is on or before `asOf`: the UI should say "scheduled for 15 Sep 2026; blocked
   or in dispute", not "in effect". A disputed rule has no `TOOK_EFFECT` step.
+- When an admin clears the dispute, that is a `DISPUTED` step back to `false`, whose source is
+  the court order or news item that lifted the block (`policyId` is `null`). `disputedBy` is
+  `null` again and, once the date has come, `currentStage` is `EFFECTIVE`. The `TOOK_EFFECT`
+  step then comes after the clearing step and carries its date, because the rule could not take
+  effect while it was blocked. If the rule is disputed again, `disputedBy` names the newest report.
+- A report held for review after a clearing is not a step, so it never shows as a dispute and
+  the rule stays `EFFECTIVE` once its date has passed. Like every flagged document, it is listed
+  under `documents` with `"needsReview": true` and its `reviewReason`.
 - A separate final rule in the same rulemaking is an `ADDITIONAL_FINAL_RULE` step. Its own
   effective date is in `ownEffectiveDate`; the step's `effectiveDate` and `previousEffectiveDate`
   stay the rule's, so it never reads as a date move. `ownEffectiveDate` is `null` on every other
@@ -1480,7 +1518,10 @@ order with the existing `POST /api/v1/ingestion/documents` (ADMIN role) as a `SE
 
 The rule becomes disputed, `disputedBy` names the source, and applicants affected by the rule get
 one "status disputed" alert. The source gets no "New policy" alert, and posting it again changes
-nothing. The real order that postponed the D/S rule (2026-14439) on 14 Sep 2026 is saved as
+nothing. This is also the only way to dispute a rule again once an admin has cleared its
+dispute: news no longer can. The order must then be dated after the source that lifted the
+block; an earlier one is held for review. The real order that postponed the D/S rule
+(2026-14439) on 14 Sep 2026 is saved as
 [`src/test/resources/court-orders/d-mass-1-26-cv-13799-2026-09-14.json`](src/test/resources/court-orders/d-mass-1-26-cv-13799-2026-09-14.json),
 which `RuleLifecycleIntegrationTest` posts:
 
@@ -1510,13 +1551,74 @@ curl -s -X POST -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: applic
 The response is `201` with the new `policyId`, which also works as `{id}` for the timeline.
 Import `2025-16554` and `2026-14439` first, or the source has no rule to join.
 
+### Clear a dispute
+
+Nothing clears a dispute by itself: news that a block was lifted reads much like news of the
+block. When a court lifts the block, for example on appeal, an admin clears it with
+`POST /api/v1/policies/{id}/dispute/clear` (ADMIN role; anyone else gets 403). `{id}` is any
+document in the rule, as for the timeline. Do not record the lifting order with
+`POST /api/v1/ingestion/documents` as well: its wording ("vacated the injunction") reads as
+litigation, so it would be held for review, or, dated after the source you clear with, dispute
+the rule again.
+
+1. Check that the order really lifts the block on this rule, and find its date.
+2. Send a `reason` in your own words and a `source` with the same fields as a court order:
+   `externalId` (your id for it, such as the case number and date), `title`, `agency` (the
+   court), `sourceUrl` (where it can be read, http or https) and `publicationDate` (the date of
+   the order). The date cannot be after your test-clock date, or before the report that
+   disputed the rule, because the timeline orders steps by date.
+3. Read the timeline to check it.
+
+```bash
+curl -s -X POST -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"reason": "The First Circuit vacated the postponement; DHS says the rule now applies.",
+       "source": {"externalId": "ca1-26-1702-2026-11-02",
+                  "title": "Appeals court lifts the postponement of the duration of status rule",
+                  "agency": "U.S. Court of Appeals for the First Circuit",
+                  "sourceUrl": "https://www.ca1.uscourts.gov/opinions/26-1702",
+                  "publicationDate": "2026-11-02"}}' \
+  http://localhost:8080/api/v1/policies/POLICY_ID/dispute/clear
+```
+
+That order is made up, to show the request. The response is `200` with the rule's id, its
+unchanged `primaryStage` and `effectiveDate`, `"disputed": false`, and `clearedBy`, `clearedAt`,
+`reason` and `source` as recorded. `policy_rule_history` keeps the clearing as an append-only
+`ADMIN` step with `actor_email`, `reason`, `recorded_at` and the source. Only the flag changes:
+the stage and effective date stay, `EFFECTIVE` is worked out when the timeline is read, no alert
+is sent and no other rule changes. A rule that is not disputed gives `409`; a missing or invalid
+field, or a date out of range, gives `400`.
+
+From then on, news never disputes the rule again. A report of litigation from the news feed,
+including news of the lift itself, is held for review as described under **Disputed** above.
+If a held report describes a new block, check it, then record the court order with
+`POST /api/v1/ingestion/documents`, dated after the source you cleared with. That disputes the
+rule again with the usual "status disputed" alert, and an admin can clear that too.
+
+To see a held report locally, clear the D/S rule's dispute as above, then import the synthetic
+feed the tests use. Its one article is made up, so do this only on a local database:
+
+```bash
+curl -s -X POST -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/xml' \
+  --data-binary @src/test/resources/newsrss/synthetic-lift-feed.xml \
+  http://localhost:8080/api/v1/ingestion/news-rss/saved
+```
+
+The article, dated 3 Nov 2026, links to `2026-14439` and says an appeals court lifted the
+injunction. The rule stays not disputed, no alert is sent, and the timeline lists the article
+under `documents` with `"needsReview": true` but not as a step.
+
 ### Known limits
 
 - Court orders do not appear in the Federal Register, so a court-blocked rule shows as in
-  effect until an admin records the order, or until linked news reports it. Record orders as
-  above.
-- Disputed is never cleared, for example when an order is lifted on appeal. That is follow-up
-  work for CS203-90.
+  effect until an admin records the order, or, for a rule no admin has cleared, until linked
+  news reports it. Record orders as above.
+- Once an admin has cleared a dispute, news can no longer dispute the rule. If the rule is
+  blocked again and only the news reports it, the rule stays shown as in effect until an admin
+  reviews the held report and records the court order. Nothing points admins to held reports
+  yet: they are flagged, but there is no review list until CS203-90, so an admin finds them only
+  in the rule's timeline (`documents` with `needsReview`) or in `policy_rule_documents`.
+- Clearing sends no alert and starts no reassessment, so applicants are not told the rule is in
+  effect again, and assessments saved while it was disputed are not refreshed.
 - Whether a final document is about the date is read from its `ACTION:` line and title. A
   manually ingested primary document without an `ACTION:` line or a `; …` suffix counts as a
   separate final rule, not a date move.

@@ -30,6 +30,7 @@ import mygrant.policies.PolicyIndexedEvent;
 import mygrant.policies.PolicyStatus;
 import mygrant.policies.SourceType;
 import mygrant.policies.RestrictionCategory;
+import mygrant.rules.DocumentOrigin;
 import mygrant.rules.PolicyRuleTracker;
 import mygrant.rules.RecordedBy;
 import mygrant.rules.RuleIdentifier;
@@ -52,7 +53,7 @@ class PolicyIngestionServiceTests {
 
     @org.junit.jupiter.api.BeforeEach
     void noRuleChange() {
-        org.mockito.Mockito.lenient().when(ruleTracker.track(any(), any(), any()))
+        org.mockito.Mockito.lenient().when(ruleTracker.track(any(), any(), any(), any()))
                 .thenReturn(new PolicyRuleTracker.Result(7L, true, false));
     }
 
@@ -79,7 +80,25 @@ class PolicyIngestionServiceTests {
         verify(eventPublisher).publishEvent(argThat((Object event) -> event instanceof PolicyIndexedEvent indexed
                 && indexed.policyId().equals(1L) && indexed.visaTypes().equals(java.util.List.of("F-1"))));
         verify(ruleTracker).track(argThat(policy -> policy.getId().equals(1L)), eq(java.util.Set.of()),
-                eq(RecordedBy.INGESTION));
+                eq(RecordedBy.INGESTION), eq(DocumentOrigin.AUTOMATIC));
+    }
+
+    @Test
+    void aPolicyAnAdminPostedReachesItsRuleMarkedAsTheAdmins() {
+        IngestPolicyRequest request = request();
+        when(repository.findByExternalId(request.externalId())).thenReturn(Optional.empty());
+        when(repository.save(any(PolicyDocument.class))).thenAnswer(invocation -> {
+            PolicyDocument policy = invocation.getArgument(0);
+            if (policy.getId() == null) {
+                ReflectionTestUtils.setField(policy, "id", 1L);
+            }
+            return policy;
+        });
+
+        new PolicyIngestionService(repository, vectorStore, eventPublisher, ruleTracker).ingestRecordedByAdmin(request);
+
+        verify(ruleTracker).track(argThat(policy -> policy.getId().equals(1L)), eq(java.util.Set.of()),
+                eq(RecordedBy.INGESTION), eq(DocumentOrigin.ADMIN_RECORDED));
     }
 
     @Test
@@ -160,7 +179,7 @@ class PolicyIngestionServiceTests {
         verify(vectorStore, never()).add(any());
         verify(eventPublisher, never()).publishEvent(any(Object.class));
         // A repeat import must not touch the rule, or it could add history twice.
-        verify(ruleTracker, never()).track(any(), any(), any());
+        verify(ruleTracker, never()).track(any(), any(), any(), any());
     }
 
     @Test
@@ -180,7 +199,7 @@ class PolicyIngestionServiceTests {
                 .ingest(request, "Selected summary only.", identifiers);
 
         verify(ruleTracker).track(argThat(policy -> policy.getId().equals(1L)), same(identifiers),
-                eq(RecordedBy.INGESTION));
+                eq(RecordedBy.INGESTION), eq(DocumentOrigin.AUTOMATIC));
     }
 
     @Test
@@ -194,7 +213,7 @@ class PolicyIngestionServiceTests {
             }
             return policy;
         });
-        when(ruleTracker.track(any(), any(), any())).thenReturn(new PolicyRuleTracker.Result(7L, true, true));
+        when(ruleTracker.track(any(), any(), any(), any())).thenReturn(new PolicyRuleTracker.Result(7L, true, true));
 
         new PolicyIngestionService(repository, vectorStore, eventPublisher, ruleTracker).ingest(request);
 
