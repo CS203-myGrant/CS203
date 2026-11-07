@@ -23,12 +23,18 @@ import mygrant.notifications.dto.NotificationResponse;
 import mygrant.policies.PolicyDocumentRepository;
 import mygrant.policies.PolicyIndexedEvent;
 import mygrant.policies.SourceType;
+import mygrant.policies.PolicyRecommendationStore;
 import mygrant.testclock.TestClock;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
 import mygrant.user.UserRole;
 import mygrant.user.UserProfile;
 import mygrant.user.UserProfileRepository;
+import mygrant.user.ProfileFieldConsentRepository;
+import mygrant.user.ProfileFieldDefinition;
+import mygrant.user.ImmigrationDocumentRepository;
+import mygrant.user.ImmigrationDocumentType;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /** Creates policy alerts for matching applicants and serves each user's inbox. */
 @Service
@@ -41,11 +47,18 @@ public class NotificationService {
     private final NotificationStreamRegistry streamRegistry;
     private final PolicyDocumentRepository policyRepository;
     private final TestClock testClock;
+    private final ProfileFieldConsentRepository consentRepository;
+    private final ImmigrationDocumentRepository immigrationDocumentRepository;
+    private final PolicyRecommendationStore recommendationStore;
 
+    @Autowired
     public NotificationService(NotificationRepository notificationRepository,
             UserRepository userRepository, UserProfileRepository userProfileRepository,
             PolicyImpactRules impactRules, NotificationStreamRegistry streamRegistry,
-            PolicyDocumentRepository policyRepository, TestClock testClock) {
+            PolicyDocumentRepository policyRepository, TestClock testClock,
+            ProfileFieldConsentRepository consentRepository,
+            ImmigrationDocumentRepository immigrationDocumentRepository,
+            PolicyRecommendationStore recommendationStore) {
         this.notificationRepository = notificationRepository;
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
@@ -53,6 +66,26 @@ public class NotificationService {
         this.streamRegistry = streamRegistry;
         this.policyRepository = policyRepository;
         this.testClock = testClock;
+        this.consentRepository = consentRepository;
+        this.immigrationDocumentRepository = immigrationDocumentRepository;
+        this.recommendationStore = recommendationStore;
+    }
+
+    public NotificationService(NotificationRepository notificationRepository,
+            UserRepository userRepository, UserProfileRepository userProfileRepository,
+            PolicyImpactRules impactRules, NotificationStreamRegistry streamRegistry,
+            PolicyDocumentRepository policyRepository, TestClock testClock,
+            ProfileFieldConsentRepository consentRepository) {
+        this(notificationRepository, userRepository, userProfileRepository, impactRules, streamRegistry,
+                policyRepository, testClock, consentRepository, null, null);
+    }
+
+    public NotificationService(NotificationRepository notificationRepository,
+            UserRepository userRepository, UserProfileRepository userProfileRepository,
+            PolicyImpactRules impactRules, NotificationStreamRegistry streamRegistry,
+            PolicyDocumentRepository policyRepository, TestClock testClock) {
+        this(notificationRepository, userRepository, userProfileRepository, impactRules,
+                streamRegistry, policyRepository, testClock, null);
     }
 
     /**
@@ -67,16 +100,45 @@ public class NotificationService {
                 .map(PolicyImpactRules::normalizeVisaType)
                 .distinct()
                 .toList();
+        if (event.requiresReview()) {
+            policyRepository.findById(event.policyId()).ifPresent(policy -> {
+                if (recommendationStore != null) {
+                    userRepository.findByRole(UserRole.APPLICANT).stream()
+                            .filter(User::isActive)
+                            .filter(user -> hasCitizenshipConsent(user.getId()) || hasConsentedIssuerDocument(user.getId()))
+                            .forEach(user -> recommendationStore.queueExtractionForReview(user, policy,
+                                    "Could not confidently extract the proclamation's affected-country rules."));
+                }
+            });
+            return;
+        }
         // A reader whose test clock is set before the publication date is alerted once their
         // clock reaches it, by syncToTestClock.
-        List<User> affected = userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, visaTypes).stream()
+        // Entry restrictions are scoped by their explicitly extracted country or
+        // supported document-holder rule. Visa names in the proclamation can be
+        // incidental and must not broaden the recipient set.
+        List<User> affected;
+        if (event.entryRestriction() || event.paTravelDocumentRestriction()) {
+            affected = userRepository.findByRole(UserRole.APPLICANT).stream()
+                    .filter(User::isActive)
+                    .filter(user -> citizenshipMatches(user.getId(), event.affectedCountries())
+                            || (event.paTravelDocumentRestriction()
+                                    && hasPalestinianAuthorityTravelDocument(user.getId())))
+                    .toList();
+        } else {
+            affected = visaTypes.isEmpty() ? List.of()
+                    : userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, visaTypes).stream()
+                            .filter(User::isActive)
+                            .toList();
+        }
+        affected = affected.stream()
                 .filter(user -> testClock.isPublished(event.publicationDate(), user.getId()))
                 .toList();
         String message = buildMessage(event);
         // The rules are visa-specific, so a policy covering several categories affects
         // different fields per reader. Read the policy text once for all of them.
-        Map<String, Set<ProfileField>> fieldsByVisaType =
-                impactRules.affectedFieldsByVisaType(visaTypes, event.title(), event.content());
+        Map<String, Set<ProfileField>> fieldsByVisaType = visaTypes.isEmpty() ? Map.of()
+                : impactRules.affectedFieldsByVisaType(visaTypes, event.title(), event.content());
 
         // Impact checks read the versioned profile, which holds fields such as the employer
         // that the legacy user row lacks. A user who never saved one falls back to their
@@ -109,7 +171,7 @@ public class NotificationService {
         LocalDate today = testClock.today(user.getId());
         int removed = notificationRepository.deleteForPoliciesPublishedAfter(user.getId(), today);
         String visaType = PolicyImpactRules.normalizeVisaType(user.getVisaType());
-        if (user.getRole() != UserRole.APPLICANT || visaType.isEmpty()) {
+        if (user.getRole() != UserRole.APPLICANT || (visaType.isEmpty() && !hasCitizenshipConsent(user.getId()))) {
             return new InboxSync(0, removed);
         }
 
@@ -122,9 +184,13 @@ public class NotificationService {
                 .stream()
                 .filter(policy -> !alreadyNotified.contains(policy.getId()))
                 .map(PolicyIndexedEvent::from)
-                .filter(event -> event.visaTypes().stream()
-                        .map(PolicyImpactRules::normalizeVisaType)
-                        .anyMatch(visaType::equals))
+                .filter(event -> !event.requiresReview())
+                .filter(event -> event.entryRestriction() || event.paTravelDocumentRestriction()
+                        ? (event.entryRestriction() && citizenshipMatches(user.getId(), event.affectedCountries()))
+                                || (event.paTravelDocumentRestriction()
+                                        && hasPalestinianAuthorityTravelDocument(user.getId()))
+                        : event.visaTypes().stream().map(PolicyImpactRules::normalizeVisaType)
+                                .anyMatch(visaType::equals))
                 .map(event -> toNotification(user, profile, event, buildMessage(event),
                         impactRules.affectedFieldsByVisaType(event.visaTypes(), event.title(), event.content())))
                 .toList();
@@ -217,11 +283,48 @@ public class NotificationService {
     }
 
     private String buildMessage(PolicyIndexedEvent event) {
-        String message = "New policy affecting " + String.join(", ", event.visaTypes()) + ": " + event.title();
+        String audience = event.paTravelDocumentRestriction()
+                ? "travelers using a PA-issued travel document"
+                : event.entryRestriction() ? "some travelers based on citizenship" : String.join(", ", event.visaTypes());
+        String message = "New policy that may affect " + audience + ": " + event.title();
         if (event.effectiveDate() != null) {
             message += " (effective " + event.effectiveDate() + ")";
         }
         return truncate(message);
+    }
+
+    private boolean citizenshipMatches(Long userId, Set<String> affectedCountries) {
+        if (affectedCountries == null || affectedCountries.isEmpty() || !hasCitizenshipConsent(userId)) return false;
+        UserProfile profile = userProfileRepository.findById(userId).orElse(null);
+        if (profile == null || profile.getCountryOfCitizenship() == null || profile.getCountryOfCitizenship().isBlank()) return false;
+        String value = profile.getCountryOfCitizenship().trim();
+        String code;
+        try {
+            code = value.length() == 2 ? mygrant.policies.CountryIdentifiers.normalize(value)
+                    : java.util.Arrays.stream(java.util.Locale.getISOCountries())
+                        .filter(candidate -> new java.util.Locale("", candidate).getDisplayCountry(java.util.Locale.ENGLISH)
+                                .equalsIgnoreCase(value))
+                        .findFirst().orElse("");
+        } catch (IllegalArgumentException invalid) { return false; }
+        return affectedCountries.contains(code);
+    }
+
+    private boolean hasCitizenshipConsent(Long userId) {
+        return consentRepository != null && consentRepository.findByUserId(userId).stream()
+                .anyMatch(consent -> consent.getFieldName() == ProfileFieldDefinition.COUNTRY_OF_CITIZENSHIP);
+    }
+
+    private boolean hasConsentedIssuerDocument(Long userId) {
+        return immigrationDocumentRepository != null
+                && !immigrationDocumentRepository.findByUserIdAndPolicyMatchingConsentTrue(userId).isEmpty();
+    }
+
+    private boolean hasPalestinianAuthorityTravelDocument(Long userId) {
+        return immigrationDocumentRepository != null
+                && immigrationDocumentRepository.findByUserIdAndPolicyMatchingConsentTrue(userId).stream()
+                        .anyMatch(document -> (document.getDocumentType() == ImmigrationDocumentType.PASSPORT
+                                || document.getDocumentType() == ImmigrationDocumentType.TRAVEL_DOCUMENT)
+                                && "PA".equals(document.getIssuingAuthority()));
     }
 
     private String truncate(String message) {

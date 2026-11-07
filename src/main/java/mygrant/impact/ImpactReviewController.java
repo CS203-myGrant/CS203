@@ -21,6 +21,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import mygrant.policies.RestrictionScope;
 
 /** Reviewer-only access to pending drafts and corrected publication. */
 @RestController
@@ -55,5 +56,12 @@ public class ImpactReviewController {
             @NotBlank @Size(max = 1500) String summary,
             @NotNull List<@NotBlank String> analysis,
             @NotNull List<@NotBlank String> actionItems,
-            @NotNull List<@NotBlank String> missingInformation) {}
+            @NotNull List<@NotBlank String> missingInformation,
+            List<@Valid CountryRuleCorrection> countryRestrictions) {
+        public Correction(String severity, int confidence, String summary, List<String> analysis,
+                List<String> actionItems, List<String> missingInformation) {
+            this(severity, confidence, summary, analysis, actionItems, missingInformation, null);
+        }
+    }
+    public record CountryRuleCorrection(@NotBlank String countryCode, @NotNull RestrictionScope scope) {}
 }

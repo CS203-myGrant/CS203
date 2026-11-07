@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Size;
 import mygrant.policies.PolicyStatus;
 import mygrant.policies.SourceType;
 import mygrant.policies.RestrictionCategory;
+import mygrant.policies.PolicyCountryRestriction;
 
 /** Validated policy metadata and source text accepted by manual ingestion. */
 public record IngestPolicyRequest(
@@ -25,12 +26,22 @@ public record IngestPolicyRequest(
         @NotBlank String content,
         Set<String> affectedCountries,
         Set<RestrictionCategory> restrictionCategories,
-        List<@NotBlank @Size(max = 2048) String> sourceReferences
+        List<@NotBlank @Size(max = 2048) String> sourceReferences,
+        List<PolicyCountryRestriction> countryRestrictions,
+        boolean extractionReviewRequired,
+        boolean specialDocumentHolderRule
 ) {
+    public IngestPolicyRequest(String externalId, String title, String agency, String visaType,
+            PolicyStatus status, SourceType sourceType, LocalDate publicationDate, LocalDate effectiveDate,
+            String sourceUrl, String content, Set<String> affectedCountries,
+            Set<RestrictionCategory> restrictionCategories, List<String> sourceReferences) {
+        this(externalId, title, agency, visaType, status, sourceType, publicationDate, effectiveDate,
+                sourceUrl, content, affectedCountries, restrictionCategories, sourceReferences, List.of(), false, false);
+    }
     public IngestPolicyRequest(String externalId, String title, String agency, String visaType,
             PolicyStatus status, SourceType sourceType, LocalDate publicationDate,
             LocalDate effectiveDate, String sourceUrl, String content) {
         this(externalId, title, agency, visaType, status, sourceType, publicationDate,
-                effectiveDate, sourceUrl, content, Set.of(), Set.of(), List.of());
+                effectiveDate, sourceUrl, content, Set.of(), Set.of(), List.of(), List.of(), false, false);
     }
 }

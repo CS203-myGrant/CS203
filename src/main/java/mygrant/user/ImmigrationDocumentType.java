@@ -4,6 +4,7 @@ import java.util.Arrays;
 
 public enum ImmigrationDocumentType {
     PASSPORT,
+    TRAVEL_DOCUMENT,
     VISA_STAMP,
     I20,
     DS2019,

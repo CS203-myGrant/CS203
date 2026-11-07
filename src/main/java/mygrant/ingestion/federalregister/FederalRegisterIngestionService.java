@@ -5,6 +5,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import mygrant.ingestion.PolicyIngestionService;
 import mygrant.ingestion.connector.ConnectorFetch;
@@ -14,6 +15,7 @@ import mygrant.ingestion.connector.DataConnector;
 import mygrant.ingestion.connector.SourceIdentity;
 import mygrant.ingestion.classification.VisaClassification;
 import mygrant.ingestion.classification.VisaTypeClassifier;
+import mygrant.ingestion.classification.EntryRestrictionExtractor;
 import mygrant.ingestion.dto.IngestPolicyRequest;
 import mygrant.ingestion.dto.IngestionResponse;
 import mygrant.impact.ProfileImpactAssessment;
@@ -37,18 +39,27 @@ public class FederalRegisterIngestionService
 
     private final FederalRegisterClient client;
     private final VisaTypeClassifier classifier;
+    private final EntryRestrictionExtractor restrictionExtractor;
     private final PolicyIngestionService ingestionService;
     private final ProfileImpactAssessmentService impactAssessmentService;
     private final AtomicReference<ConnectorHealth> currentHealth =
             new AtomicReference<>(ConnectorHealth.notChecked(SOURCE));
 
+    @Autowired
     public FederalRegisterIngestionService(FederalRegisterClient client,
-            VisaTypeClassifier classifier, PolicyIngestionService ingestionService,
+            VisaTypeClassifier classifier, EntryRestrictionExtractor restrictionExtractor, PolicyIngestionService ingestionService,
             ProfileImpactAssessmentService impactAssessmentService) {
         this.client = client;
         this.classifier = classifier;
+        this.restrictionExtractor = restrictionExtractor;
         this.ingestionService = ingestionService;
         this.impactAssessmentService = impactAssessmentService;
+    }
+
+    /** Compatibility constructor for existing connector tests and callers. */
+    public FederalRegisterIngestionService(FederalRegisterClient client, VisaTypeClassifier classifier,
+            PolicyIngestionService ingestionService, ProfileImpactAssessmentService impactAssessmentService) {
+        this(client, classifier, new EntryRestrictionExtractor(), ingestionService, impactAssessmentService);
     }
 
     /** Imports a published document by number; repeat imports are idempotent. */
@@ -79,11 +90,12 @@ public class FederalRegisterIngestionService
         FederalRegisterDocument document = fetched.payload().document();
         String content = fetched.payload().content();
         VisaClassification classification = classifier.classify(document.title(), content);
-        if (classification.visaTypes().isEmpty()) {
+        var restrictions = restrictionExtractor.extract(document.title(), content, document.htmlUrl());
+        if (classification.visaTypes().isEmpty() && !restrictions.proclamation()) {
             throw new IllegalArgumentException(
                     "No supported visa category was detected; document was not ingested");
         }
-        return new PreparedDocument(document, content, classification, agencyNames(document));
+        return new PreparedDocument(document, content, classification, agencyNames(document), restrictions);
     }
 
     @Override
@@ -92,17 +104,23 @@ public class FederalRegisterIngestionService
         FederalRegisterDocument document = prepared.document();
         String content = prepared.content();
         VisaClassification classification = prepared.classification();
+        var restrictions = prepared.restrictions();
+        String visaType = classification.visaTypes().isEmpty() ? "ENTRY_RESTRICTION"
+                : String.join(",", classification.visaTypes());
         IngestionResponse ingestion = ingestionService.ingest(new IngestPolicyRequest(
                 document.documentNumber(),
                 document.title(),
                 prepared.agency(),
-                String.join(",", classification.visaTypes()),
+                visaType,
                 mapStatus(document.type()),
                 source().type(),
                 document.publicationDate(),
                 document.effectiveDate(),
                 document.htmlUrl(),
-                content), content.substring(0, Math.min(content.length(), MAX_INDEX_CHARACTERS)));
+                content, new java.util.LinkedHashSet<>(restrictions.affectedCountries()),
+                new java.util.LinkedHashSet<>(restrictions.categories()), restrictions.sourceReferences(),
+                restrictions.restrictions(), restrictions.requiresReview(), restrictions.specialDocumentHolderRule()),
+                content.substring(0, Math.min(content.length(), MAX_INDEX_CHARACTERS)));
 
         ProfileImpactAssessment impactAssessment = request.assessImpact()
                 ? impactAssessmentService.assess(request.userEmail(), document, prepared.agency(), content, classification)
@@ -143,7 +161,8 @@ public class FederalRegisterIngestionService
     public record FetchedDocument(FederalRegisterDocument document, String content) {}
 
     public record PreparedDocument(FederalRegisterDocument document, String content,
-            VisaClassification classification, String agency) {}
+            VisaClassification classification, String agency,
+            EntryRestrictionExtractor.Extraction restrictions) {}
 
     private String agencyNames(FederalRegisterDocument document) {
         if (document.agencies() == null || document.agencies().isEmpty()) {

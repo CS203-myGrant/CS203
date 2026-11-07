@@ -14,17 +14,29 @@ public record PolicyIndexedEvent(
         List<String> visaTypes,
         LocalDate effectiveDate,
         String content,
-        LocalDate publicationDate
+        LocalDate publicationDate,
+        java.util.Set<String> affectedCountries,
+        boolean entryRestriction,
+        boolean requiresReview,
+        boolean paTravelDocumentRestriction
 ) {
     /** An event without a publication date, which counts as already published. */
     public PolicyIndexedEvent(Long policyId, String title, List<String> visaTypes,
             LocalDate effectiveDate, String content) {
-        this(policyId, title, visaTypes, effectiveDate, content, null);
+        this(policyId, title, visaTypes, effectiveDate, content, null, java.util.Set.of(), false, false, false);
+    }
+
+    public PolicyIndexedEvent(Long policyId, String title, List<String> visaTypes,
+            LocalDate effectiveDate, String content, LocalDate publicationDate) {
+        this(policyId, title, visaTypes, effectiveDate, content, publicationDate,
+                java.util.Set.of(), false, false, false);
     }
 
     public static PolicyIndexedEvent from(PolicyDocument policy) {
         return new PolicyIndexedEvent(policy.getId(), policy.getTitle(),
                 List.of(policy.getVisaType().split(",")), policy.getEffectiveDate(),
-                policy.getContent(), policy.getPublicationDate());
+                policy.getContent(), policy.getPublicationDate(), policy.getAffectedCountries(),
+                policy.getRestrictionCategories().contains(RestrictionCategory.ENTRY_RESTRICTION),
+                policy.isExtractionReviewRequired(), policy.hasSpecialDocumentHolderRule());
     }
 }

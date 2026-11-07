@@ -32,6 +32,13 @@ import mygrant.user.UserRepository;
 import mygrant.user.UserRole;
 import mygrant.user.UserProfile;
 import mygrant.user.UserProfileRepository;
+import mygrant.user.ImmigrationDocument;
+import mygrant.user.ImmigrationDocumentRepository;
+import mygrant.user.ImmigrationDocumentType;
+import mygrant.user.ProfileFieldConsentRepository;
+import mygrant.user.ProfileFieldConsent;
+import mygrant.user.ProfileFieldDefinition;
+import mygrant.policies.PolicyRecommendationStore;
 
 /** Verifies who is notified about a new policy and that inbox access is scoped to the owner. */
 @ExtendWith(MockitoExtension.class)
@@ -51,6 +58,10 @@ class NotificationServiceTests {
 
     @Mock
     private PolicyDocumentRepository policyRepository;
+
+    @Mock private ImmigrationDocumentRepository immigrationDocuments;
+    @Mock private ProfileFieldConsentRepository consents;
+    @Mock private PolicyRecommendationStore recommendations;
 
     private final TestClock testClock = new TestClock(true);
 
@@ -96,6 +107,74 @@ class NotificationServiceTests {
 
         verify(notificationRepository).saveAll(saved.capture());
         assertThat(saved.getValue()).hasSize(1);
+    }
+
+    @Test
+    void matchesExplicitlyConsentedPalestinianAuthorityTravelDocumentHolderCase() {
+        User traveler = user(7L, "traveler@example.com");
+        when(userRepository.findByRole(UserRole.APPLICANT)).thenReturn(List.of(traveler));
+        when(immigrationDocuments.findByUserIdAndPolicyMatchingConsentTrue(7L)).thenReturn(List.of(
+                new ImmigrationDocument(7L, ImmigrationDocumentType.TRAVEL_DOCUMENT, "travel.pdf",
+                        "application/pdf", 10, new byte[] {1}, "PA", true)));
+        NotificationService service = new NotificationService(notificationRepository, userRepository,
+                userProfileRepository, new PolicyImpactRules(), streamRegistry, policyRepository,
+                testClock, consents, immigrationDocuments, recommendations);
+
+        service.onPolicyIndexed(new PolicyIndexedEvent(3L, "Entry proclamation", List.of("ENTRY_RESTRICTION"),
+                null, "Restriction applies to PA-issued travel documents.", LocalDate.now(), java.util.Set.of(),
+                true, false, true));
+
+        verify(notificationRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).extracting(Notification::getUserId).containsExactly(7L);
+        assertThat(saved.getValue().getFirst().getMessage()).contains("travelers using a PA-issued travel document");
+    }
+
+    @Test
+    void entryRestrictionDoesNotNotifyVisaMatchesOutsideAffectedCountries() {
+        User affectedCitizen = user(7L, "affected@example.com");
+        User incidentalVisaMention = user(8L, "other@example.com");
+        UserProfile affectedProfile = UserProfile.fromUser(affectedCitizen);
+        affectedProfile.setCountryOfCitizenship("Afghanistan");
+        UserProfile otherProfile = UserProfile.fromUser(incidentalVisaMention);
+        otherProfile.setCountryOfCitizenship("Malaysia");
+        when(userRepository.findByRole(UserRole.APPLICANT))
+                .thenReturn(List.of(affectedCitizen, incidentalVisaMention));
+        when(consents.findByUserId(7L)).thenReturn(List.of(new ProfileFieldConsent(7L,
+                ProfileFieldDefinition.COUNTRY_OF_CITIZENSHIP, java.time.Instant.now())));
+        when(consents.findByUserId(8L)).thenReturn(List.of(new ProfileFieldConsent(8L,
+                ProfileFieldDefinition.COUNTRY_OF_CITIZENSHIP, java.time.Instant.now())));
+        when(userProfileRepository.findById(7L)).thenReturn(Optional.of(affectedProfile));
+        when(userProfileRepository.findById(8L)).thenReturn(Optional.of(otherProfile));
+        lenient().when(userProfileRepository.findAllById(List.of(7L))).thenReturn(List.of(affectedProfile));
+
+        new NotificationService(notificationRepository, userRepository, userProfileRepository,
+                new PolicyImpactRules(), streamRegistry, policyRepository, testClock,
+                consents, immigrationDocuments, recommendations)
+                .onPolicyIndexed(new PolicyIndexedEvent(3L, "Entry proclamation mentioning F-1",
+                List.of("F-1"), null, "Entry restrictions for nationals of Afghanistan.",
+                null, java.util.Set.of("AF"), true, false, false));
+
+        verify(userRepository, org.mockito.Mockito.never())
+                .findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("F-1"));
+        verify(notificationRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).extracting(Notification::getUserId).containsExactly(7L);
+    }
+
+    @Test
+    void entryRestrictionDoesNotMatchCitizenshipWithoutConsent() {
+        User applicant = user(7L, "applicant@example.com");
+        UserProfile profile = UserProfile.fromUser(applicant);
+        profile.setCountryOfCitizenship("Afghanistan");
+        when(userRepository.findByRole(UserRole.APPLICANT)).thenReturn(List.of(applicant));
+        new NotificationService(notificationRepository, userRepository, userProfileRepository,
+                new PolicyImpactRules(), streamRegistry, policyRepository, testClock,
+                consents, immigrationDocuments, recommendations)
+                .onPolicyIndexed(new PolicyIndexedEvent(3L, "Entry proclamation",
+                List.of("ENTRY_RESTRICTION"), null, "Entry restrictions for nationals of Afghanistan.",
+                null, java.util.Set.of("AF"), true, false, false));
+
+        verify(notificationRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).isEmpty();
     }
 
     @Test

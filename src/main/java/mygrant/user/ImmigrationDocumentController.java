@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -52,14 +54,18 @@ public class ImmigrationDocumentController {
     @ApiResponse(responseCode = "413", description = "The upload is larger than 10 MB")
     public ResponseEntity<ImmigrationDocumentResponse> upload(
             Authentication authentication,
-            @Parameter(description = "Kind of document", schema = @Schema(allowableValues = {"PASSPORT",
+            @Parameter(description = "Kind of document", schema = @Schema(allowableValues = {"PASSPORT", "TRAVEL_DOCUMENT",
                     "VISA_STAMP", "I20", "DS2019", "I94", "EAD", "I797", "I140", "PERM", "OTHER"}))
             @RequestParam String documentType,
+            @RequestParam(required = false) String issuingAuthority,
+            @RequestParam(defaultValue = "false") boolean policyMatchingConsent,
             @RequestPart MultipartFile file) throws IOException {
 
         ImmigrationDocumentResponse response = documentService.upload(
                 authentication.getName(),
                 documentType,
+                issuingAuthority,
+                policyMatchingConsent,
                 file
         );
 
@@ -75,6 +81,15 @@ public class ImmigrationDocumentController {
             @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
         return documentService.list(authentication.getName(), pageable);
     }
+
+    @PatchMapping("/api/v1/profiles/me/documents/{documentId}/policy-matching-consent")
+    @Operation(summary = "Change consent to use a document issuer for policy matching")
+    public ImmigrationDocumentResponse setPolicyMatchingConsent(Authentication authentication,
+            @PathVariable Long documentId, @RequestBody PolicyMatchingConsentRequest request) {
+        return documentService.setPolicyMatchingConsent(authentication.getName(), documentId, request.consented());
+    }
+
+    public record PolicyMatchingConsentRequest(boolean consented) {}
 
     @GetMapping("/api/v1/profiles/me/documents/{documentId}/download")
     @Operation(summary = "Download one of the signed-in user's documents",
