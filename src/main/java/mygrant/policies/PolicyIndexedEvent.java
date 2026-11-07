@@ -18,6 +18,10 @@ public record PolicyIndexedEvent(
         LocalDate effectiveDate,
         String content,
         LocalDate publicationDate,
+        java.util.Set<String> affectedCountries,
+        boolean entryRestriction,
+        boolean requiresReview,
+        boolean paTravelDocumentRestriction,
         boolean ruleChanged
 ) {
     public PolicyIndexedEvent(Long policyId, String title, List<String> visaTypes,
@@ -28,7 +32,23 @@ public record PolicyIndexedEvent(
     /** An event without a publication date, which counts as already published. */
     public PolicyIndexedEvent(Long policyId, String title, List<String> visaTypes,
             LocalDate effectiveDate, String content) {
-        this(policyId, title, visaTypes, effectiveDate, content, null);
+        this(policyId, title, visaTypes, effectiveDate, content, null, java.util.Set.of(), false, false, false);
+    }
+
+    /** An event for a policy that restricts no entry, saying whether it moved its rule. */
+    public PolicyIndexedEvent(Long policyId, String title, List<String> visaTypes,
+            LocalDate effectiveDate, String content, LocalDate publicationDate, boolean ruleChanged) {
+        this(policyId, title, visaTypes, effectiveDate, content, publicationDate,
+                java.util.Set.of(), false, false, false, ruleChanged);
+    }
+
+    /** An event that moved no rule, with its entry-restriction details. */
+    public PolicyIndexedEvent(Long policyId, String title, List<String> visaTypes,
+            LocalDate effectiveDate, String content, LocalDate publicationDate,
+            java.util.Set<String> affectedCountries, boolean entryRestriction, boolean requiresReview,
+            boolean paTravelDocumentRestriction) {
+        this(policyId, title, visaTypes, effectiveDate, content, publicationDate, affectedCountries,
+                entryRestriction, requiresReview, paTravelDocumentRestriction, false);
     }
 
     public static PolicyIndexedEvent from(PolicyDocument policy) {
@@ -38,6 +58,8 @@ public record PolicyIndexedEvent(
     public static PolicyIndexedEvent from(PolicyDocument policy, boolean ruleChanged) {
         return new PolicyIndexedEvent(policy.getId(), policy.getTitle(),
                 List.of(policy.getVisaType().split(",")), policy.getEffectiveDate(),
-                policy.getContent(), policy.getPublicationDate(), ruleChanged);
+                policy.getContent(), policy.getPublicationDate(), policy.getAffectedCountries(),
+                policy.getRestrictionCategories().contains(RestrictionCategory.ENTRY_RESTRICTION),
+                policy.isExtractionReviewRequired(), policy.hasSpecialDocumentHolderRule(), ruleChanged);
     }
 }

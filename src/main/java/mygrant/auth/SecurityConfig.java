@@ -71,6 +71,8 @@ public class SecurityConfig {
                 .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**",
                         "/actuator/health").permitAll()
                 .requestMatchers("/api/v1/ingestion/**", "/api/v1/admin/**").hasRole("ADMIN")
+                // Clearing a rule's dispute is for admins; reading its timeline is for everyone.
+                .requestMatchers(HttpMethod.POST, "/api/v1/policies/*/dispute/clear").hasRole("ADMIN")
                 .requestMatchers("/api/v1/manager/**").hasRole("MANAGER")
                 .requestMatchers("/api/v1/review/**").hasAnyRole("MANAGER", "ADMIN")
                 .anyRequest().authenticated())

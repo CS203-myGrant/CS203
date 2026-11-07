@@ -29,25 +29,29 @@ public record RuleTimelineResponse(
         LocalDate effectiveDate,
         @Schema(description = "True once a secondary source linked to the rule by an identifier reported litigation "
                 + "or a stay: a news item, or a court order an admin recorded. Shown alongside primaryStage, never "
-                + "instead of it.")
+                + "instead of it. False again once an admin clears the dispute after a court lifts the block; "
+                + "after that only a court order an admin records sets it again, and news is held for review.")
         boolean disputed,
         @Schema(description = "True when the rule is disputed and asOf has reached effectiveDate: it was scheduled to "
                 + "take effect then, but whether it did is in question, so currentStage stays FINAL and there is no "
                 + "TOOK_EFFECT step. Show it as \"scheduled for <effectiveDate>; blocked or in dispute\".")
         boolean effectiveDatePassedWhileDisputed,
-        @Schema(description = "The secondary source that marked the rule disputed; null when it is not disputed")
+        @Schema(description = "The secondary source behind the current dispute, the newest that marked the rule "
+                + "disputed; null when it is not disputed")
         RuleSource disputedBy,
         @Schema(description = "Dockets and RINs of the rule's primary documents")
         List<RuleIdentifier> identifiers,
         @Schema(description = "Every document in the rule, oldest first, with how it was linked")
         List<Document> documents,
-        @Schema(description = "Stage history, oldest first, by source publication date")
+        @Schema(description = "Stage history, oldest first, by source publication date. A report held for review "
+                + "is not a step: it is in documents with needsReview.")
         List<Step> steps
 ) {
 
     @Schema(name = "RuleTimelineStep", description = "One step in a rule's history")
     public record Step(
-            @Schema(description = "The source's publication date; for a derived step, the effective date",
+            @Schema(description = "The source's publication date. For a derived step, the effective date, or the "
+                    + "date of the source that lifted the block when the rule was disputed on that date",
                     example = "2026-07-17")
             LocalDate observedOn,
             @Schema(description = "When the step was recorded; null for a derived step")
@@ -75,7 +79,8 @@ public record RuleTimelineResponse(
                     + "document arrived after a newer one and repeats what is already known.")
             List<RuleChange> changes,
             @Schema(description = "The document this step came from; for a derived step, the one that set the "
-                    + "effective date")
+                    + "effective date. When an admin cleared a dispute, the court order or news item that lifted the "
+                    + "block, with a null policyId.")
             RuleSource source
     ) {
     }
@@ -92,9 +97,10 @@ public record RuleTimelineResponse(
             Confidence confidence,
             @Schema(description = "The identifiers or title score behind the match", example = "DOCKET ICEB-2025-0001; RIN 1653-AA95")
             String matchedOn,
-            @Schema(description = "True when a person should check the match")
+            @Schema(description = "True when a person should check the document: how it was matched, or what it "
+                    + "reports that was not applied, such as litigation in the news after an admin cleared the dispute")
             boolean needsReview,
-            @Schema(description = "Why the match needs checking; null when it does not")
+            @Schema(description = "Why it needs checking; null when it does not")
             String reviewReason
     ) {
     }

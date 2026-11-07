@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SYNTHETIC TEST FIXTURE (CS203-86): not a real Guardian article. News about a court lifting the block on
+     the real rule 2026-14439, after an admin cleared the dispute. It reads as litigation ("injunction") and
+     is dated after the lift, so it must be held for review, not dispute the rule again. -->
+<rss version="2.0"><channel>
+  <title>US immigration | The Guardian</title>
+  <link>https://www.theguardian.com/us-news/usimmigration</link>
+  <item>
+    <title>Appeals court lifts injunction on rule ending open-ended stays for F-1 students</title>
+    <link>https://www.theguardian.com/us-news/2026/nov/03/appeals-court-lifts-student-visa-injunction</link>
+    <description><![CDATA[<p>A federal appeals court lifted the injunction against the
+      <a href="https://www.federalregister.gov/d/2026-14439">Department of Homeland Security's final rule</a>
+      fixing the admission period for F-1 students and J-1 exchange visitors.</p>]]></description>
+    <pubDate>Tue, 03 Nov 2026 12:00:00 GMT</pubDate>
+  </item>
+</channel></rss>

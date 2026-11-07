@@ -500,7 +500,7 @@
 
 <div class="modal-bg" id="review-modal-bg">
   <div class="modal">
-    <h3>Review and publish assessment</h3>
+    <h3 id="review-editor-title">Review and publish assessment</h3>
     <input id="review-edit-id" type="hidden">
     <div class="field"><label for="review-edit-severity">Severity</label><select id="review-edit-severity"><option>CRITICAL</option><option>HIGH</option><option selected>MEDIUM</option><option>LOW</option><option>INFO</option></select></div>
     <div class="field"><label for="review-edit-confidence">Confidence (0–100)</label><input id="review-edit-confidence" type="number" min="0" max="100" value="80"></div>
@@ -508,6 +508,11 @@
     <div class="field"><label for="review-edit-analysis">Analysis (one point per line)</label><textarea id="review-edit-analysis" rows="3"></textarea></div>
     <div class="field"><label for="review-edit-actions">Recommended actions (one per line)</label><textarea id="review-edit-actions" rows="3"></textarea></div>
     <div class="field"><label for="review-edit-missing">Missing information (one point per line)</label><textarea id="review-edit-missing" rows="3"></textarea></div>
+    <div id="review-extraction-fields" hidden>
+      <p><a id="review-extraction-source" target="_blank" rel="noopener">Open official source</a></p>
+      <pre id="review-extraction-excerpt" style="max-height:260px;overflow:auto;white-space:pre-wrap"></pre>
+      <div class="field"><label for="review-edit-country-rules">Confirmed affected countries and scope (one ISO code and FULL/PARTIAL per line, e.g. AF,FULL)</label><textarea id="review-edit-country-rules" rows="5"></textarea></div>
+    </div>
     <div class="form-actions">
       <button class="btn ghost small" onclick="closeQueueEditor()">Cancel</button>
       <button class="btn small" onclick="publishEditedQueue()">Publish correction</button>
@@ -1123,6 +1128,8 @@ async function uploadImmigrationDocument(event) {
   event.preventDefault();
 
   const documentType = document.getElementById('document-type').value;
+  const issuingAuthority = document.getElementById('document-issuer').value;
+  const policyMatchingConsent = document.getElementById('document-policy-consent').checked;
   const fileInput = document.getElementById('immigration-file');
   const file = fileInput.files[0];
 
@@ -1133,6 +1140,8 @@ async function uploadImmigrationDocument(event) {
 
   const formData = new FormData();
   formData.append('documentType', documentType);
+  if (issuingAuthority) formData.append('issuingAuthority', issuingAuthority);
+  formData.append('policyMatchingConsent', String(policyMatchingConsent));
   formData.append('file', file);
 
   try {
@@ -1148,6 +1157,14 @@ async function uploadImmigrationDocument(event) {
   } catch (error) {
     showToast(error.message);
   }
+}
+async function setDocumentMatchingConsent(id, consented) {
+  try {
+    await parseApiResponse(await apiFetch(`/api/v1/profiles/me/documents/${id}/policy-matching-consent`, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({consented})
+    }));
+    await loadImmigrationDocuments();
+  } catch (error) { showToast(error.message); }
 }
 
 function updateUnreadBadge(){
@@ -2440,6 +2457,7 @@ function renderAccountProfile(){
         <label for="document-type">Document type</label>
         <select id="document-type" required>
           <option value="PASSPORT">Passport</option>
+          <option value="TRAVEL_DOCUMENT">Travel document</option>
           <option value="VISA_STAMP">Visa stamp</option>
           <option value="I20">Form I-20</option>
           <option value="DS2019">Form DS-2019</option>
@@ -2450,6 +2468,19 @@ function renderAccountProfile(){
           <option value="PERM">PERM</option>
           <option value="OTHER">Other</option>
         </select>
+      </div>
+
+      <div class="field">
+        <label for="document-issuer">Issuer for policy matching (optional)</label>
+        <select id="document-issuer">
+          <option value="">Do not use this document for policy matching</option>
+          <option value="PALESTINIAN_AUTHORITY">Palestinian Authority</option>
+        </select>
+        <small>Only supported for passport or travel document uploads.</small>
+      </div>
+
+      <div class="field">
+        <label><input id="document-policy-consent" type="checkbox"> I consent to using this document’s issuer to match applicable entry restriction policies.</label>
       </div>
 
       <div class="field">
@@ -2487,6 +2518,7 @@ function renderAccountProfile(){
                 <span class="tag">${escapeHtml(document.documentType)}</span>
                 <span class="tag">${Math.round(document.sizeBytes / 1024)} KB</span>
               </div>
+              ${document.policyMatchingConsent ? `<button class="btn btn-secondary" onclick="setDocumentMatchingConsent(${document.id}, false)">Withdraw policy-matching consent</button>` : ''}
             </div>
           </div>
         `).join('')
@@ -2640,6 +2672,13 @@ function openQueueEditor(id){
   document.getElementById('review-edit-analysis').value = '';
   document.getElementById('review-edit-actions').value = '';
   document.getElementById('review-edit-missing').value = '';
+  const extractionReview = item.reviewType === 'Policy extractor';
+  document.getElementById('review-editor-title').textContent = extractionReview
+    ? 'Review policy extraction' : 'Review and publish assessment';
+  document.getElementById('review-extraction-fields').hidden = !extractionReview;
+  document.getElementById('review-extraction-source').href = item.sourceUrl || '#';
+  document.getElementById('review-extraction-excerpt').textContent = item.sourceExcerpt || '';
+  document.getElementById('review-edit-country-rules').value = '';
   document.getElementById('review-modal-bg').classList.add('show');
 }
 function closeQueueEditor(){ document.getElementById('review-modal-bg').classList.remove('show'); }
@@ -2652,7 +2691,12 @@ async function publishEditedQueue(){
     summary:document.getElementById('review-edit-summary').value.trim(),
     analysis:lines('review-edit-analysis'),
     actionItems:lines('review-edit-actions'),
-    missingInformation:lines('review-edit-missing')
+    missingInformation:lines('review-edit-missing'),
+    countryRestrictions:document.getElementById('review-extraction-fields').hidden ? null
+      : lines('review-edit-country-rules').map(line=>{
+        const [countryCode, scope] = line.split(',').map(value=>value.trim());
+        return {countryCode, scope};
+      })
   };
   if(!correction.summary || !Number.isInteger(correction.confidence) || correction.confidence<0 || correction.confidence>100){
     showToast('Enter a summary and a confidence from 0 to 100.'); return;
@@ -2662,7 +2706,7 @@ async function publishEditedQueue(){
       method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(correction)
     }));
     closeQueueEditor();
-    showToast('Corrected assessment published.');
+    showToast(correction.countryRestrictions ? 'Policy extraction correction saved and matching resumed.' : 'Corrected assessment published.');
     await loadReviewQueue();
     if(state.view==='manager') await loadManagerDashboard();
   }catch(error){ showToast(error.message); }

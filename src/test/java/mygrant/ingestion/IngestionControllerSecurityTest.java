@@ -1,6 +1,8 @@
 package mygrant.ingestion;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -17,10 +19,12 @@ import mygrant.auth.SecurityConfig;
 import mygrant.ingestion.dto.IngestionResponse;
 import mygrant.ingestion.connector.ConnectorHealth;
 import mygrant.ingestion.dto.IngestionStatusResponse;
+import mygrant.ingestion.dto.SyncFailureResponse;
 import mygrant.ingestion.SourceSyncService;
 import mygrant.ingestion.connector.SourceIdentity;
 import mygrant.ingestion.federalregister.FederalRegisterIngestionService;
 import mygrant.policies.SourceType;
+import mygrant.sources.SyncFailure;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
 import mygrant.user.UserRole;
@@ -30,6 +34,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -72,14 +77,18 @@ class IngestionControllerSecurityTest {
     @Test
     void adminCanIngestPolicy() throws Exception {
         stubToken(UserRole.ADMIN);
-        when(ingestionService.ingest(any()))
+        when(ingestionService.ingestRecordedByAdmin(any()))
                 .thenReturn(new IngestionResponse(1L, "policy-1", 1, Instant.now(), false));
 
         mockMvc.perform(post("/api/v1/ingestion/documents")
                         .header("Authorization", "Bearer token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequest()))
-                .andExpect(status().isCreated());
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.policyId").value(1));
+        // Marked as the admin's, so a court order posted here can dispute a rule an admin cleared.
+        org.mockito.Mockito.verify(ingestionService).ingestRecordedByAdmin(any());
+        org.mockito.Mockito.verify(ingestionService, org.mockito.Mockito.never()).ingest(any());
     }
 
     @Test
@@ -133,6 +142,30 @@ class IngestionControllerSecurityTest {
                         .header("Authorization", "Bearer token"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.chunksReembedded").value(12));
+    }
+
+    @Test
+    void onlyAdminCanSeeDocumentsTheSyncCouldNotImport() throws Exception {
+        stubToken(UserRole.ADMIN);
+        when(sourceSyncService.failures(eq(SyncFailure.Status.RETRYING), any())).thenReturn(new PageImpl<>(List.of(
+                new SyncFailureResponse(4L, 1L, "Federal Register", "2026-12345", SyncFailure.Status.RETRYING, 2, 5,
+                        "Upstream unavailable", Instant.parse("2026-11-05T01:00:00Z"),
+                        Instant.parse("2026-11-06T01:00:00Z"), null))));
+        mockMvc.perform(get("/api/v1/ingestion/sync-failures").param("status", "RETRYING")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].documentId").value("2026-12345"))
+                .andExpect(jsonPath("$.content[0].sourceName").value("Federal Register"))
+                .andExpect(jsonPath("$.content[0].status").value("RETRYING"))
+                .andExpect(jsonPath("$.content[0].attempts").value(2))
+                .andExpect(jsonPath("$.content[0].maxAttempts").value(5))
+                .andExpect(jsonPath("$.content[0].lastError").value("Upstream unavailable"));
+        verify(sourceSyncService).failures(eq(SyncFailure.Status.RETRYING), any());
+
+        stubToken(UserRole.APPLICANT);
+        mockMvc.perform(get("/api/v1/ingestion/sync-failures")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isForbidden());
     }
 
     private void stubToken(UserRole role) {
