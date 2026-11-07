@@ -69,6 +69,8 @@ import mygrant.testclock.TestClock;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
 import mygrant.user.UserRole;
+import mygrant.user.UserProfile;
+import mygrant.user.UserProfileRepository;
 
 /**
  * CS203-136: the real proposal (2025-16554) and final rule (2026-14439) end to end, then a synthetic
@@ -103,6 +105,7 @@ class RuleLifecycleIntegrationTest {
     @Autowired PolicyRuleStore store;
     @Autowired NamedParameterJdbcTemplate jdbc;
     @Autowired UserRepository users;
+    @Autowired UserProfileRepository profiles;
     @Autowired JwtService jwt;
     @Autowired MockMvc mvc;
     @Autowired TestClock clock;
@@ -602,11 +605,30 @@ class RuleLifecycleIntegrationTest {
 
     private User user(String visaType, UserRole role) {
         String suffix = UUID.randomUUID().toString();
-        User user = new User("Lifecycle test", "rule-lifecycle-" + suffix + "@example.com", null, visaType, null, null);
+
+        User user = new User(
+                "Lifecycle test",
+                "rule-lifecycle-" + suffix + "@example.com",
+                null
+        );
+
         user.setRole(role);
         user.setWorkosUserId("user_rule_lifecycle_" + suffix);
         user.setProfileComplete(true);
+
         user = users.saveAndFlush(user);
+
+        if (role == UserRole.APPLICANT && visaType != null) {
+                profiles.saveAndFlush(UserProfile.registrationProfile(
+                        user.getId(),
+                        visaType,
+                        null,
+                        null,
+                        null,
+                        null
+                ));
+        }
+
         createdUsers.add(user.getId());
         return user;
     }

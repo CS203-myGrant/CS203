@@ -152,6 +152,8 @@ class NotificationServiceTests {
         User student = user(7L, "student@example.com");
         LocalDate today = LocalDate.parse("2026-09-30");
         testClock.setUserDate(7L, today);
+        when(userProfileRepository.findById(7L)).thenReturn(Optional.of(
+                profile(student, "F-1", null, null, null, null)));
         when(policyRepository.findBySourceTypeAndPublicationDateLessThanEqualOrderByPublicationDateAscIdAsc(
                 SourceType.PRIMARY, today)).thenReturn(List.of(policy(5L, "Fixed Time Period of Admission", "F-1,J-1")));
         var row = new PolicyRuleStore.HistoryRow(1L, 9L, new RuleState(PolicyStatus.FINAL, LocalDate.parse("2026-09-15"), false),
