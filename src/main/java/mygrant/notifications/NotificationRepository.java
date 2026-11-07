@@ -29,6 +29,9 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     @Query("select n.policyId from Notification n where n.userId = :userId")
     Set<Long> findPolicyIdsByUserId(@Param("userId") Long userId);
 
+    @Query("select n.userId from Notification n where n.policyId = :policyId")
+    Set<Long> findUserIdsByPolicyId(@Param("policyId") Long policyId);
+
     /** Removes the user's alerts for policies published after the date; returns how many went. */
     @Modifying
     @Query(value = """

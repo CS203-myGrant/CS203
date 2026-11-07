@@ -45,7 +45,7 @@ class NewsRssConnectorTest {
 
     @Test
     void importsOnlyRelevantArticlesWithSecondaryProvenanceAndDeduplicates() throws Exception {
-        when(ingestion.ingest(any())).thenReturn(
+        when(ingestion.ingest(any(), any(), any())).thenReturn(
                 new IngestionResponse(1L, "rss:1", 1, Instant.now(), false),
                 new IngestionResponse(2L, "rss:2", 1, Instant.now(), false),
                 new IngestionResponse(1L, "rss:1", 0, Instant.now(), true),
@@ -60,7 +60,7 @@ class NewsRssConnectorTest {
         assertThat(connector.health().status()).isEqualTo(ConnectorHealth.Status.OK);
 
         ArgumentCaptor<IngestPolicyRequest> captured = ArgumentCaptor.forClass(IngestPolicyRequest.class);
-        verify(ingestion, org.mockito.Mockito.times(4)).ingest(captured.capture());
+        verify(ingestion, org.mockito.Mockito.times(4)).ingest(captured.capture(), any(), any());
         assertThat(captured.getAllValues()).allSatisfy(request -> {
             assertThat(request.sourceType()).isEqualTo(SourceType.SECONDARY);
             assertThat(request.status().name()).isEqualTo("UNKNOWN");

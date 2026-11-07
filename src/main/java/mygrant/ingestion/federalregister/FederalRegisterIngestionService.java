@@ -1,6 +1,7 @@
 package mygrant.ingestion.federalregister;
 
 import java.time.Instant;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -22,6 +23,7 @@ import mygrant.impact.ProfileImpactAssessment;
 import mygrant.impact.ProfileImpactAssessmentService;
 import mygrant.policies.PolicyStatus;
 import mygrant.policies.SourceType;
+import mygrant.rules.RuleIdentifiers;
 
 /** Orchestrates Federal Register download, classification, and policy indexing. */
 @Service
@@ -92,7 +94,7 @@ public class FederalRegisterIngestionService
         VisaClassification classification = classifier.classify(document.title(), content);
         var restrictions = restrictionExtractor.extract(document.title(), content, document.htmlUrl());
         if (classification.visaTypes().isEmpty() && !restrictions.proclamation()) {
-            throw new IllegalArgumentException(
+            throw new UnsupportedVisaCategoryException(
                     "No supported visa category was detected; document was not ingested");
         }
         return new PreparedDocument(document, content, classification, agencyNames(document), restrictions);
@@ -112,7 +114,7 @@ public class FederalRegisterIngestionService
                 document.title(),
                 prepared.agency(),
                 visaType,
-                mapStatus(document.type()),
+                mapStatus(document.type(), document.action()),
                 source().type(),
                 document.publicationDate(),
                 document.effectiveDate(),
@@ -120,7 +122,8 @@ public class FederalRegisterIngestionService
                 content, new java.util.LinkedHashSet<>(restrictions.affectedCountries()),
                 new java.util.LinkedHashSet<>(restrictions.categories()), restrictions.sourceReferences(),
                 restrictions.restrictions(), restrictions.requiresReview(), restrictions.specialDocumentHolderRule()),
-                content.substring(0, Math.min(content.length(), MAX_INDEX_CHARACTERS)));
+                content.substring(0, Math.min(content.length(), MAX_INDEX_CHARACTERS)),
+                RuleIdentifiers.fromFederalRegisterApi(document.docketIds(), document.regulationIdNumbers()));
 
         ProfileImpactAssessment impactAssessment = request.assessImpact()
                 ? impactAssessmentService.assess(request.userEmail(), document, prepared.agency(), content, classification)
@@ -172,13 +175,20 @@ public class FederalRegisterIngestionService
                 .distinct().collect(Collectors.joining("; "));
     }
 
-    private PolicyStatus mapStatus(String type) {
-        if ("Rule".equalsIgnoreCase(type)) {
+    /**
+     * A rule or proposed rule whose action withdraws it, such as "Proposed rule; withdrawal.", is
+     * WITHDRAWN. Otherwise a Rule (final, interim final, a delay or a correction) is FINAL and a
+     * Proposed Rule is PROPOSED; notices and anything else are UNKNOWN.
+     */
+    static PolicyStatus mapStatus(String type, String action) {
+        boolean rule = "Rule".equalsIgnoreCase(type);
+        boolean proposed = "Proposed Rule".equalsIgnoreCase(type);
+        if ((rule || proposed) && action != null && action.toLowerCase(Locale.ROOT).contains("withdraw")) {
+            return PolicyStatus.WITHDRAWN;
+        }
+        if (rule) {
             return PolicyStatus.FINAL;
         }
-        if ("Proposed Rule".equalsIgnoreCase(type)) {
-            return PolicyStatus.PROPOSED;
-        }
-        return PolicyStatus.UNKNOWN;
+        return proposed ? PolicyStatus.PROPOSED : PolicyStatus.UNKNOWN;
     }
 }

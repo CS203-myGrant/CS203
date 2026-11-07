@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -50,18 +51,28 @@ public class IngestionController {
         this.embeddingRebuildService = embeddingRebuildService;
     }
 
-    /** Indexes a policy supplied in the request body. */
+    /**
+     * Indexes a policy supplied in the request body, marked as an admin's: only an admin reaches
+     * this endpoint, and only a court order recorded here can dispute a rule again once an admin
+     * has cleared its dispute.
+     */
     @PostMapping("/documents")
     @PreAuthorize("hasRole('ADMIN')")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Index a policy from the request body",
             description = "Saves the policy, splits and embeds its text for RAG, and alerts affected "
-                    + "applicants. An unchanged policy with the same external id is reused.")
+                    + "applicants. An unchanged policy with the same external id is reused. A SECONDARY "
+                    + "source, such as a court order, joins the rule of any Federal Register document or "
+                    + "regulations.gov docket linked in its sourceUrl or sourceReferences; if its title or "
+                    + "content reports litigation or a stay, the rule is marked disputed and its applicants "
+                    + "get one alert. That holds for a rule whose dispute an admin cleared, which news no "
+                    + "longer disputes, as long as the source is dated after the one that lifted the block; "
+                    + "an earlier one is flagged for review instead.")
     @ApiResponse(responseCode = "201", description = "Indexed, or reused when unchanged")
     @ApiResponse(responseCode = "400", description = "A field is missing, too long or invalid")
     @ApiResponse(responseCode = "409", description = "A different policy already has this external id")
     public IngestionResponse ingest(@Valid @RequestBody IngestPolicyRequest request) {
-        return ingestionService.ingest(request);
+        return ingestionService.ingestRecordedByAdmin(request);
     }
 
     /** Backwards-compatible health view for the Federal Register connector. */
@@ -110,6 +121,21 @@ public class IngestionController {
     public Page<mygrant.ingestion.dto.IngestionStatusResponse> status(
             @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
         return Pages.of(sourceSyncService.status(), pageable);
+    }
+
+    /** Documents a source sync could not import, for admins. */
+    @GetMapping("/sync-failures")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Documents a source sync could not import",
+            description = "One entry per document that failed during a sync, with its attempts and last error. "
+                    + "A failed document no longer fails the whole run: the run imports the rest and moves on. "
+                    + "RETRYING documents are tried again on every later run; after maxAttempts failures in a row "
+                    + "(5 by default) a document is PERMANENTLY_FAILED and skipped. RESOLVED means a later run "
+                    + "imported it. Filter with status; newest failure first.")
+    public Page<mygrant.ingestion.dto.SyncFailureResponse> syncFailures(
+            @RequestParam(required = false) mygrant.sources.SyncFailure.Status status,
+            @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
+        return sourceSyncService.failures(status, pageable);
     }
 
     @PostMapping("/sync")

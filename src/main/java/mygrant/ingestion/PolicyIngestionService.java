@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Arrays;
 
 import org.springframework.ai.document.Document;
@@ -21,6 +22,10 @@ import mygrant.policies.PolicyDocumentRepository;
 import mygrant.policies.PolicyIndexedEvent;
 import mygrant.policies.SourceType;
 import mygrant.policies.CountryIdentifiers;
+import mygrant.rules.DocumentOrigin;
+import mygrant.rules.PolicyRuleTracker;
+import mygrant.rules.RecordedBy;
+import mygrant.rules.RuleIdentifier;
 
 /** Stores complete policy records and their searchable, visa-tagged vector chunks. */
 @Service
@@ -30,13 +35,15 @@ public class PolicyIngestionService {
     private final VectorStore vectorStore;
     private final ApplicationEventPublisher eventPublisher;
     private final TokenTextSplitter textSplitter;
+    private final PolicyRuleTracker ruleTracker;
 
     public PolicyIngestionService(PolicyDocumentRepository policyRepository, VectorStore vectorStore,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher, PolicyRuleTracker ruleTracker) {
         this.policyRepository = policyRepository;
         this.vectorStore = vectorStore;
         this.eventPublisher = eventPublisher;
         this.textSplitter = new TokenTextSplitter();
+        this.ruleTracker = ruleTracker;
     }
 
     /** Stores and indexes all content supplied by a manual ingestion request. */
@@ -45,9 +52,35 @@ public class PolicyIngestionService {
         return ingest(request, request.content());
     }
 
+    /**
+     * The same, for a policy an admin posted, such as a court order recorded as a secondary
+     * source. Its rule is told so ({@link DocumentOrigin#ADMIN_RECORDED}): after an admin has
+     * cleared a rule's dispute, only such a source can dispute the rule again, never news.
+     */
+    @Transactional
+    public IngestionResponse ingestRecordedByAdmin(IngestPolicyRequest request) {
+        return ingest(request, request.content(), Set.of(), DocumentOrigin.ADMIN_RECORDED);
+    }
+
     /** Stores the full policy while indexing a selected excerpt for retrieval. */
     @Transactional
     public IngestionResponse ingest(IngestPolicyRequest request, String indexedContent) {
+        return ingest(request, indexedContent, Set.of());
+    }
+
+    /**
+     * The same, with dockets, RINs or linked document numbers the source supplied, such as the
+     * Federal Register API's. They are added to those read from the document's own header when
+     * the document is put in its policy rule (CS203-86).
+     */
+    @Transactional
+    public IngestionResponse ingest(IngestPolicyRequest request, String indexedContent,
+            Set<RuleIdentifier> ruleIdentifiers) {
+        return ingest(request, indexedContent, ruleIdentifiers, DocumentOrigin.AUTOMATIC);
+    }
+
+    private IngestionResponse ingest(IngestPolicyRequest request, String indexedContent,
+            Set<RuleIdentifier> ruleIdentifiers, DocumentOrigin origin) {
         if (indexedContent == null || indexedContent.isBlank()) {
             throw new IllegalArgumentException("Indexed policy content must not be blank");
         }
@@ -92,11 +125,16 @@ public class PolicyIngestionService {
         Instant indexedAt = Instant.now();
         saved.markIndexed(indexedAt);
         policyRepository.save(saved);
+        // In this transaction, so a document is never stored without its rule. Last, so the rule
+        // lock is held only until commit, not through the embedding call above. The row is already
+        // inserted: IDENTITY ids make Hibernate insert on the first save.
+        PolicyRuleTracker.Result rule = ruleTracker.track(saved, ruleIdentifiers, RecordedBy.INGESTION, origin);
 
         // Profile impact alerts describe official policy changes. News is searchable
-        // as secondary evidence but must not create a policy-change notification.
+        // as secondary evidence but must not create a policy-change notification. A policy that
+        // moved its rule is alerted once, by the change alert that says what moved.
         if (saved.getSourceType() == SourceType.PRIMARY) {
-            eventPublisher.publishEvent(PolicyIndexedEvent.from(saved));
+            eventPublisher.publishEvent(PolicyIndexedEvent.from(saved, rule.changeAlerted()));
         }
 
         return new IngestionResponse(saved.getId(), saved.getExternalId(), chunks.size(), indexedAt, false);

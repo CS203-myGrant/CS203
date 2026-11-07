@@ -51,7 +51,7 @@ class FederalRegisterConnectorTest {
         when(client.downloadFullText(document.rawTextUrl())).thenReturn("F-1 student policy");
         when(classifier.classify(document.title(), "F-1 student policy"))
                 .thenReturn(new VisaClassification(true, false, false, List.of("F-1"), List.of("F-1")));
-        when(policyIngestion.ingest(any(IngestPolicyRequest.class), eq("F-1 student policy")))
+        when(policyIngestion.ingest(any(IngestPolicyRequest.class), eq("F-1 student policy"), any()))
                 .thenReturn(new IngestionResponse(42L, document.documentNumber(), 0, Instant.now(), true));
 
         DataConnector<FederalRegisterImportRequest,
@@ -69,7 +69,7 @@ class FederalRegisterConnectorTest {
         assertThat(result.ingestion().alreadyIndexed()).isTrue();
         assertThat(result.detectedVisaTypes()).containsExactly("F-1");
         var request = ArgumentCaptor.forClass(IngestPolicyRequest.class);
-        verify(policyIngestion).ingest(request.capture(), eq("F-1 student policy"));
+        verify(policyIngestion).ingest(request.capture(), eq("F-1 student policy"), eq(java.util.Set.of()));
         assertThat(request.getValue().sourceType()).isEqualTo(SourceType.PRIMARY);
         assertThat(request.getValue().externalId()).isEqualTo(document.documentNumber());
         verify(impactAssessment).assess(eq("admin@example.com"), eq(document),
@@ -92,7 +92,7 @@ class FederalRegisterConnectorTest {
         assertThat(connector.health().status()).isEqualTo(ConnectorHealth.Status.FAILED);
         assertThat(connector.health().errorStage()).isEqualTo(ConnectorHealth.Stage.TRANSFORM);
         assertThat(connector.health().errorMessage()).contains("No supported visa category");
-        verify(policyIngestion, never()).ingest(any(), any());
+        verify(policyIngestion, never()).ingest(any(), any(), any());
     }
 
     @Test
@@ -108,7 +108,7 @@ class FederalRegisterConnectorTest {
         assertThat(connector.health().lastAttemptAt()).isNotNull();
         assertThat(connector.health().errorStage()).isEqualTo(ConnectorHealth.Stage.FETCH);
         assertThat(connector.health().errorMessage()).isEqualTo("Upstream unavailable");
-        verify(policyIngestion, never()).ingest(any(), any());
+        verify(policyIngestion, never()).ingest(any(), any(), any());
     }
 
     @Test
@@ -134,7 +134,28 @@ class FederalRegisterConnectorTest {
         assertThat(fetched.fetchedAt()).isNotNull();
         assertThat(fetched.contentHash()).isEqualTo(ContentHash.sha256(content));
         assertThat(prepared.classification().visaTypes()).containsExactly("H-1B");
-        verify(policyIngestion, never()).ingest(any(), any());
+        verify(policyIngestion, never()).ingest(any(), any(), any());
+    }
+
+    @Test
+    void passesTheApiDocketAndRinToIngestionAndMapsWithdrawals() {
+        var document = new FederalRegisterDocument("2026-12345", "F-1 student rule", "Proposed Rule",
+                LocalDate.of(2026, 10, 1), null, "https://www.federalregister.gov/d/2026-12345",
+                "https://example.com/raw.txt", List.of(), "Proposed rule; withdrawal.",
+                List.of("DHS Docket No. ICEB-2025-0001"), List.of("1653-AA95"));
+        when(client.getDocument(document.documentNumber())).thenReturn(document);
+        when(client.downloadFullText(document.rawTextUrl())).thenReturn("F-1 student policy");
+        when(classifier.classify(document.title(), "F-1 student policy"))
+                .thenReturn(new VisaClassification(true, false, false, List.of("F-1"), List.of("F-1")));
+        when(policyIngestion.ingest(any(IngestPolicyRequest.class), eq("F-1 student policy"), any()))
+                .thenReturn(new IngestionResponse(42L, document.documentNumber(), 1, Instant.now(), false));
+
+        service().ingest(new FederalRegisterImportRequest(document.documentNumber(), "admin@example.com", false));
+
+        var request = ArgumentCaptor.forClass(IngestPolicyRequest.class);
+        verify(policyIngestion).ingest(request.capture(), eq("F-1 student policy"), eq(java.util.Set.of(
+                mygrant.rules.RuleIdentifier.docket("ICEB-2025-0001"), mygrant.rules.RuleIdentifier.rin("1653-AA95"))));
+        assertThat(request.getValue().status()).isEqualTo(mygrant.policies.PolicyStatus.WITHDRAWN);
     }
 
     private FederalRegisterIngestionService service() {
