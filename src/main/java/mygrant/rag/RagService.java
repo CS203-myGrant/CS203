@@ -85,7 +85,7 @@ public class RagService {
                         """, context);
 
         List<CitationResponse> citations = createCitations(evidence);
-        JudgeEvaluation evaluation = judge.evaluateAnswer(context, answer);
+        JudgeEvaluation evaluation = judge.evaluateAnswer(context, answer, citations);
         if (evaluation.verdict() != JudgeEvaluation.Verdict.YES) {
             return new RagQueryResponse("An independently verified answer is not available. Please try again or contact the support team.",
                     Confidence.LOW, true, citations, createRetrievedEvidence(evidence, citations),

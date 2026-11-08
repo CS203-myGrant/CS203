@@ -3,6 +3,7 @@ package mygrant.rag;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -69,7 +70,7 @@ class RagServiceTests {
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(document));
         when(generator.generate(any(),any())).thenReturn("Generated candidate [1]");
         for(var verdict:mygrant.impact.JudgeEvaluation.Verdict.values()){
-            when(judge.evaluateAnswer(any(),any())).thenReturn(new mygrant.impact.JudgeEvaluation(verdict,"Review","judge"));
+            when(judge.evaluateAnswer(any(),any(),anyList())).thenReturn(new mygrant.impact.JudgeEvaluation(verdict,"Review","judge"));
             var response=ragService.query(new RagQueryRequest("When?","F-1"));
             assertThat(response.evaluation().verdict()).isEqualTo(verdict);
             if(verdict==mygrant.impact.JudgeEvaluation.Verdict.YES)assertThat(response.answer()).isEqualTo("Generated candidate [1]");

@@ -108,7 +108,7 @@ public class PolicyChatService {
             var response=mapper.readTree(json);
             String answer=response.path("answer").asText();
             if(answer.isBlank() || answer.length()>6000 || !response.path("requiresReview").isBoolean()) throw new IllegalStateException("Invalid answer");
-            JudgeEvaluation evaluation=judge.evaluateAnswer(context,answer);
+            JudgeEvaluation evaluation=judge.evaluateAnswer(context,answer,citations(policy));
             if(evaluation.verdict()!=JudgeEvaluation.Verdict.YES) {
                 String notice=evaluation.verdict()==JudgeEvaluation.Verdict.NO
                         ? "The independent review could not verify an answer to this question. Please consult the original source or ask the support team."
@@ -126,10 +126,14 @@ public class PolicyChatService {
     }
 
     private Answer reply(PolicyDocument policy,String text,boolean review,JudgeEvaluation evaluation,Confidence confidence,boolean evidence){
-        var citations=evidence?List.of(new CitationResponse(policy.getExternalId(),policy.getTitle(),policy.getAgency(),
+        return new Answer(text,policy.getTitle(),policy.getSourceUrl(),review,evaluation,
+                evidence ? citations(policy) : List.of(),confidence);
+    }
+
+    private List<CitationResponse> citations(PolicyDocument policy) {
+        return List.of(new CitationResponse(policy.getExternalId(),policy.getTitle(),policy.getAgency(),
                 policy.getStatus().name(),policy.getSourceType().name(),String.valueOf(policy.getPublicationDate()),
-                policy.getEffectiveDate()==null?null:policy.getEffectiveDate().toString(),policy.getSourceUrl(),null)):List.<CitationResponse>of();
-        return new Answer(text,policy.getTitle(),policy.getSourceUrl(),review,evaluation,citations,confidence);
+                policy.getEffectiveDate()==null?null:policy.getEffectiveDate().toString(),policy.getSourceUrl(),null));
     }
 
     /** Selects bounded, overlapping passages from the entire stored source, including later provisions. */

@@ -2045,3 +2045,5 @@ RAG flow. Visa classification stays a keyword rule set and never calls a model. 
 the embedding model requires the same 1024 dimensions, or a matching change to
 `spring.ai.vectorstore.pgvector.dimensions` and a rebuilt table, followed by
 `POST /api/v1/ingestion/embeddings/rebuild`.
+
+AI output evaluation (CS203-88): see [judge configuration, versioning, and limitations](docs/ai-output-evaluation.md).

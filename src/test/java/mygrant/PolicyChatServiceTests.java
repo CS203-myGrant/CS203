@@ -27,7 +27,7 @@ class PolicyChatServiceTests {
     final PolicyQuestionHistory history=mock(PolicyQuestionHistory.class);
     final PolicyChatService service=new PolicyChatService(policies,recommendations,users,profiles,generator,new ObjectMapper().findAndRegisterModules(),judge,retrieval,history);
     @BeforeEach void setup(){
-        when(judge.evaluateAnswer(anyString(),anyString())).thenReturn(new JudgeEvaluation(JudgeEvaluation.Verdict.YES,"Supported","judge"));
+        when(judge.evaluateAnswer(anyString(),anyString(),anyList())).thenReturn(new JudgeEvaluation(JudgeEvaluation.Verdict.YES,"Supported","judge"));
         when(policies.findById(21L)).thenReturn(policy);
         when(policy.getTitle()).thenReturn("Selected policy");
         when(policy.getStatus()).thenReturn(PolicyStatus.PROPOSED);
@@ -57,7 +57,7 @@ class PolicyChatServiceTests {
         assertFalse(context.getValue().contains("<html>"));
         assertFalse(context.getValue().contains("Forged client text"));
         verify(recommendations,never()).getOrGenerate(anyString(),any(),any());
-        verify(judge).evaluateAnswer(eq(context.getValue()),eq("Check this proposed rule [1]."));
+        verify(judge).evaluateAnswer(eq(context.getValue()),eq("Check this proposed rule [1]."),anyList());
     }
     @Test void noSourceDoesNotCallModel(){
         when(policy.getContent()).thenReturn("");
@@ -93,12 +93,12 @@ class PolicyChatServiceTests {
         assertEquals(mygrant.common.Confidence.LOW,result.confidence());
         assertTrue(result.requiresReview());
         assertEquals(1,result.citations().size());
-        verify(judge).evaluateAnswer(contains("Proposed student admission rule"),eq(result.answer()));
+        verify(judge).evaluateAnswer(contains("Proposed student admission rule"),eq(result.answer()),anyList());
     }
     @Test void rejectsUnapprovedOrUnavailableAnswers(){
         for(var verdict:List.of(JudgeEvaluation.Verdict.NO,JudgeEvaluation.Verdict.UNAVAILABLE)){
             when(generator.generateJson(anyString(),anyString(),anyMap(),anyString())).thenReturn("{\"answer\":\"Unsupported secret claim\",\"requiresReview\":false}");
-            when(judge.evaluateAnswer(anyString(),anyString())).thenReturn(new JudgeEvaluation(verdict,"Not verified","judge"));
+            when(judge.evaluateAnswer(anyString(),anyString(),anyList())).thenReturn(new JudgeEvaluation(verdict,"Not verified","judge"));
             var response=service.ask(21L,"owner@example.org",new PolicyChatService.Question("Why?",List.of()));
             assertFalse(response.answer().contains("Unsupported secret claim"));
             assertTrue(response.requiresReview());
