@@ -46,7 +46,7 @@ class PolicyQaIntegrationTest {
                 "publicationDate","2026-01-01","sourceUrl","https://example.org/f1")).build();
         when(vectors.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(document));
         when(generator.generate(anyString(),anyString())).thenReturn("A general policy answer [1].");
-        when(judge.evaluateAnswer(anyString(),anyString())).thenReturn(new JudgeEvaluation(JudgeEvaluation.Verdict.YES,"Supported","judge"));
+        when(judge.evaluateAnswer(anyString(),anyString(),anyList())).thenReturn(new JudgeEvaluation(JudgeEvaluation.Verdict.YES,"Supported","judge"));
         String owner=account("F-1"),other=account("H-1B");
         mvc.perform(post("/api/v1/rag/query").header("Authorization",owner).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"question\":\"What changed?\",\"visaType\":\"H-1B\"}"))
@@ -63,7 +63,7 @@ class PolicyQaIntegrationTest {
         when(vectors.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(document));
         when(generator.generateJson(anyString(),anyString(),anyMap(),eq("policy_follow_up")))
                 .thenReturn("{\"answer\":\"A saved cited answer [1].\",\"requiresReview\":false}");
-        when(judge.evaluateAnswer(anyString(),anyString())).thenReturn(new JudgeEvaluation(JudgeEvaluation.Verdict.YES,"Supported","judge"));
+        when(judge.evaluateAnswer(anyString(),anyString(),anyList())).thenReturn(new JudgeEvaluation(JudgeEvaluation.Verdict.YES,"Supported","judge"));
         String owner=account("F-1"),stranger=account("H-1B");
         String path="/api/v1/policies/"+policy.getId()+"/questions";
         mvc.perform(post(path).header("Authorization",owner).contentType(MediaType.APPLICATION_JSON)
