@@ -73,7 +73,8 @@ class FederalRegisterConnectorTest {
         assertThat(request.getValue().sourceType()).isEqualTo(SourceType.PRIMARY);
         assertThat(request.getValue().externalId()).isEqualTo(document.documentNumber());
         verify(impactAssessment).assess(eq("admin@example.com"), eq(document),
-                eq("Department of Homeland Security"), eq("F-1 student policy"), any());
+                eq("Department of Homeland Security"), eq("F-1 student policy"), any(),
+                org.mockito.ArgumentMatchers.argThat(context -> context.contains("affectedCountries: []")));
     }
 
     @Test

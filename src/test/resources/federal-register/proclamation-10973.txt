@@ -1,0 +1,8 @@
+Historical source fixture. Publication date: 2025-09-24. Signed: 2025-09-19. Effective date: 2025-09-21.
+Official source: https://www.federalregister.gov/documents/2025/09/24/2025-18601/restriction-on-entry-of-certain-nonimmigrant-workers
+This saved excerpt is a regression input, not a statement of current law.
+
+Presidential Proclamation 10973
+Restriction on Entry of Certain Nonimmigrant Workers
+Section 1. Restriction on Entry.
+The entry into the United States of aliens as nonimmigrants to perform services in a specialty occupation under the H-1B visa classification is restricted, except for petitions accompanied or supplemented by a $100,000 payment, subject to national-interest exceptions. The restriction applies to certain H-1B workers currently outside the United States who enter after the effective date.

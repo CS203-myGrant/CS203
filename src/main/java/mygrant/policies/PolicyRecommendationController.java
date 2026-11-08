@@ -38,7 +38,7 @@ public class PolicyRecommendationController {
     public ProfileImpactAssessment recommendation(@PathVariable Long id, Principal principal) {
         PolicyDocument policy = policies.findById(id);
         return store.getOrGenerate(principal.getName(), policy,
-                () -> assessments.assess(principal.getName(), PolicyAssessmentInputs.document(policy),
-                        policy.getAgency(), policy.getContent(), PolicyAssessmentInputs.classification(policy)));
+                () -> assessments.assess(principal.getName(), policy, PolicyAssessmentInputs.document(policy),
+                        PolicyAssessmentInputs.classification(policy)));
     }
 }

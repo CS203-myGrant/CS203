@@ -44,6 +44,15 @@ public class ImpactController {
         return service.list(principal.getName(), pageable, severity, archived);
     }
 
+    @GetMapping("/consolidated")
+    @Operation(summary = "Get one consolidated view of your current policy assessments",
+            description = "Combines net urgency, deduplicated citations and uncertainty notes while preserving "
+                    + "each policy-specific assessment in the breakdown.")
+    @ApiResponse(responseCode = "200", description = "Consolidated published assessments")
+    public ImpactFeedService.ConsolidatedAssessment consolidated(Principal principal) {
+        return service.consolidated(principal.getName());
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Get one of your published impact assessments")
     @ApiResponse(responseCode = "200", description = "Analysis, citations, actions and review marker")

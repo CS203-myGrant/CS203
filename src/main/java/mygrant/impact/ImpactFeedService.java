@@ -4,6 +4,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.ArrayList;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -27,6 +29,14 @@ public class ImpactFeedService {
     private static final String VISIBLE = """
             FROM policy_recommendations r JOIN policy_documents p ON p.id = r.policy_id
             WHERE r.user_id = :userId AND """ + ImpactVisibility.VISIBLE + "\n";
+    private static final String CONSOLIDATED = """
+            FROM (
+                SELECT DISTINCT ON (r.policy_id) r.*
+                FROM policy_recommendations r
+                WHERE r.user_id = :userId AND r.archived_at IS NULL AND """ + ImpactVisibility.VISIBLE + """
+                ORDER BY r.policy_id, r.generated_at DESC, r.id DESC
+            ) r JOIN policy_documents p ON p.id = r.policy_id
+            """;
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
     private final UserRepository users;
@@ -57,10 +67,55 @@ public class ImpactFeedService {
         Long total = jdbc.queryForObject("SELECT count(*) " + where, params, Long.class);
         List<ImpactView> rows = withActionItems(userId, jdbc.query(
                 "SELECT r.*, p.title AS policy_title, p.agency AS policy_agency, "
-                + "p.source_url AS policy_source_url " + where + " ORDER BY " + order
+                + "p.source_url AS policy_source_url, " + citationSql() + " " + where + " ORDER BY " + order
                 + " LIMIT :limit OFFSET :offset", params, (rs, row) -> map(rs)));
         return new PageImpl<>(rows, PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
                 pageable.getSort()), total == null ? 0 : total);
+    }
+
+    /** One current assessment per policy, projected as a combined consumer-facing view. */
+    @Transactional(readOnly = true)
+    public ConsolidatedAssessment consolidated(String email) {
+        long userId = userId(email);
+        var params = new MapSqlParameterSource("userId", userId);
+        List<ImpactView> breakdown = jdbc.query("SELECT r.*, p.title AS policy_title, "
+                        + "p.agency AS policy_agency, p.source_url AS policy_source_url, " + citationSql()
+                        + " " + CONSOLIDATED + " ORDER BY r.generated_at DESC, r.id DESC", params,
+                (rs, row) -> map(rs));
+        breakdown = withActionItems(userId, breakdown);
+        return aggregate(breakdown);
+    }
+
+    static ConsolidatedAssessment aggregate(List<ImpactView> breakdown) {
+        ImpactUrgency netStatus = breakdown.stream().map(ImpactView::urgency)
+                .max(java.util.Comparator.comparingInt(ImpactFeedService::urgencyRank))
+                .orElse(ImpactUrgency.NOT_APPLICABLE);
+        LinkedHashMap<String, Citation> citations = new LinkedHashMap<>();
+        List<String> uncertainty = new ArrayList<>();
+        for (ImpactView impact : breakdown) {
+            impact.citations().stream().filter(citation -> citation.url() != null && !citation.url().isBlank())
+                    .forEach(citation -> citations.putIfAbsent(citation.url(), citation));
+            impact.missingInformation().forEach(field -> uncertainty.add(impact.policyTitle() + ": " + field));
+            if (impact.confidence() < 60) {
+                uncertainty.add(impact.policyTitle() + ": assessment confidence is low ("
+                        + impact.confidence() + "%).");
+            }
+            if (impact.requiresHumanReview()) {
+                uncertainty.add(impact.policyTitle() + ": human review is recommended for this assessment.");
+            }
+        }
+        return new ConsolidatedAssessment(netStatus, List.copyOf(citations.values()),
+                uncertainty.stream().distinct().toList(), breakdown);
+    }
+
+    private static int urgencyRank(ImpactUrgency urgency) {
+        return switch (urgency) {
+            case HIGH -> 4;
+            case MEDIUM -> 3;
+            case LOW -> 2;
+            case NOT_APPLICABLE -> 1;
+            case UNAVAILABLE -> 0;
+        };
     }
 
     @Transactional(readOnly = true)
@@ -89,7 +144,7 @@ public class ImpactFeedService {
         MapSqlParameterSource params = new MapSqlParameterSource("userId", userId)
                 .addValue("id", id);
         return jdbc.query("SELECT r.*, p.title AS policy_title, p.agency AS policy_agency, "
-                + "p.source_url AS policy_source_url " + VISIBLE + " AND r.id = :id", params,
+                + "p.source_url AS policy_source_url, " + citationSql() + " " + VISIBLE + " AND r.id = :id", params,
                 (rs, row) -> map(rs)).stream().findFirst().orElseThrow(ImpactNotFoundException::new);
     }
 
@@ -108,14 +163,38 @@ public class ImpactFeedService {
             throw new IllegalStateException("Stored impact assessment is unreadable", exception);
         }
         return new ImpactView(rs.getLong("id"), rs.getLong("policy_id"), rs.getString("policy_title"),
-                rs.getString("policy_agency"), rs.getString("severity"), assessment.summary(),
+                rs.getString("policy_agency"), rs.getString("severity"), assessment.urgency(),
+                assessment.requiresHumanReview(), assessment.summary(),
                 assessment.confidence(), confidenceLabel(assessment.confidence()),
                 assessment.reasons(), assessment.missingInformation(),
-                List.of(new Citation(rs.getString("policy_title"), rs.getString("policy_source_url"))),
+                citations(rs),
                 List.of(), rs.getBoolean("reviewed_by_human"), instant(rs, "reviewed_at"),
                 instant(rs, "archived_at") != null, instant(rs, "generated_at"),
                 instant(rs, "updated_at"), rs.getInt("version"),
                 "This information is not legal advice. Check the original source and a qualified adviser.");
+    }
+
+    private String citationSql() {
+        return "(SELECT COALESCE(json_agg(DISTINCT refs.url ORDER BY refs.url)::text, '[]') FROM ("
+                + "SELECT source_reference AS url FROM policy_source_references sr WHERE sr.policy_id = p.id "
+                + "UNION SELECT source_reference AS url FROM policy_country_restrictions cr WHERE cr.policy_id = p.id"
+                + ") refs) AS policy_citations";
+    }
+
+    private List<Citation> citations(ResultSet rs) throws SQLException {
+        List<Citation> citations = new java.util.ArrayList<>();
+        String sourceUrl = rs.getString("policy_source_url");
+        citations.add(new Citation(rs.getString("policy_title"), sourceUrl));
+        try {
+            List<String> references = mapper.readValue(rs.getString("policy_citations"),
+                    mapper.getTypeFactory().constructCollectionType(List.class, String.class));
+            references.stream().filter(url -> url != null && !url.isBlank())
+                    .filter(url -> !url.equals(sourceUrl))
+                    .distinct().forEach(url -> citations.add(new Citation("Restriction source", url)));
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Stored policy citations are unreadable", exception);
+        }
+        return List.copyOf(citations);
     }
 
     private Instant instant(ResultSet rs, String column) throws SQLException {
@@ -156,13 +235,17 @@ public class ImpactFeedService {
     }
 
     public record Citation(String title, String url) {}
+    public record ConsolidatedAssessment(ImpactUrgency netStatus, List<Citation> citations,
+            List<String> uncertaintyNotes, List<ImpactView> breakdown) {}
     public record ImpactView(long id, long policyId, String policyTitle, String policyAgency,
-            String severity, String summary, int confidence, String confidenceLabel,
+            String severity, ImpactUrgency urgency, boolean requiresHumanReview,
+            String summary, int confidence, String confidenceLabel,
             List<String> analysis, List<String> missingInformation, List<Citation> citations,
             List<ActionItemView> actionItems, boolean reviewedByHuman, Instant reviewedAt,
             boolean archived, Instant createdAt, Instant updatedAt, int version, String disclaimer) {
         ImpactView withActionItems(List<ActionItemView> items) {
-            return new ImpactView(id, policyId, policyTitle, policyAgency, severity, summary, confidence,
+            return new ImpactView(id, policyId, policyTitle, policyAgency, severity, urgency,
+                    requiresHumanReview, summary, confidence,
                     confidenceLabel, analysis, missingInformation, citations, items, reviewedByHuman,
                     reviewedAt, archived, createdAt, updatedAt, version, disclaimer);
         }

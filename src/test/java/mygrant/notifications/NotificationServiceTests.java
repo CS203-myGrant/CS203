@@ -260,6 +260,68 @@ class NotificationServiceTests {
     }
 
     @Test
+    void visaAndNationalityOverlapUsesOneExistingPolicyAlert() {
+        User applicant = user(7L, "overlap@example.com");
+        UserProfile profile = UserProfile.fromUser(applicant);
+        profile.setCountryOfCitizenship("AF");
+        when(userRepository.findByRole(UserRole.APPLICANT)).thenReturn(List.of(applicant));
+        when(consents.findByUserId(7L)).thenReturn(List.of(new ProfileFieldConsent(7L,
+                ProfileFieldDefinition.COUNTRY_OF_CITIZENSHIP, java.time.Instant.now())));
+        when(userProfileRepository.findById(7L)).thenReturn(Optional.of(profile));
+        when(notificationRepository.findUserIdsByPolicyId(3L)).thenReturn(java.util.Set.of());
+
+        new NotificationService(notificationRepository, userRepository, userProfileRepository,
+                new PolicyImpactRules(), streamRegistry, policyRepository, testClock,
+                ruleStore, consents, immigrationDocuments, recommendations)
+                .onPolicyIndexed(new PolicyIndexedEvent(3L, "Overlapping restriction", List.of("F-1"), null,
+                        "Entry restriction for nationals of Afghanistan; F-1 is mentioned in source context.",
+                        LocalDate.parse("2025-06-10"), java.util.Set.of("AF"), true, false, false));
+
+        verify(notificationRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).singleElement().satisfies(row -> {
+            assertThat(row.getUserId()).isEqualTo(7L);
+            assertThat(row.getPolicyId()).isEqualTo(3L);
+        });
+        verify(userRepository, org.mockito.Mockito.never())
+                .findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("F-1"));
+    }
+
+    @Test
+    void missingConsentedNationalityDoesNotGuessAnAffectedCountry() {
+        User applicant = user(7L, "missing-nationality@example.com");
+        UserProfile profile = UserProfile.fromUser(applicant);
+        when(userRepository.findByRole(UserRole.APPLICANT)).thenReturn(List.of(applicant));
+        when(consents.findByUserId(7L)).thenReturn(List.of(new ProfileFieldConsent(7L,
+                ProfileFieldDefinition.COUNTRY_OF_CITIZENSHIP, java.time.Instant.now())));
+        when(userProfileRepository.findById(7L)).thenReturn(Optional.of(profile));
+
+        new NotificationService(notificationRepository, userRepository, userProfileRepository,
+                new PolicyImpactRules(), streamRegistry, policyRepository, testClock,
+                ruleStore, consents, immigrationDocuments, recommendations)
+                .onPolicyIndexed(new PolicyIndexedEvent(3L, "Entry restriction", List.of(), null,
+                        "Entry restriction for nationals of Afghanistan.", LocalDate.parse("2025-06-10"),
+                        java.util.Set.of("AF"), true, false, false));
+
+        verify(notificationRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).isEmpty();
+    }
+
+    @Test
+    void repeatedIndexEventDoesNotCreateASecondAlertForTheSameAssessment() {
+        User applicant = user(7L, "already-alerted@example.com");
+        when(userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("F-1")))
+                .thenReturn(List.of(applicant));
+        when(notificationRepository.findUserIdsByPolicyId(3L)).thenReturn(java.util.Set.of(7L));
+
+        service().onPolicyIndexed(new PolicyIndexedEvent(3L, "F-1 policy", List.of("F-1"), null, "Policy."));
+
+        verify(notificationRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).isEmpty();
+        verify(streamRegistry, org.mockito.Mockito.never()).publish(org.mockito.ArgumentMatchers.eq(7L),
+                org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void flagsActionRequiredWhenThePolicyTouchesAFilledInProfileField() {
         User student = user(7L, "student@example.com");
         student.setProgramEndDate(LocalDate.parse("2028-05-31"));

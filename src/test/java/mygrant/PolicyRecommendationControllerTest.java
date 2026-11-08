@@ -25,9 +25,9 @@ class PolicyRecommendationControllerTest {
         MockMvcBuilders.standaloneSetup(new PolicyRecommendationController(policies, assessments, store)).build()
                 .perform(post("/api/v1/policies/21/recommendation").principal(() -> "user@example.org"))
                 .andExpect(status().isOk());
-        verify(assessments).assess(eq("user@example.org"),
+        verify(assessments).assess(eq("user@example.org"), eq(policy),
                 argThat(document -> document.documentNumber().equals("2026-14439")
-                        && document.type().equals("FINAL")), eq("DHS"), eq("SUMMARY: Policy facts"),
+                        && document.type().equals("FINAL")),
                 argThat(classification -> classification.affectsF1() && classification.affectsJ1()));
     }
 }

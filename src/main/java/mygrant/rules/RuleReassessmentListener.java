@@ -52,9 +52,8 @@ public class RuleReassessmentListener {
         int failed = 0;
         for (String email : users) {
             try {
-                recommendations.getOrGenerate(email, target, () -> assessments.assess(email,
-                        PolicyAssessmentInputs.document(target), target.getAgency(), target.getContent(),
-                        PolicyAssessmentInputs.classification(target)));
+                recommendations.getOrGenerate(email, target, () -> assessments.assess(email, target,
+                        PolicyAssessmentInputs.document(target), PolicyAssessmentInputs.classification(target)));
             } catch (RuntimeException failure) {
                 failed++;
                 LOGGER.warn("Could not reassess a user for rule {} change {}", event.ruleId(), event.historyId(),

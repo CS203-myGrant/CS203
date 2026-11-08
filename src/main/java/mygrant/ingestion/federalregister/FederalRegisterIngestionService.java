@@ -23,6 +23,7 @@ import mygrant.ingestion.dto.IngestionResponse;
 import mygrant.impact.ProfileImpactAssessment;
 import mygrant.impact.ProfileImpactAssessmentService;
 import mygrant.policies.PolicyStatus;
+import mygrant.policies.PolicyAssessmentInputs;
 import mygrant.policies.SourceType;
 import mygrant.rules.RuleIdentifiers;
 
@@ -135,7 +136,8 @@ public class FederalRegisterIngestionService
                 RuleIdentifiers.fromFederalRegisterApi(document.docketIds(), document.regulationIdNumbers()));
 
         ProfileImpactAssessment impactAssessment = request.assessImpact()
-                ? impactAssessmentService.assess(request.userEmail(), document, prepared.agency(), content, classification)
+                ? impactAssessmentService.assess(request.userEmail(), document, prepared.agency(), content,
+                        classification, PolicyAssessmentInputs.restrictionContext(restrictions))
                 : null;
 
         return new FederalRegisterIngestionResponse(
