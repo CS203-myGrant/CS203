@@ -3,11 +3,9 @@
 The existing `ImpactJudgeService` evaluates CS203-13 impact assessments and
 CS203-12 RAG / policy follow-up answers. Existing recommendation revisions and
 question history retain the returned `JudgeEvaluation`; no second generation or
-citation schema was introduced. The parent story requires outputs to be checked
-for faithfulness and relevance before display, with quality metrics available
-to admins. Unapproved or unavailable evaluations yield a safe notice rather than
-the raw candidate. Admin metrics are exposed through the existing authenticated
-REST API and Swagger UI.
+citation schema was introduced. This implementation follows the supplied
+CS203-88 acceptance criteria for citation validation, evaluation scoring,
+versioned persistence and deterministic testing.
 
 ## Judge configuration and rubric
 
@@ -107,29 +105,3 @@ With an isolated PostgreSQL database and a dummy test-only JWT key:
 ```
 
 No live AI-provider calls were made by these tests.
-
-## Admin quality metrics
-
-`GET /api/v1/admin/ai-evaluations/metrics` requires an ADMIN JWT. Applicants,
-managers and anonymous callers cannot read metrics. Use Swagger UI with an admin
-login to inspect the report, or call the endpoint directly.
-
-Optional `since` and `until` accept ISO-8601 timestamps. Defaults cover the last
-30 days; since is inclusive and until exclusive. Invalid timestamps or since >=
-until return 400. The response contains overall metrics and groups by output
-kind (ANSWER/ASSESSMENT), actual configured judge model and prompt version.
-
-Each summary returns total attempts, approved/rejected/unavailable counts,
-scored count, averageFaithfulness, averageRelevance, citationsChecked,
-invalidCitations and approvalRate. Approval rate is approved / all attempts,
-including unavailable judges. Averages exclude null scores (invalid citations and
-judge failures); these attempts remain in total and outcome counts. Empty sets
-have zero counts and null averages/rate. Attempts, including repeats of the same
-candidate, are counted individually; these are not unique-user or unique-answer
-counts. Groups help distinguish model/prompt changes. No candidate, question,
-profile or judge-rationale text is returned. This is a backend reporting endpoint;
-no frontend dashboard has been added.
-
-`EvaluationMetricsControllerSecurityTest` tests admin access and denied access for
-other roles. PostgreSQL integration tests exercise grouped aggregates, score/rate
-denominators, unavailable/rejected outcomes, empty populations and time boundaries.
