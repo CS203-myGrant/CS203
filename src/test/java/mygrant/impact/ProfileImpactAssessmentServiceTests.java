@@ -30,6 +30,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import mygrant.ingestion.classification.VisaClassification;
 import mygrant.ingestion.federalregister.FederalRegisterDocument;
+import mygrant.policies.PolicyDocument;
+import mygrant.policies.PolicyCountryRestriction;
+import mygrant.policies.PolicyStatus;
+import mygrant.policies.RestrictionCategory;
+import mygrant.policies.RestrictionScope;
+import mygrant.policies.SourceType;
+import mygrant.policies.PolicyAssessmentInputs;
 import mygrant.user.User;
 import mygrant.user.UserProfile;
 import mygrant.user.UserProfileRepository;
@@ -40,6 +47,36 @@ import mygrant.user.ProfileFieldDefinition;
 
 
 class ProfileImpactAssessmentServiceTests {
+
+    @Test
+    void assessmentReceivesStructuredVisaAndNationalityRulesWithSourceAndExceptions() throws Exception {
+        Harness harness = harness();
+        String candidate = harness.candidateJson("Combined policy assessment");
+        String response = new ObjectMapper().writeValueAsString(
+                Map.of("choices", List.of(Map.of("message", Map.of("content", candidate)))));
+        PolicyDocument policy = new PolicyDocument("2025-10669", "Entry proclamation", "State", "F-1",
+                PolicyStatus.FINAL, SourceType.PRIMARY, LocalDate.parse("2025-06-10"),
+                LocalDate.parse("2025-06-09"), "https://example.test/proclamation", "source text", "hash",
+                java.util.Set.of("AF"), java.util.Set.of(RestrictionCategory.ENTRY_RESTRICTION),
+                List.of("https://example.test/proclamation"), List.of(new PolicyCountryRestriction("AF",
+                        RestrictionScope.FULL, "https://example.test/proclamation#section-2",
+                        "Exceptions for dual nationals and specified visa holders.")));
+        when(harness.judge.evaluate(anyString(), any())).thenReturn(
+                new JudgeEvaluation(JudgeEvaluation.Verdict.YES, "Supported", "claude-test"));
+
+        harness.server.expect(requestTo("https://api.openai.test/chat/completions"))
+                .andExpect(content().string(containsString("affectedCountries")))
+                .andExpect(content().string(containsString("country=AF, scope=FULL")))
+                .andExpect(content().string(containsString("section-2")))
+                .andExpect(content().string(containsString("dual nationals")))
+                .andRespond(withSuccess(response, MediaType.APPLICATION_JSON));
+
+        var assessment = harness.service.assess("student@example.com", policy,
+                PolicyAssessmentInputs.document(policy), PolicyAssessmentInputs.classification(policy));
+
+        assertThat(assessment.urgency()).isEqualTo(ImpactUrgency.HIGH);
+        harness.server.verify();
+    }
 
     @Test
     void reportsProviderFailureWithoutExposingProviderResponse() {

@@ -28,6 +28,9 @@ import mygrant.policies.PolicyDocumentRepository;
 import mygrant.policies.PolicyStatus;
 import mygrant.policies.PolicyRecommendationStore;
 import mygrant.policies.SourceType;
+import mygrant.policies.RestrictionCategory;
+import mygrant.policies.RestrictionScope;
+import mygrant.policies.PolicyCountryRestriction;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
 import mygrant.user.UserRole;
@@ -65,7 +68,9 @@ class ImpactFeedIntegrationTest {
                 .andExpect(jsonPath("$.content[0].id").value(low));
         mvc.perform(get("/api/v1/impacts/" + critical).header("Authorization", token(owner)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.summary").value("Urgent review"))
-                .andExpect(jsonPath("$.citations[0].url").value(policy.getSourceUrl()))
+                .andExpect(jsonPath("$.citations[*].url").value(org.hamcrest.Matchers.containsInAnyOrder(
+                        policy.getSourceUrl(), "https://www.whitehouse.gov/proclamation",
+                        "https://www.whitehouse.gov/proclamation#section-2")))
                 .andExpect(jsonPath("$.actionItems[0].text").value("Check the official rule"));
         mvc.perform(get("/api/v1/impacts/" + pending).header("Authorization", token(owner)))
                 .andExpect(status().isNotFound());
@@ -163,6 +168,47 @@ class ImpactFeedIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].id").value(original));
     }
 
+    @Test
+    void consolidatedViewCombinesOverlappingPolicyAssessmentsButKeepsAtomicBreakdown() throws Exception {
+        User owner = account(UserRole.APPLICANT);
+        owner.setVisaType("H-1B");
+        owner = users.saveAndFlush(owner);
+        String proclamation10949 = "https://www.federalregister.gov/documents/2025/06/10/2025-10669/"
+                + "restricting-the-entry-of-foreign-nationals-to-protect-the-united-states-from-foreign";
+        String proclamation10973 = "https://www.federalregister.gov/documents/2025/09/24/2025-18601/"
+                + "restriction-on-entry-of-certain-nonimmigrant-workers";
+        PolicyDocument nationalityPolicy = policies.saveAndFlush(new PolicyDocument(
+                "2025-10669-" + UUID.randomUUID(), "Proclamation 10949 nationality restriction", "State",
+                "ENTRY_RESTRICTION", PolicyStatus.FINAL, SourceType.PRIMARY, LocalDate.of(2025, 6, 10),
+                LocalDate.of(2025, 6, 9), proclamation10949, "Historical source fixture", "hash",
+                java.util.Set.of("AF"), java.util.Set.of(RestrictionCategory.ENTRY_RESTRICTION),
+                List.of(proclamation10949), List.of(new PolicyCountryRestriction("AF", RestrictionScope.FULL,
+                        proclamation10949 + "#section-2", "Exceptions for specified travelers."))));
+        PolicyDocument visaPolicy = policies.saveAndFlush(new PolicyDocument(
+                "2025-18601-" + UUID.randomUUID(), "Proclamation 10973 H-1B entry restriction", "Executive Office",
+                "H-1B", PolicyStatus.FINAL, SourceType.PRIMARY, LocalDate.of(2025, 9, 24),
+                LocalDate.of(2025, 9, 21), proclamation10973, "Historical source fixture", "hash",
+                java.util.Set.of(), java.util.Set.of(RestrictionCategory.WORK_AUTHORIZATION),
+                List.of(proclamation10973), List.of()));
+        insert(owner, visaPolicy, "CRITICAL", "PUBLISHED", approved(ImpactUrgency.HIGH, "H-1B impact"));
+        insert(owner, nationalityPolicy, "MEDIUM", "PUBLISHED", new ProfileImpactAssessment(
+                ImpactUrgency.MEDIUM, 60, "Nationality impact", List.of("Country rule applies"),
+                List.of("Check the source"), List.of("countryOfCitizenship"), true, "OpenAI", "test",
+                new JudgeEvaluation(JudgeEvaluation.Verdict.YES, "Supported with uncertainty", "test"), 1));
+
+        mvc.perform(get("/api/v1/impacts/consolidated").header("Authorization", token(owner)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.netStatus").value("HIGH"))
+                .andExpect(jsonPath("$.breakdown.length()").value(2))
+                .andExpect(jsonPath("$.citations.length()").value(3))
+                .andExpect(jsonPath("$.citations[*].url").value(org.hamcrest.Matchers.containsInAnyOrder(
+                        proclamation10949, proclamation10949 + "#section-2", proclamation10973)))
+                .andExpect(jsonPath("$.uncertaintyNotes[0]")
+                        .value("Proclamation 10949 nationality restriction: countryOfCitizenship"))
+                .andExpect(jsonPath("$.uncertaintyNotes[1]").value(
+                        "Proclamation 10949 nationality restriction: human review is recommended for this assessment."));
+    }
+
     private User account(UserRole role) {
         User user = new User("Impact test", "impact-" + UUID.randomUUID() + "@example.org",
                 "unused", "F-1", null, null);
@@ -183,7 +229,11 @@ class ImpactFeedIntegrationTest {
         return policies.saveAndFlush(new PolicyDocument("impact-" + UUID.randomUUID(),
                 "Student status rule", "DHS", "F-1", PolicyStatus.FINAL, SourceType.PRIMARY,
                 LocalDate.of(2026, 10, 1), null, "https://www.federalregister.gov/example",
-                "Official source text", "hash"));
+                "Official source text", "hash", java.util.Set.of("AF"),
+                java.util.Set.of(RestrictionCategory.ENTRY_RESTRICTION),
+                List.of("https://www.whitehouse.gov/proclamation"), List.of(new PolicyCountryRestriction("AF",
+                        RestrictionScope.FULL, "https://www.whitehouse.gov/proclamation#section-2",
+                        "Exceptions apply to permanent residents and specified visa holders."))));
     }
 
     /** Saves the row directly, then generates its checklist as the two publish points do. */

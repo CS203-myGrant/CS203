@@ -32,14 +32,39 @@ public class EntryRestrictionExtractor {
                     || combined.toLowerCase(Locale.ROOT).contains("suspend the entry")
                     || combined.toLowerCase(Locale.ROOT).contains("restricting and limiting the entry"));
         if (!proclamation) return new Extraction(false, false, false, List.of(), List.of(), List.of(), List.of());
+        String bodyText = content == null ? "" : content;
+        // A visa-program proclamation (for example, the H-1B worker proclamation) is not a
+        // nationality extraction failure. Leave it to the visa classifier unless it also
+        // contains country-list restriction language; otherwise it would be misrouted to review.
+        boolean visaSpecific = Pattern.compile("(?i)\\b(?:H[-–]1B|F[-–]1|J[-–]1|specialty occupation)\\b")
+                .matcher(combined).find();
+        boolean countryListCue = COUNTRY_LIST_CUE.matcher(bodyText).find();
+        boolean countryPhrase = COUNTRY.matcher(bodyText).find();
+        if (visaSpecific && !countryListCue && !countryPhrase) {
+            return new Extraction(false, false, false, List.of(), List.of(), List.of(), List.of());
+        }
         List<PolicyCountryRestriction> rules = new ArrayList<>();
         List<String> references = new ArrayList<>();
         boolean specialDocumentHolderRule = PA_TRAVEL_DOCUMENT.matcher(combined).find();
         boolean unparsedRestrictionSection = false;
         String exemption = "";
-        Matcher ex = EXEMPTION.matcher(content == null ? "" : content);
+        Matcher ex = EXEMPTION.matcher(bodyText);
         if (ex.find()) exemption = ex.group().strip();
-        Matcher sections = SECTION.matcher(content == null ? "" : content);
+        if (exemption.isBlank()) {
+            Matcher starts = Pattern.compile("(?im)^\\s*(?:Section|Sec\\.)\\s+\\d+\\b").matcher(bodyText);
+            List<Integer> offsets = new ArrayList<>();
+            while (starts.find()) offsets.add(starts.start());
+            for (int i = 0; i < offsets.size(); i++) {
+                int start = offsets.get(i);
+                int end = i + 1 < offsets.size() ? offsets.get(i + 1) : bodyText.length();
+                String sectionText = bodyText.substring(start, end).strip();
+                if (Pattern.compile("(?i)\\b(?:exceptions?|exemptions?)\\b").matcher(sectionText).find()) {
+                    exemption = sectionText;
+                    break;
+                }
+            }
+        }
+        Matcher sections = SECTION.matcher(bodyText);
         while (sections.find()) {
             String heading = sections.group(1);
             String body = sections.group(2);

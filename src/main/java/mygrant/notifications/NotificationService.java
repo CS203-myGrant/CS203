@@ -140,6 +140,10 @@ public class NotificationService {
         affected = affected.stream()
                 .filter(user -> testClock.isPublished(event.publicationDate(), user.getId()))
                 .toList();
+        // The inbox is the shared delivery source for live and email notifications. A duplicate
+        // ingestion event must reuse that one row instead of creating another alert.
+        Set<Long> alreadyAlerted = notificationRepository.findUserIdsByPolicyId(event.policyId());
+        affected = affected.stream().filter(user -> !alreadyAlerted.contains(user.getId())).toList();
         String message = buildMessage(event);
         // The rules are visa-specific, so a policy covering several categories affects
         // different fields per reader. Read the policy text once for all of them.
