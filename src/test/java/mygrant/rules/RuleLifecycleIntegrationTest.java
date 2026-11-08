@@ -167,7 +167,7 @@ class RuleLifecycleIntegrationTest {
         stubFederalRegister(AC61_WITHDRAWAL, RuleFixtures.AC61_WITHDRAWAL_TITLE, "Rule", "Final rule; withdrawal.",
                 LocalDate.of(2021, 12, 22), null, "federal-register/" + AC61_WITHDRAWAL + ".txt", List.of(),
                 List.of("1615-AC61"));
-        when(assessments.assess(any(), any(), any(), any(), any())).thenAnswer(invocation -> {
+        when(assessments.assess(any(), any(), any(), any())).thenAnswer(invocation -> {
             assessmentThreads.add(Thread.currentThread().getName());
             return new ProfileImpactAssessment(ImpactUrgency.MEDIUM, 80, "Your admission period becomes fixed.",
                     List.of("You hold F-1 status."), List.of("Check the end date on your I-94"), List.of(), false,
@@ -218,12 +218,12 @@ class RuleLifecycleIntegrationTest {
         verify(streams, timeout(5_000).times(2)).publish(eq(student.getId()), any());
 
         // Exactly one reassessment for the change: the reader, on the final rule, in the background.
-        verify(assessments, timeout(10_000)).assess(eq(reader.getEmail()), document(FINAL_RULE), any(), any(), any());
-        verify(assessments, after(500).times(1)).assess(any(), any(), any(), any(), any());
+        verify(assessments, timeout(10_000)).assess(eq(reader.getEmail()), any(), document(FINAL_RULE), any());
+        verify(assessments, after(500).times(1)).assess(any(), any(), any(), any());
         assertThat(assessmentThreads).singleElement().isNotEqualTo(Thread.currentThread().getName());
         // Through the gated store: the judge approved it, so it is published to the reader.
         await(() -> publishedAssessments(reader, finalRule) == 1);
-        verify(assessments, never()).assess(eq(student.getEmail()), any(), any(), any(), any());
+        verify(assessments, never()).assess(eq(student.getEmail()), any(), any(), any());
 
         // Each alert is emailed at most once, however often the email jobs run.
         Instant now = Instant.now();
@@ -241,13 +241,13 @@ class RuleLifecycleIntegrationTest {
         assertThat(store.history(ruleId)).hasSize(history);
         assertThat(events.stream(PolicyChangedEvent.class)).isEmpty();
         assertThat(messages(student)).hasSize(2);
-        verify(assessments, after(500).times(1)).assess(any(), any(), any(), any(), any());
+        verify(assessments, after(500).times(1)).assess(any(), any(), any(), any());
 
         // The synthetic delay notice moves the effective date.
         long delay = importDocument(DATE_MOVE);
         assertThat(alertsFor(student, delay)).containsExactly(CHANGE_PREFIX
                 + "effective date moved from 15 Sep 2026 to 1 Nov 2026: " + RuleFixtures.TITLE);
-        verify(assessments, timeout(10_000)).assess(eq(reader.getEmail()), document(DATE_MOVE), any(), any(), any());
+        verify(assessments, timeout(10_000)).assess(eq(reader.getEmail()), any(), document(DATE_MOVE), any());
 
         // Undisputed, the rule takes effect on the moved date.
         clock.setUserDate(student.getId(), LocalDate.of(2026, 11, 2));

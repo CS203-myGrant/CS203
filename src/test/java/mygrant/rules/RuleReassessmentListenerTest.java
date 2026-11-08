@@ -59,8 +59,8 @@ class RuleReassessmentListenerTest {
         generate.getValue().get();
         ArgumentCaptor<FederalRegisterDocument> document = ArgumentCaptor.forClass(FederalRegisterDocument.class);
         ArgumentCaptor<VisaClassification> classification = ArgumentCaptor.forClass(VisaClassification.class);
-        verify(assessments).assess(eq("second@example.com"), document.capture(), eq("Homeland Security Department"),
-                eq("Final rule text."), classification.capture());
+        verify(assessments).assess(eq("second@example.com"), same(finalRule), document.capture(),
+                classification.capture());
         assertThat(document.getValue().documentNumber()).isEqualTo("2026-14439");
         assertThat(classification.getValue().visaTypes()).containsExactly("F-1", "J-1");
     }
@@ -72,7 +72,8 @@ class RuleReassessmentListenerTest {
         listener.onPolicyChanged(change(5L));
 
         verifyNoInteractions(scope, store);
-        verify(assessments, never()).assess(any(), any(), any(), any(), any());
+        verify(assessments, never()).assess(any(), any(PolicyDocument.class), any(FederalRegisterDocument.class),
+                any(VisaClassification.class));
     }
 
     private static PolicyChangedEvent change(long sourceId) {

@@ -191,6 +191,8 @@ class ImpactFeedIntegrationTest {
                 java.util.Set.of(), java.util.Set.of(RestrictionCategory.WORK_AUTHORIZATION),
                 List.of(proclamation10973), List.of()));
         insert(owner, visaPolicy, "CRITICAL", "PUBLISHED", approved(ImpactUrgency.HIGH, "H-1B impact"));
+        // A newer draft for the same policy must not replace the current published assessment.
+        insert(owner, visaPolicy, "HIGH", "PENDING_REVIEW", pending(ImpactUrgency.HIGH, "Unreviewed draft"));
         insert(owner, nationalityPolicy, "MEDIUM", "PUBLISHED", new ProfileImpactAssessment(
                 ImpactUrgency.MEDIUM, 60, "Nationality impact", List.of("Country rule applies"),
                 List.of("Check the source"), List.of("countryOfCitizenship"), true, "OpenAI", "test",
@@ -200,6 +202,8 @@ class ImpactFeedIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.netStatus").value("HIGH"))
                 .andExpect(jsonPath("$.breakdown.length()").value(2))
+                .andExpect(jsonPath("$.breakdown[*].summary")
+                        .value(org.hamcrest.Matchers.containsInAnyOrder("H-1B impact", "Nationality impact")))
                 .andExpect(jsonPath("$.citations.length()").value(3))
                 .andExpect(jsonPath("$.citations[*].url").value(org.hamcrest.Matchers.containsInAnyOrder(
                         proclamation10949, proclamation10949 + "#section-2", proclamation10973)))
@@ -207,6 +211,45 @@ class ImpactFeedIntegrationTest {
                         .value("Proclamation 10949 nationality restriction: countryOfCitizenship"))
                 .andExpect(jsonPath("$.uncertaintyNotes[1]").value(
                         "Proclamation 10949 nationality restriction: human review is recommended for this assessment."));
+    }
+
+    @Test
+    void consolidatedViewIsOwnerScopedAndExcludesArchivedAssessments() throws Exception {
+        User owner = account(UserRole.APPLICANT);
+        User stranger = account(UserRole.APPLICANT);
+        User withoutAssessments = account(UserRole.APPLICANT);
+        PolicyDocument sharedPolicy = policy();
+
+        long archivedOlderAssessment = insert(owner, sharedPolicy, "LOW", "PUBLISHED",
+                approved(ImpactUrgency.LOW, "Archived older assessment"));
+        insert(owner, sharedPolicy, "HIGH", "PUBLISHED",
+                approved(ImpactUrgency.HIGH, "Owner current assessment"));
+        insert(stranger, sharedPolicy, "MEDIUM", "PUBLISHED",
+                approved(ImpactUrgency.MEDIUM, "Stranger private assessment"));
+        jdbc.update("UPDATE policy_recommendations SET archived_at = now() WHERE id = ?", archivedOlderAssessment);
+
+        PolicyDocument archivedOnlyPolicy = policy();
+        long archivedOnlyAssessment = insert(owner, archivedOnlyPolicy, "MEDIUM", "PUBLISHED",
+                approved(ImpactUrgency.MEDIUM, "Archived only assessment"));
+        jdbc.update("UPDATE policy_recommendations SET archived_at = now() WHERE id = ?", archivedOnlyAssessment);
+
+        mvc.perform(get("/api/v1/impacts/consolidated").header("Authorization", token(owner)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.breakdown.length()").value(1))
+                .andExpect(jsonPath("$.breakdown[0].summary").value("Owner current assessment"))
+                .andExpect(jsonPath("$.netStatus").value("HIGH"));
+
+        mvc.perform(get("/api/v1/impacts/consolidated").header("Authorization", token(stranger)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.breakdown.length()").value(1))
+                .andExpect(jsonPath("$.breakdown[0].summary").value("Stranger private assessment"));
+
+        mvc.perform(get("/api/v1/impacts/consolidated").header("Authorization", token(withoutAssessments)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.netStatus").value("NOT_APPLICABLE"))
+                .andExpect(jsonPath("$.breakdown").isEmpty())
+                .andExpect(jsonPath("$.citations").isEmpty())
+                .andExpect(jsonPath("$.uncertaintyNotes").isEmpty());
     }
 
     private User account(UserRole role) {
