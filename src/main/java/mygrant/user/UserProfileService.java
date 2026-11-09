@@ -7,6 +7,8 @@ import java.time.Instant;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
 
 import mygrant.common.ProfileValidationException;
@@ -22,14 +24,23 @@ public class UserProfileService {
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
     private final ProfileFieldConsentRepository consentRepository;
+    private final ApplicationEventPublisher events;
 
+    @Autowired
     public UserProfileService(
             UserRepository userRepository,
             UserProfileRepository userProfileRepository,
-            ProfileFieldConsentRepository consentRepository) {
+            ProfileFieldConsentRepository consentRepository,
+            ApplicationEventPublisher events) {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
         this.consentRepository = consentRepository;
+        this.events = events;
+    }
+
+    public UserProfileService(UserRepository users, UserProfileRepository profiles,
+            ProfileFieldConsentRepository consents) {
+        this(users, profiles, consents, null);
     }
 
     @Transactional(readOnly = true)
@@ -72,6 +83,7 @@ public class UserProfileService {
         userRepository.save(user);
 
         UserProfile savedProfile = userProfileRepository.save(profile);
+        if (events != null) events.publishEvent(new mygrant.forecast.ForecastRiskService.ProfileSaved(user.getId()));
         return response(savedProfile);
     }
 
@@ -149,6 +161,12 @@ public class UserProfileService {
         if (request.i140FilingDate() != null) {
             profile.setI140FilingDate(request.i140FilingDate());
         }
+        if (request.i765FilingDate() != null) {
+            profile.setI765FilingDate(request.i765FilingDate());
+        }
+        if (request.i539FilingDate() != null) {
+            profile.setI539FilingDate(request.i539FilingDate());
+        }
 
         if (request.priorityDate() != null) {
             profile.setPriorityDate(request.priorityDate());
@@ -202,6 +220,8 @@ public class UserProfileService {
             case VISA_EXPIRY_DATE -> profile.setVisaExpiryDate(null);
             case OPT_START_DATE -> profile.setOptStartDate(null);
             case I140_FILING_DATE -> profile.setI140FilingDate(null);
+            case I765_FILING_DATE -> profile.setI765FilingDate(null);
+            case I539_FILING_DATE -> profile.setI539FilingDate(null);
             case PRIORITY_DATE -> profile.setPriorityDate(null);
             case ACADEMIC_LEVEL -> profile.setAcademicLevel(null);
             case PROGRAM_END_DATE -> profile.setProgramEndDate(null);
@@ -259,6 +279,8 @@ public class UserProfileService {
             case VISA_EXPIRY_DATE -> profile.getVisaExpiryDate() != null;
             case OPT_START_DATE -> profile.getOptStartDate() != null;
             case I140_FILING_DATE -> profile.getI140FilingDate() != null;
+            case I765_FILING_DATE -> profile.getI765FilingDate() != null;
+            case I539_FILING_DATE -> profile.getI539FilingDate() != null;
             case PRIORITY_DATE -> profile.getPriorityDate() != null;
             case ACADEMIC_LEVEL -> isPresent(profile.getAcademicLevel());
             case PROGRAM_END_DATE -> profile.getProgramEndDate() != null;

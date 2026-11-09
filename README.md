@@ -756,6 +756,58 @@ were fetched automatically. An admin must verify the copied result and category
 against USCIS before importing it. The shared health endpoint describes imports,
 not the freshness of a live feed; scheduling and health UI belong to CS203-78.
 
+### USCIS processing forecast (CS203-89)
+
+Applicants can save `i765FilingDate` or `i539FilingDate` in their existing profile.
+The signed-in user's `GET /api/v1/forecast/processing-times?formType=I-765`
+returns a decision-window projection from up to 12 latest distinct observation dates
+for one exact form, category and office. If multiple categories or offices exist,
+the endpoint returns `UNAVAILABLE` with `AMBIGUOUS_SERIES` and `availableSeries`.
+The user can choose the matching series on the dashboard; the app saves it with
+`PUT /api/v1/forecast/processing-times/selection` and reuses it for later
+forecasts and alerts. Callers can also supply exact `formCategory` and `office`
+query parameters. It never averages unlike series. I-140 uses the existing
+`i140FilingDate` if matching snapshots exist.
+
+The method converts months to days with 30.44 days per month. It takes the median
+of the selected *published 80th-percentile durations* as a central source figure.
+Its uncertainty margin is 7 days plus twice the median absolute deviation of those
+durations, half any rise from oldest to newest, and 7 days for each observation
+below five. The projected upper date is filing date plus the central source figure
+and margin; the start of the displayed range subtracts the margin from the
+published median if present, or from the 80th-percentile figure otherwise. At
+least two dated snapshots are required. This band is **uncalibrated**: it is not
+an 80% probability interval. `medianDecisionDate` stays null unless at least two
+snapshots contain an actual published case median. The response includes the
+snapshot dates, method, and reasons the margin widened. It returns `UNAVAILABLE`
+and null dates for missing or future filing dates, unsupported forms, no history,
+insufficient history, or ambiguous series. Individual case decisions can differ.
+
+Only I-765 is compared with `optStartDate`; only I-539 is compared with
+`visaExpiryDate`. If the projected upper date is later, an in-app timing alert is
+saved in `forecast_deadline_alerts`, returned only to its owner by
+`GET /api/v1/forecast/deadline-alerts`, and shown in the dashboard timeline and
+Notifications section. The key
+`(user_id, form_type, deadline_type)` prevents duplicates; a changed forecast
+updates that row, and a safe or unavailable forecast clears it. Evaluation runs
+after a profile save, series selection, new USCIS snapshot import, and daily at 02:15 server
+time. Loading or refreshing the dashboard only reads the forecast and cannot
+create alerts. Account purge removes these alerts.
+
+For a **synthetic local demo**, sign in as an admin and import
+`src/test/resources/uscis/saved-i765-result.json` through the saved-result API.
+Copy that file and change only `observedOn` from `2026-09-15` to `2026-09-22`,
+then import the copy. Sign in as an applicant, save `i765FilingDate` and an
+`optStartDate` earlier than the projected upper date in the profile, then call:
+
+```bash
+curl -H "Authorization: Bearer $USER_TOKEN" \
+  'http://localhost:8080/api/v1/forecast/processing-times?formType=I-765'
+```
+
+Open **Impact dashboard → USCIS processing timeline** to see the same window and
+timing warning. This demo data is a saved sample; it is not a live USCIS forecast.
+
 ### Secondary news RSS
 
 Admins can pull the selected [Guardian US immigration RSS feed](https://www.theguardian.com/us-news/usimmigration/rss)

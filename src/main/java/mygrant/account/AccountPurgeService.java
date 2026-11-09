@@ -3,6 +3,8 @@ package mygrant.account;
 import java.time.Instant;
 
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 import mygrant.actions.ActionItemService;
@@ -33,7 +35,9 @@ public class AccountPurgeService {
     private final EmailPreferenceRepository emailPreferenceRepository;
     private final EmailDeliveryRepository emailDeliveryRepository;
     private final ActionItemService actionItemService;
+    private final JdbcTemplate forecastJdbc;
 
+    @Autowired
     public AccountPurgeService(UserRepository userRepository,
             UserProfileRepository userProfileRepository,
             ImmigrationDocumentRepository immigrationDocumentRepository,
@@ -45,7 +49,8 @@ public class AccountPurgeService {
             FeedbackMessageRepository feedbackMessageRepository,
             EmailPreferenceRepository emailPreferenceRepository,
             EmailDeliveryRepository emailDeliveryRepository,
-            ActionItemService actionItemService) {
+            ActionItemService actionItemService,
+            JdbcTemplate forecastJdbc) {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
         this.immigrationDocumentRepository = immigrationDocumentRepository;
@@ -58,6 +63,17 @@ public class AccountPurgeService {
         this.emailPreferenceRepository = emailPreferenceRepository;
         this.emailDeliveryRepository = emailDeliveryRepository;
         this.actionItemService = actionItemService;
+        this.forecastJdbc = forecastJdbc;
+    }
+
+    public AccountPurgeService(UserRepository users, UserProfileRepository profiles,
+            ImmigrationDocumentRepository documents, NotificationRepository notifications,
+            AccountDeletionRequestRepository requests, AccountDeletionAuditRepository audit,
+            NotificationStreamRegistry streams, FeedbackConversationRepository conversations,
+            FeedbackMessageRepository messages, EmailPreferenceRepository preferences,
+            EmailDeliveryRepository deliveries, ActionItemService actions) {
+        this(users, profiles, documents, notifications, requests, audit, streams, conversations,
+                messages, preferences, deliveries, actions, null);
     }
 
     /**
@@ -79,6 +95,10 @@ public class AccountPurgeService {
         emailPreferenceRepository.deleteById(userId);
         // Before the assessments they were generated from.
         actionItemService.deleteAllByUserId(userId);
+        if (forecastJdbc != null) {
+            forecastJdbc.update("DELETE FROM forecast_deadline_alerts WHERE user_id=?", userId);
+            forecastJdbc.update("DELETE FROM forecast_series_selections WHERE user_id=?", userId);
+        }
         userProfileRepository.deleteRecommendationsByUserId(userId);
         userProfileRepository.deleteApplicationProgressByUserId(userId);
         userProfileRepository.deleteQuestionHistoryByUserId(userId);
