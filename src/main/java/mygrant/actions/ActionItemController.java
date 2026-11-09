@@ -1,6 +1,7 @@
 package mygrant.actions;
 
 import java.security.Principal;
+import java.time.LocalDate;
 import java.util.List;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 /** The signed-in user's checklist of steps from their published impact assessments. */
 @RestController
@@ -64,5 +66,17 @@ public class ActionItemController {
         return service.updateStatus(principal.getName(), id, request.status());
     }
 
+    @PatchMapping("/{id}/details")
+    @Operation(summary = "Edit your checklist item's deadline and details",
+            description = "Only the signed-in owner can edit an item. This personalises the checklist item; it does not alter the source policy or assessment.")
+    @ApiResponse(responseCode = "200", description = "The saved checklist item")
+    @ApiResponse(responseCode = "403", description = "The item belongs to another user, or onboarding is unfinished")
+    @ApiResponse(responseCode = "404", description = "No such visible item")
+    public ActionItemView updateDetails(Principal principal, @PathVariable long id,
+            @Valid @RequestBody DetailsRequest request) {
+        return service.updateDetails(principal.getName(), id, request.deadline(), request.description());
+    }
+
     public record StatusRequest(@NotNull ActionStatus status) {}
+    public record DetailsRequest(LocalDate deadline, @Size(max = 4000) String description) {}
 }
