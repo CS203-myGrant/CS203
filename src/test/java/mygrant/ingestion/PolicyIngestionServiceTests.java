@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
+import java.util.ArrayList;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -81,6 +82,35 @@ class PolicyIngestionServiceTests {
                 && indexed.policyId().equals(1L) && indexed.visaTypes().equals(java.util.List.of("F-1"))));
         verify(ruleTracker).track(argThat(policy -> policy.getId().equals(1L)), eq(java.util.Set.of()),
                 eq(RecordedBy.INGESTION), eq(DocumentOrigin.AUTOMATIC));
+    }
+
+    @Test
+    void aPassageAfterSixThousandCharactersIsInSearchableChunks() {
+        IngestPolicyRequest base = request();
+        String tail = "Unique exemption for students after the long preamble.";
+        String content = "Federal Register policy introduction. ".repeat(240) + tail;
+        IngestPolicyRequest request = new IngestPolicyRequest(base.externalId(), base.title(),
+                base.agency(), base.visaType(), base.status(), base.sourceType(),
+                base.publicationDate(), base.effectiveDate(), base.sourceUrl(), content);
+        when(repository.findByExternalId(request.externalId())).thenReturn(Optional.empty());
+        when(repository.save(any(PolicyDocument.class))).thenAnswer(invocation -> {
+            PolicyDocument policy = invocation.getArgument(0);
+            ReflectionTestUtils.setField(policy, "id", 1L);
+            return policy;
+        });
+        var indexed = new ArrayList<org.springframework.ai.document.Document>();
+        org.mockito.Mockito.doAnswer(invocation -> {
+            indexed.addAll(invocation.getArgument(0));
+            return null;
+        }).when(vectorStore).add(any());
+
+        new PolicyIngestionService(repository, vectorStore, eventPublisher, ruleTracker).ingest(request);
+
+        assertThat(content.indexOf(tail)).isGreaterThan(6_000);
+        assertThat(indexed).anySatisfy(chunk -> {
+            assertThat(chunk.getText()).contains(tail);
+            assertThat(chunk.getMetadata()).containsEntry("externalId", base.externalId());
+        });
     }
 
     @Test

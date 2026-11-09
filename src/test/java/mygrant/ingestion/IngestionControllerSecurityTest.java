@@ -58,6 +58,9 @@ class IngestionControllerSecurityTest {
     private EmbeddingRebuildService embeddingRebuildService;
 
     @MockBean
+    private FederalRegisterReindexService federalRegisterReindexService;
+
+    @MockBean
     private JwtService jwtService;
 
     @MockBean
@@ -142,6 +145,23 @@ class IngestionControllerSecurityTest {
                         .header("Authorization", "Bearer token"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.chunksReembedded").value(12));
+    }
+
+    @Test
+    void onlyAdminCanReindexSavedFederalRegisterText() throws Exception {
+        stubToken(UserRole.APPLICANT);
+        mockMvc.perform(post("/api/v1/ingestion/federal-register/reindex")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isForbidden());
+
+        stubToken(UserRole.ADMIN);
+        when(federalRegisterReindexService.rebuild())
+                .thenReturn(new FederalRegisterReindexService.ReindexResult(2, 24));
+        mockMvc.perform(post("/api/v1/ingestion/federal-register/reindex")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentsReindexed").value(2))
+                .andExpect(jsonPath("$.chunksIndexed").value(24));
     }
 
     @Test

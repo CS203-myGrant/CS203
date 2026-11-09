@@ -35,10 +35,6 @@ public class FederalRegisterIngestionService
                 FederalRegisterIngestionService.PreparedDocument,
                 FederalRegisterIngestionResponse> {
 
-    // Long Federal Register rules can exceed a million characters. Keep the
-    // original full text in PostgreSQL, but index the opening summary and
-    // effective-date discussion for the first demo's focused RAG queries.
-    private static final int MAX_INDEX_CHARACTERS = 6_000;
     private static final SourceIdentity SOURCE = new SourceIdentity("FEDERAL_REGISTER", SourceType.PRIMARY);
     private static final String PRESIDENTIAL_DOCUMENT = "Presidential Document";
     private static final EntryRestrictionExtractor.Extraction NO_RESTRICTIONS =
@@ -132,7 +128,7 @@ public class FederalRegisterIngestionService
                 content, new java.util.LinkedHashSet<>(restrictions.affectedCountries()),
                 new java.util.LinkedHashSet<>(restrictions.categories()), restrictions.sourceReferences(),
                 restrictions.restrictions(), restrictions.requiresReview(), restrictions.specialDocumentHolderRule()),
-                content.substring(0, Math.min(content.length(), MAX_INDEX_CHARACTERS)),
+                content,
                 RuleIdentifiers.fromFederalRegisterApi(document.docketIds(), document.regulationIdNumbers()));
 
         ProfileImpactAssessment impactAssessment = request.assessImpact()
