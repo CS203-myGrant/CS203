@@ -44,7 +44,7 @@ public class PolicyRecommendationStore {
     public ProfileImpactAssessment getOrGenerate(String email, PolicyDocument policy,
             Supplier<ProfileImpactAssessment> generate) {
         var user = users.findByEmail(email).orElseThrow(() -> new IllegalStateException("User not found"));
-        var profile = profiles.findById(user.getId()).orElseGet(() -> UserProfile.fromUser(user));
+        var profile = profiles.findById(user.getId()).orElseGet(() -> UserProfile.empty(user.getId()));
         String hash = fingerprint(profile, policy);
         // Serialize concurrent clicks, including requests handled by different app instances.
         jdbc.execute("SELECT pg_advisory_xact_lock(" + user.getId().intValue() + "," + policy.getId().intValue() + ")");
@@ -155,7 +155,7 @@ public class PolicyRecommendationStore {
     /** Reads only this user's current assessment; asking a question never regenerates it. */
     public java.util.Optional<ProfileImpactAssessment> findCurrent(String email, PolicyDocument policy) {
         var user = users.findByEmail(email).orElseThrow(() -> new IllegalStateException("User not found"));
-        var profile = profiles.findById(user.getId()).orElseGet(() -> UserProfile.fromUser(user));
+        var profile = profiles.findById(user.getId()).orElseGet(() -> UserProfile.empty(user.getId()));
         List<String> saved = jdbc.queryForList("""
                 SELECT assessment_json FROM policy_recommendations
                 WHERE user_id = ? AND policy_id = ? AND input_hash = ?

@@ -246,6 +246,8 @@
 
   /* ---------- PROFILE / FORMS ---------- */
   .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px 28px;background:var(--panel);border:1px solid var(--base-lighter);padding:28px;}
+  .anomaly-refresh{margin:16px 0 20px;}
+  .anomaly-actions{display:flex;flex-direction:column;align-items:flex-start;gap:12px;}
   .field{display:flex;flex-direction:column;gap:6px;}
   .field label{font-size:16px;color:var(--text);}
   .field:has(> input[required]) > label[for]::after,.field:has(> select[required]) > label[for]::after{content:" (*Required)";color:var(--urgent);}
@@ -434,32 +436,6 @@
       </div>
       <div class="cite">Federal Register · USCIS · DOL</div>
     </div>
-    <div class="login-right" id="legacy-role-login" style="display:none;">
-      <h1><span class="step-num">1</span>Choose how you'd like to look around</h1>
-      <p class="sub">This is a prototype — pick a role to see what that person sees. No password needed.</p>
-
-      <button class="role-option" onclick="enterApp('student')">
-        <div class="role-icon">S</div>
-        <div>
-          <div class="rt">Student / visa holder</div>
-          <div class="rd">Personal alerts, checklist and profile</div>
-        </div>
-      </button>
-      <button class="role-option" onclick="enterApp('manager')">
-        <div class="role-icon">M</div>
-        <div>
-          <div class="rt">Manager / employer</div>
-          <div class="rd">Team-wide impact and the review queue</div>
-        </div>
-      </button>
-      <button class="role-option" onclick="enterApp('admin')">
-        <div class="role-icon">A</div>
-        <div>
-          <div class="rt">Admin</div>
-          <div class="rd">Monitored sources and data health</div>
-        </div>
-      </button>
-    </div>
     <div class="login-right" id="account-login">
       <h1><span class="step-num">1</span>of 2 &nbsp;Account access</h1>
       <p class="sub">You’ll need an account to see alerts matched to your visa profile. You aren’t required to fill in every field, but we can match policies faster if you provide more information.</p>
@@ -527,6 +503,7 @@
     <div id="nav-admin" class="nav-group" style="display:none;">
       <div class="nav-label">System</div>
       <a class="nav-link" data-view="admin" onclick="goto('admin')">Monitored sources</a>
+      <a class="nav-link" data-view="anomalies" onclick="goto('anomalies')">Anomalies</a>
       <a class="nav-link" data-view="visaBulletin" onclick="goto('visaBulletin')">Visa Bulletin</a>
       <a class="nav-link" data-view="rag" onclick="goto('rag')">RAG inspector</a>
       <a class="nav-link" data-view="feedbackInbox" onclick="goto('feedbackInbox')">Feedback inbox<span class="nav-badge nav-feedback-badge" style="display:none;">0</span></a>
@@ -595,6 +572,7 @@
   </div>
 </div>
 
+<script src="/config.js"></script>
 <script>
 /* Shared by profile completion and editing. Native datalists allow both selection
    and type-ahead filtering without requiring a third-party UI dependency. */
@@ -603,60 +581,8 @@ function countryOptions(){
   return COUNTRIES.map(country=>`<option value="${escapeAttribute(country)}"></option>`).join('');
 }
 
-/* ---------------- MOCK DATA ---------------- */
-const policies = {
-  p1:{title:'Fixed time period replaces Duration of Status for F-1/J-1', agency:'DHS · Federal Register', status:'Final rule', citation:'8 CFR §214.1 · 90 Fed. Reg. 41221 · effective Sept 15, 2026'},
-  p2:{title:'Wage-weighted selection replaces the H-1B random lottery', agency:'USCIS', status:'Final rule', citation:'USCIS Policy Manual, Vol. 2, Part F · in effect for FY2027 cap season'},
-  p3:{title:'Higher prevailing wage floor proposed for H-1B and PERM', agency:'DOL', status:'Proposed rule', citation:'20 CFR §656 · NPRM 2026-03 · comment period open'},
-  p4:{title:'Entry restriction list expands to 39 countries', agency:'Presidential Proclamation', status:'In effect', citation:'Proclamation of Dec 16, 2025 · no family-of-citizen exception'},
-};
-
-let studentAlerts = [
-  {id:'a1', case:'DKT-2026-0113', policy:'p1', urgency:'high', confidence:'high',
-   title:'Booking a flight home could shorten your work authorization',
-   body:"You're on OPT and your profile shows travel after September 15, 2026. Under the new rule, returning after that date usually resets your admission to a fixed expiration instead of your open-ended Duration of Status — which can cut short the OPT window your job offer depends on.",
-   checklist:[
-     {text:'Confirm your return date against the Sept 15, 2026 effective date', done:false},
-     {text:'Ask your DSO whether re-entry resets your admission date', done:false},
-     {text:'Hold off on booking until your status is confirmed', done:false},
-   ]},
-  {id:'a2', case:'DKT-2026-0098', policy:'p4', urgency:'medium', confidence:'medium',
-   title:'Your nationality is now on the expanded restriction list',
-   body:"This list grew from 19 to 39 countries in December 2025 and no longer carves out an exception for close family of U.S. citizens. Renewing a visa stamp abroad now carries more risk of delay.",
-   checklist:[
-     {text:'Check the proclamation text for your specific country', done:false},
-     {text:'Talk to your DSO before renewing a visa stamp abroad', done:false},
-     {text:'Avoid non-essential international travel for now', done:false},
-   ]},
-  {id:'a3', case:'DKT-2026-0071', policy:'p1', urgency:'low', confidence:'high',
-   title:'File Form I-765 before March 18, 2027',
-   body:"Your program ends May 2027 and you haven't traveled since enrolling, so transition relief covers you. This is a reminder, not a warning.",
-   checklist:[
-     {text:'Mark March 18, 2027 on your calendar', done:false},
-     {text:'Gather OPT application documents ahead of time', done:false},
-   ]},
-];
-
-let queueItems = [
-  {id:'q1', case:'DKT-2026-0142', title:'Is the DOL wage floor final, or still proposed?', detail:'Federal Register still lists this as a proposed rule; a News API source reported it as finalised on March 30. The two sources disagree on status.', flag:'Conflicting sources'},
-  {id:'q2', case:'DKT-2026-0139', title:'Does transition relief cover a Feb 2027 program end date?', detail:'The rule text does not explicitly address programs ending in this window — confidence is below the auto-publish threshold.', flag:'Low confidence'},
-  {id:'q3', case:'DKT-2026-0136', title:'User-flagged: OPT checklist says I-765, employee says I-539', detail:'A user reported this impact summary may reference the wrong form for their situation.', flag:'User-reported'},
-];
-
-let sources = [
-  {name:'Federal Register API', status:'ok', last:'2 hours ago'},
-  {name:'USCIS processing-time data', status:'ok', last:'6 hours ago'},
-  {name:'DOL wage rule RSS feed', status:'broken', last:'3 days ago — layout changed'},
-  {name:'News API (secondary reporting)', status:'ok', last:'12 minutes ago'},
-];
-
-const configuredApiOrigin = window.MYGRANT_API_ORIGIN;
-const localPreviewOrigin = location.protocol === 'http:'
-  && ['localhost', '127.0.0.1'].includes(location.hostname)
-  && location.port !== '8080'
-  ? 'http://localhost:8080'
-  : location.origin;
-const API_BASE = (configuredApiOrigin || localPreviewOrigin).replace(/\/$/, '');
+const configuredApiOrigin = window.MYGRANT_CONFIG?.apiBaseUrl?.trim();
+const API_BASE = (configuredApiOrigin || location.origin).replace(/\/$/, '');
 /* Links in alert emails open #notification=<id> or #view=profile. The target waits in
    sessionStorage until the user is in the app, because WorkOS sign-in leaves this page
    and comes back with its own hash. */
@@ -797,6 +723,7 @@ const initialState = () => ({
   bulletinPreference: 'ALL',
   bulletinChart: 'ALL',
   bulletinArea: 'ALL'
+  ,anomalies: [], anomaliesLoading: false, anomaliesError: null, anomalyStatus: 'OPEN', anomalyType: 'ALL'
 });
 let state = initialState();
 let notificationStreamController = null;
@@ -805,68 +732,11 @@ let feedbackBadgeTimer = null;
 let permissionPromptedThisSession = false;
 let refreshPromise = null;
 
-/* ---------- RAG pipeline scenarios ----------
-   Each one traces a real /api/v1/rag/query call end to end so you can see, at every
-   step, whether retrieval, grounding and the guardrail checks are doing
-   their job — not just whether the final answer sounds right. */
-const ragScenarios = {
-  s1:{
-    label:'"Can I keep working if I fly home in December?"',
-    query:'I\'m on OPT and my flight home is booked for December 18. Will I still be able to work when I get back?',
-    filter:'F-1 · OPT · program ends May 2027 · last entry Aug 2025',
-    chunks:[
-      {source:'Federal Register', title:'90 Fed. Reg. 41221 — Fixed Time Period of Admission', score:0.91, used:true,
-       snippet:'An F-1 or J-1 nonimmigrant previously admitted for Duration of Status who is readmitted on or after September 15, 2026 will be issued a fixed period of admission tied to the program end date or OPT authorization.'},
-      {source:'USCIS guidance', title:'OPT Extension and Travel FAQ', score:0.87, used:true,
-       snippet:'Re-entry after the effective date generally results in a new Form I-94 reflecting a fixed expiration date, rather than Duration of Status.'},
-      {source:'News API', title:'Reuters — DHS ends open-ended student status', score:0.52, used:false,
-       snippet:'Secondary reporting summarizing the rule change for a general audience; lower weight than the primary sources above.'},
-    ],
-    answer:'Returning to the U.S. after September 15, 2026 will likely convert your admission from Duration of Status to a fixed expiration tied to your OPT end date <span class="cite-mark">[1][2]</span>. If your OPT end date is earlier than you expect, that could shorten your remaining work authorization — confirm the exact effect with your DSO before you travel.',
-    guardrails:[
-      {name:'Faithfulness', pass:true, detail:'Every claim in the answer traces back to chunk [1] or [2]. No unsupported claims.'},
-      {name:'Answer relevance', pass:true, detail:'Directly answers the question asked, at the right level of detail.'},
-      {name:'Source agreement', pass:true, detail:'Primary sources (Federal Register, USCIS) agree; no conflict to flag.'},
-    ],
-    outcome:{status:'published', title:'Published directly to the user', detail:'High confidence, no conflicts, both citations verified against retrieved text. No human review needed.'}
-  },
-  s2:{
-    label:'"Has the DOL wage floor been finalized?"',
-    query:'Has the DOL wage floor rule been finalized yet?',
-    filter:'H-1B · Employer aggregate view',
-    chunks:[
-      {source:'Federal Register', title:'NPRM 2026-03 — Wage Methodology', score:0.88, used:true,
-       snippet:'This document proposes to amend the wage methodology used to compute prevailing wage levels. Comments must be received within 60 days of publication.'},
-      {source:'News API', title:'Trade press — "DOL wage rule now final"', score:0.74, used:true,
-       snippet:'Industry newsletter reporting that the Department of Labor has finalized the new wage floor, effective immediately.'},
-    ],
-    answer:'Sources disagree on the status of this rule, so no answer was generated for the user. The primary source (Federal Register) still lists it as proposed; a secondary source claims it is final.',
-    guardrails:[
-      {name:'Faithfulness', pass:true, detail:'No answer was synthesized, so there is nothing ungrounded to check.'},
-      {name:'Source agreement', pass:false, detail:'Federal Register (primary) says "proposed rule, comment period open." News API (secondary) says "finalized." Primary source should win, but the disagreement itself is flagged rather than silently resolved.'},
-    ],
-    outcome:{status:'queued', title:'Routed to the review queue', detail:'Primary and secondary sources disagree on rule status — held for a manager to confirm rather than guessing which one is current.'}
-  },
-  s3:{
-    label:'"When does the $100,000 H-1B fee start?"',
-    query:'When exactly does the $100,000 H-1B petition fee apply from, and does it cover renewals?',
-    filter:'H-1B · Employer aggregate view',
-    chunks:[
-      {source:'Presidential Proclamation', title:'Supplemental fee on H-1B petitions', score:0.90, used:true,
-       snippet:'A supplemental fee of $100,000 applies to H-1B petitions filed on or after September 21, 2025.'},
-    ],
-    answer:'<s style="opacity:.6">Draft (blocked before publishing):</s> The $100,000 fee applies to all H-1B petitions filed on or after September 21, 2025, <b>including renewals and amendments of previously approved petitions filed before that date</b> <span class="cite-mark">[1]</span>.',
-    guardrails:[
-      {name:'Faithfulness', pass:false, detail:'Chunk [1] says nothing about renewals or amendments of prior petitions — that clause isn\'t supported by any retrieved source. Likely model overreach, not a retrieval gap.'},
-      {name:'Answer relevance', pass:true, detail:'The unsupported clause aside, the core answer does address the question.'},
-    ],
-    outcome:{status:'queued', title:'Blocked before reaching the user', detail:'Failed the faithfulness check, so the draft never published. Held for a human to confirm the renewals/amendments question against the actual proclamation text.'}
-  }
-};
-
 /* ---------------- NAV ---------------- */
-function enterApp(role){
-  state.role = role; 
+function enterApp(){
+  const role = roleForAccessToken(state.token);
+  if(!state.user) throw new Error('Sign in to load your account before opening the app.');
+  state.role = role;
   document.getElementById('login').style.display='none';
   document.getElementById('app').classList.add('active');
   document.getElementById('nav-student').style.display = role==='student' ? 'block':'none';
@@ -977,7 +847,7 @@ async function submitProfileCompletion(event){
     state.user.upcomingTravelDate = state.profile.upcomingTravelDate;
     state.ragVisaType = state.profile.visaType || 'F-1';
 
-    enterApp(roleForUser(state.user.role));
+    enterApp();
   }catch(exception){
     error.textContent=exception.message;
     error.style.display='block';
@@ -1038,7 +908,19 @@ function setAuthBusy(message){
   document.querySelectorAll('#login-form button[type="submit"],#register-form button[type="submit"]')
     .forEach(button=>{ button.disabled=Boolean(message); button.textContent=message ? 'Please wait…' : (button.dataset.label || button.textContent); });
 }
-function roleForUser(role){ return role==='ADMIN'?'admin':role==='MANAGER'?'manager':'student'; }
+function roleForAccessToken(token){
+  try{
+    const encodedPayload=token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+    const payloadBytes=Uint8Array.from(atob(encodedPayload.padEnd(Math.ceil(encodedPayload.length/4)*4,'=')),character=>character.charCodeAt(0));
+    const role=JSON.parse(new TextDecoder().decode(payloadBytes)).role;
+    if(role==='ADMIN') return 'admin';
+    if(role==='MANAGER') return 'manager';
+    if(role==='APPLICANT') return 'student';
+  }catch(error){
+    throw new Error('Your access token does not contain a readable role. Please sign in again.');
+  }
+  throw new Error('Your access token contains an unsupported role. Please contact an administrator.');
+}
 async function parseApiResponse(response){
   const body=await response.json().catch(()=>null);
   if(response.status===401){
@@ -1143,8 +1025,8 @@ async function authenticate(path,payload){
     state.user=user; state.token=user.token; state.refreshToken=user.refreshToken; state.ragVisaType=user.visaType || 'F-1';
     sessionStorage.setItem('mygrantToken',user.token);
     sessionStorage.setItem('mygrantRefreshToken',user.refreshToken);
-    enterApp(roleForUser(user.role));
-  }catch(error){ setAuthMessage(error instanceof TypeError?'Cannot reach Spring Boot on http://localhost:8080. Start the application first.':error.message); }
+    enterApp();
+  }catch(error){ setAuthMessage(error instanceof TypeError?'Cannot reach the API. Check that the backend is running and app/config.js has the correct API origin.':error.message); }
   finally{ setAuthBusy(''); }
 }
 function submitLogin(event){
@@ -1182,7 +1064,7 @@ async function restoreSession(){
       state.ragVisaType = state.profile.visaType || 'F-1';
     }
 
-    enterApp(roleForUser(state.user.role));
+    enterApp();
   }catch(error){
     clearLocalSession();
     setAuthMessage(error.message);
@@ -1269,7 +1151,7 @@ function receiveNotification(notification){
   state.unreadCount++;
   state.notifications=[notification,...(state.notifications || []).filter(item=>item.id!==notification.id)];
   updateUnreadBadge();
-  if(state.view==='dashboard' || state.view==='notifications') render();
+  if(state.view==='dashboard') render();
   if('Notification' in window && Notification.permission==='granted'){
     const title=notification.actionRequired?'ACTION REQUIRED — myGRANT alert':'New myGRANT policy alert';
     const browserNotification=new Notification(title,{body:notification.message,tag:`mygrant-${notification.id}`,
@@ -1290,7 +1172,7 @@ async function requestBrowserNotifications(){
     if(permission==='granted') showToast('Browser notifications enabled.');
     else if(permission==='denied') showToast('Browser notifications are blocked. Inbox alerts remain available.');
     else showToast('You can enable browser notifications later in your browser settings.');
-    if(state.view==='dashboard' || state.view==='notifications') render();
+  if(state.view==='dashboard') render();
   }catch(error){ showToast('Could not request notification permission.'); }
 }
 async function markNotificationRead(id){
@@ -1428,6 +1310,7 @@ function goto(view, param){
   if(view==='manager' && state.role==='manager') loadManagerDashboard();
   if(view==='queue' && state.role==='manager') loadReviewQueue();
   if(view==='admin' && state.role==='admin'){ loadAdminUsers(); loadAdminSources(); loadTestClock(); loadPolicies(); }
+  if(view==='anomalies' && state.role==='admin') loadAnomalies();
   if(view==='visaBulletin' && state.role==='admin'){ loadVisaBulletin(); }
   if(view==='feedback') openHumanFeedback();
   if(view==='feedbackInbox'){ state.inboxLastSeen=Date.now(); updateInboxBadge(state.staffConversations); loadStaffConversations(); }
@@ -1491,7 +1374,7 @@ const VIEW_LABELS = {
 VIEW_LABELS.impactDetail='Impact detail';
 VIEW_LABELS.policyDetail='Policy details';
 VIEW_LABELS.applicationProgress='Application tracker';
-const VIEW_PARENTS = {notificationDetail:'dashboard', alertDetail:'dashboard', policyDetail:'dashboard', impactDetail:'dashboard'};
+const VIEW_PARENTS = {notificationDetail:'dashboard', policyDetail:'dashboard', impactDetail:'dashboard'};
 function homeView(){ return state.role==='manager' ? 'manager' : state.role==='admin' ? 'admin' : 'dashboard'; }
 function updateBreadcrumb(view){
   const crumb = document.getElementById('breadcrumb');
@@ -1516,15 +1399,14 @@ function render(){
   const main = document.getElementById('main');
   if(state.view==='dashboard') main.innerHTML = renderLiveDashboard();
   else if(state.view==='impactDetail') main.innerHTML = renderImpactDetail();
-  else if(state.view==='notifications') main.innerHTML = renderNotifications();
   else if(state.view==='notificationDetail') main.innerHTML = renderNotificationDetail(state.openAlert);
-  else if(state.view==='alertDetail') main.innerHTML = renderAlertDetail(state.openAlert);
   else if(state.view==='applicationProgress') main.innerHTML = renderApplicationProgress();
   else if(state.view==='policyDetail') main.innerHTML = renderPolicyDetail();
   else if(state.view==='profile') main.innerHTML = renderAccountProfile();
   else if(state.view==='manager') main.innerHTML = renderManager();
   else if(state.view==='queue') main.innerHTML = renderQueue();
   else if(state.view==='admin') main.innerHTML = renderAdmin();
+  else if(state.view==='anomalies') main.innerHTML = renderAnomalies();
   else if(state.view==='visaBulletin') main.innerHTML = renderVisaBulletin();
   else if(state.view==='rag') main.innerHTML = renderRag();
   else if(state.view==='feedback') main.innerHTML = renderFeedback();
@@ -1545,32 +1427,6 @@ function urgencyLabel(u){ return u==='high'?'High urgency':u==='medium'?'Medium 
 function confTag(c){
   const label = c==='high'?'High confidence':c==='medium'?'Medium confidence':'Needs review';
   return `<span class="tag confidence-${c}">${label}</span>`;
-}
-
-function renderDashboard(){
-  const rows = studentAlerts.map(a=>`
-    <div class="entry urgency-${a.urgency}">
-      <div class="flag"></div>
-      <div class="entry-case">${a.case}<br>${urgencyLabel(a.urgency)}</div>
-      <div class="entry-body">
-        <h3>${a.title}</h3>
-        <p>${a.body}</p>
-        <div class="tag-row">
-          ${confTag(a.confidence)}
-          <span class="tag">${policies[a.policy].agency}</span>
-        </div>
-      </div>
-      <div class="entry-action">
-        <button class="btn ghost small" onclick="goto('alertDetail','${a.id}')">Open</button>
-      </div>
-    </div>`).join('');
-  return `
-    <div class="page-head">
-      <h1>Your alerts</h1>
-      <p class="sub">Matched to your profile — F-1, OPT, Malaysia. Ordered by urgency.</p>
-    </div>
-    ${rows}
-  `;
 }
 
 /* Student home: the notification inbox on top, then every policy for the student's visa type. */
@@ -1646,9 +1502,8 @@ function renderLiveDashboard(){
     <div class="block-label">Notifications${state.unreadCount ? ` &middot; ${state.unreadCount} unread` : ''}</div>
     ${state.forecastAlertsError ? `<div class="rag-error">${escapeHtml(state.forecastAlertsError)}</div>` : ''}
     ${forecastAlertRows}
-    ${state.notificationsError ? `<div class="rag-error">${escapeHtml(state.notificationsError)}</div>` : ''}
     ${state.notifications===null
-      ? (state.notificationsError ? '' : '<div class="empty">Loading notifications...</div>')
+      ? (state.notificationsError ? `<div class="rag-error" role="alert">Notification data is not available yet. ${escapeHtml(state.notificationsError)} <button class="btn ghost small" type="button" onclick="loadNotifications()">Try again</button></div>` : '<div class="empty" role="status">Loading notifications...</div>')
       : notificationRows || (forecastAlertRows ? '' : '<div class="empty"><div class="big">Nothing yet</div>You will be notified here when a policy affecting your visa category is published.</div>')}
 
     <div class="block-label" style="margin-top:32px;">Policies and your impact for ${escapeHtml(visaType || 'your profile')}</div>
@@ -1656,10 +1511,9 @@ function renderLiveDashboard(){
       <button class="btn ${state.impactsArchived?'ghost':''} small" type="button" onclick="showArchivedImpacts(false)">Current</button>
       <button class="btn ${state.impactsArchived?'':'ghost'} small" type="button" onclick="showArchivedImpacts(true)">Archived</button>
     </div>
-    ${state.policyError ? `<div class="rag-error">${escapeHtml(state.policyError)}</div>` : ''}
     ${state.impactsError ? `<div class="rag-error">${escapeHtml(state.impactsError)}</div>` : ''}
     ${state.policyRecords===null
-      ? (state.policyError ? '' : '<div class="empty">Loading policies...</div>')
+      ? (state.policyError ? `<div class="rag-error" role="alert">Policy data is not available yet. ${escapeHtml(state.policyError)} <button class="btn ghost small" type="button" onclick="loadPolicies()">Try again</button></div>` : '<div class="empty" role="status">Loading policies...</div>')
       : policyRows || `<div class="empty"><div class="big">${state.impactsArchived?'No archived policy assessments':'No matching policies yet'}</div>${state.impactsArchived?'Archived assessments will appear here.':'Import a Federal Register document from the RAG inspector.'}</div>`}
 
     ${renderActionChecklist()}`;
@@ -2026,6 +1880,8 @@ window.addEventListener('beforeunload',event=>{
   if(state.applicationTracker?.dirty){ event.preventDefault(); event.returnValue=''; }
 });
 
+// Static application-guide content, not sample account data. The user's application
+// fields and completed step numbers are loaded from and saved to the application-progress API.
 const APPLICATION_STEPS=[
   {title:'Determine your visa type',body:'Choose the category that matches your purpose of travel, such as B-1 for business, B-2 for tourism, or F-1 for academic study.',url:'https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/all-visa-categories.html',link:'Find your visa category'},
   {title:'Complete Form DS-160',body:'Submit the online application, provide a compliant photo, and keep the barcode confirmation page for your appointment.',url:'https://ceac.state.gov/GenNIV/',link:'Open the official DS-160 form'},
@@ -2294,84 +2150,13 @@ async function reportPolicyRecommendation(event){
 function renderNotificationDetail(id){
   const notification=(state.notifications || []).find(item=>item.id===id)
     || (state.openNotification?.id===id ? state.openNotification : null);
-  if(!notification) return '<button class="back-link" onclick="goto(\'notifications\')">&larr; Back to notifications</button><div class="empty">Loading this alert…</div>';
-  return `<button class="back-link" onclick="goto('notifications')">&larr; Back to notifications</button>
+  if(!notification) return '<button class="back-link" onclick="goto(\'dashboard\')">&larr; Back to notifications</button><div class="empty">Notification data is not available yet.</div>';
+  return `<button class="back-link" onclick="goto('dashboard')">&larr; Back to notifications</button>
     <div class="entry ${notification.actionRequired?'urgency-high':'urgency-low'}"><div class="flag"></div>
       <div class="entry-body"><div class="tag-row">${notification.actionRequired?'<span class="tag action">Action needed</span>':'<span class="tag">For information</span>'}
       ${(notification.affectedFields||[]).map(field=>`<span class="tag">${escapeHtml(field)}</span>`).join('')}</div>
       <h2>${notification.actionRequired?'<span class="tag action">ACTION REQUIRED</span> ':''}${escapeHtml(notification.message)}</h2><p>${escapeHtml(formatTimestamp(notification.createdAt))}</p>
       ${notification.read?'':`<button class="btn ghost small" onclick="markNotificationRead(${notification.id})">Mark read</button>`}</div></div>`;
-}
-
-function renderAlertDetail(id){
-  const a = studentAlerts.find(x=>x.id===id);
-  const p = policies[a.policy];
-  const items = a.checklist.map((c,i)=>`
-    <div class="checklist-item ${c.done?'done':''}">
-      <input type="checkbox" id="chk-${i}" ${c.done?'checked':''} onchange="toggleChecklist('${a.id}',${i})">
-      <label for="chk-${i}">${c.text}</label>
-    </div>`).join('');
-  return `
-    <button class="back-link" onclick="goto('dashboard')">&larr; Back to your alerts</button>
-    <div class="detail-card">
-      <div class="tag-row" style="margin-bottom:10px;">
-        ${confTag(a.confidence)}<span class="tag">${urgencyLabel(a.urgency)}</span><span class="tag">${p.status}</span>
-      </div>
-      <h2>${a.title}</h2>
-      <div class="detail-meta">
-        <span>${a.case}</span>
-        <span>${p.agency}</span>
-      </div>
-      <p style="font-size:14.5px;line-height:1.7;color:var(--text);">${a.body}</p>
-
-      <div class="block-label">What to do</div>
-      ${items}
-
-      <div class="block-label">Source</div>
-      <div class="citation-box">${p.title}<br>${p.citation}</div>
-
-      <div class="form-actions" style="margin-top:22px;">
-        <button class="btn ghost small" onclick="flagInaccurate('${a.id}')">Flag as inaccurate</button>
-        <button class="btn small" onclick="dismissAlert('${a.id}')">Mark as resolved</button>
-      </div>
-    </div>
-  `;
-}
-function toggleChecklist(alertId, idx){
-  const a = studentAlerts.find(x=>x.id===alertId);
-  a.checklist[idx].done = !a.checklist[idx].done;
-  render();
-}
-function flagInaccurate(id){ showToast('Sent to the review queue for a human look.'); }
-function dismissAlert(id){
-  studentAlerts = studentAlerts.filter(a=>a.id!==id);
-  showToast('Alert marked as resolved.');
-  goto('dashboard');
-}
-
-function renderProfile(){
-  return `
-    <div class="page-head">
-      <h1>Your profile</h1>
-      <p class="sub">This is what myGRANT compares new rules against to build your alerts.</p>
-    </div>
-    <div class="form-grid">
-      <div class="field"><label>Full name</label><input value="Alex Chen"></div>
-      <div class="field"><label>Visa category</label>
-        <select><option>F-1 (student)</option><option>H-1B</option><option>J-1</option><option>OPT / STEM OPT</option></select>
-      </div>
-      <div class="field"><label>Country of citizenship</label><input value="Malaysia"></div>
-      <div class="field"><label>Country of birth</label><input value="Malaysia"></div>
-      <div class="field"><label>Program end date</label><input value="2027-05-15"></div>
-      <div class="field"><label>Last entry to the U.S.</label><input value="2025-08-20"></div>
-      <div class="field"><label>Upcoming travel</label><input value="Dec 18, 2026 — flight booked"></div>
-      <div class="field"><label>Employer (if applicable)</label><input value="—"></div>
-      <div class="form-actions">
-        <button class="btn ghost" onclick="showToast('Changes discarded.')">Cancel</button>
-        <button class="btn" onclick="showToast('Profile updated — alerts will refresh.')">Save changes</button>
-      </div>
-    </div>
-  `;
 }
 
 function renderProfileForm(){
@@ -3306,6 +3091,36 @@ function renderVisaBulletin(){
   `;
 }
 
+async function loadAnomalies(){
+  state.anomaliesLoading=true; state.anomaliesError=null; render();
+  const filter=new URLSearchParams({size:'100'}); if(state.anomalyStatus!=='ALL')filter.set('status',state.anomalyStatus); if(state.anomalyType!=='ALL')filter.set('type',state.anomalyType);
+  try { const page=await parseApiResponse(await apiFetch(`/api/v1/anomalies?${filter}`)); state.anomalies=page.content||[]; }
+  catch(error){ state.anomaliesError=error.message; } finally { state.anomaliesLoading=false; if(state.view==='anomalies') render(); }
+}
+async function resolveAnomaly(id,status){
+  const note=prompt(status==='IGNORED'?'Why is this safe to ignore?':'Resolution note:'); if(!note) return;
+  const anomaly=state.anomalies.find(a=>a.id===id); let correctEffectiveDate=null;
+  if(status==='RESOLVED'&&anomaly?.type==='EFFECTIVE_DATE_CONFLICT'){
+    if(anomaly.policyId==null||anomaly.ruleId==null){
+      showToast('This date conflict is not linked to a policy rule, so it cannot update a stored date. Ignore it or recreate it from the linked source.');
+      return;
+    }
+    correctEffectiveDate=prompt('Correct effective date (YYYY-MM-DD):');
+    if(!correctEffectiveDate)return;
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(correctEffectiveDate)||Number.isNaN(Date.parse(`${correctEffectiveDate}T00:00:00Z`))){
+      showToast('Enter the date as YYYY-MM-DD, for example 2026-11-09.');
+      return;
+    }
+  }
+  try { await parseApiResponse(await apiFetch(`/api/v1/anomalies/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,note,correctEffectiveDate})})); showToast('Anomaly updated.'); await loadAnomalies(); } catch(error){showToast(error.message);}
+}
+function renderAnomalies(){
+  if(state.anomaliesLoading)return '<p class="rag-status">Loading anomalies…</p>';
+  if(state.anomaliesError)return `<div class="rag-error">${escapeHtml(state.anomaliesError)}</div>`;
+  const rows=state.anomalies.map(a=>`<tr><td><strong>${escapeHtml(a.type)}</strong><br><span class="tag">${escapeHtml(a.status)}</span></td><td>${escapeHtml(a.details)}<br><small>Policy ${a.policyId??'—'} · Rule ${a.ruleId??'—'} · Source ${a.sourceId??'—'}</small>${a.resolutionNote?`<br><small>Resolution: ${escapeHtml(a.resolutionNote)} (${escapeHtml(a.resolvedBy||'')})</small>`:''}</td><td>${escapeHtml(formatTimestamp(a.createdAt))}</td><td>${a.status==='OPEN'?`<div class="anomaly-actions"><button class="btn small" onclick="resolveAnomaly(${a.id},'RESOLVED')">Resolve</button><button class="btn ghost small" onclick="resolveAnomaly(${a.id},'IGNORED')">Ignore</button></div>`:'—'}</td></tr>`).join('');
+  const types=['ALL','EFFECTIVE_DATE_CONFLICT','UNCERTAIN_RULE_LINK','MALFORMED_SOURCE_DATA','CLASSIFICATION_FAILED']; const statuses=['ALL','OPEN','RESOLVED','IGNORED'];
+  return `<div class="page-head"><h1>Anomalies</h1><p class="sub">Review conflicting or unreliable source data.</p></div><div class="form-grid"><div class="field"><label>Status</label><select onchange="state.anomalyStatus=this.value;loadAnomalies()">${statuses.map(x=>`<option ${state.anomalyStatus===x?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Type</label><select onchange="state.anomalyType=this.value;loadAnomalies()">${types.map(x=>`<option ${state.anomalyType===x?'selected':''}>${x}</option>`).join('')}</select></div></div><button class="btn ghost small anomaly-refresh" onclick="loadAnomalies()">Refresh</button><table><tr><th>Type</th><th>Details and related records</th><th>Reported</th><th>Action</th></tr>${rows||'<tr><td colspan="4">No anomalies match these filters.</td></tr>'}</table>`;
+}
 function renderAdmin(){
   const rows = state.adminSources.map(source=>{
     const health = source.health;
@@ -3399,79 +3214,7 @@ async function runSourceSync(payload){
     await loadAdminSources();
   }catch(error){ showToast(error.message); }
 }
-function renderRag(){
-  const s = ragScenarios[state.ragActive];
-  const tabs = Object.keys(ragScenarios).map(k=>`
-    <button class="rag-tab ${k===state.ragActive?'active':''}" onclick="selectRag('${k}')">${ragScenarios[k].label}</button>
-  `).join('');
-
-  const chunks = s.chunks.map(c=>`
-    <div class="chunk ${c.used?'used':'notused'}">
-      <div class="chunk-head">
-        <div>
-          <div class="chunk-source">${c.source} — ${c.title}</div>
-        </div>
-        <div class="chunk-right">
-          <div class="score-bar"><i style="width:${c.score*100}%"></i></div>
-          <div class="score-num">${c.score.toFixed(2)}</div>
-        </div>
-      </div>
-      <div class="chunk-snippet">"${c.snippet}"</div>
-      ${c.used ? '<div class="chunk-badge" style="margin-top:8px;">Used in answer ✓</div>' : '<div class="chunk-badge" style="margin-top:8px;color:var(--muted);">Retrieved, not used — weighted below primary sources</div>'}
-    </div>`).join('');
-
-  const guardrails = s.guardrails.map(g=>`
-    <div class="guard-row">
-      <div>
-        <div class="gname">${g.name}</div>
-        <div class="detail">${g.detail}</div>
-      </div>
-      <div class="guard-badge ${g.pass?'pass':'fail'}">${g.pass?'Pass':'Fail'}</div>
-    </div>`).join('');
-
-  return `
-    <div class="page-head">
-      <h1>RAG inspector</h1>
-      <p class="sub">Traces one call to <code>/api/v1/rag/query</code> end to end, so you can see whether retrieval, grounding and the guardrails actually did their job.</p>
-    </div>
-
-    <div class="rag-tabs">${tabs}</div>
-    <p class="rag-note">These three example queries are fixed for the prototype — real free-text input needs the retrieval backend behind it.</p>
-
-    <div class="step">
-      <div class="step-title"><span class="step-num">1</span>Query + profile filter</div>
-      <p style="font-size:14.5px;margin:0 0 10px;">"${s.query}"</p>
-      <div class="filter-line">Filtered to: ${s.filter}</div>
-    </div>
-
-    <div class="step">
-      <div class="step-title"><span class="step-num">2</span>Retrieved chunks</div>
-      ${chunks}
-    </div>
-
-    <div class="step">
-      <div class="step-title"><span class="step-num">3</span>Draft answer</div>
-      <div class="answer-box">${s.answer}</div>
-    </div>
-
-    <div class="step">
-      <div class="step-title"><span class="step-num">4</span>Guardrail checks</div>
-      ${guardrails}
-    </div>
-
-    <div class="step" style="margin-bottom:0;">
-      <div class="step-title"><span class="step-num">5</span>Outcome</div>
-      <div class="outcome-banner ${s.outcome.status==='queued'?'queued':''}">
-        <h4>${s.outcome.title}</h4>
-        <div>${s.outcome.detail}</div>
-      </div>
-    </div>
-  `;
-}
-function selectRag(key){ state.ragActive = key; render(); }
-
-/* The live renderer below replaces the fixed RAG scenarios above. Other prototype
-   screens remain demonstrative; this screen always calls the Spring API. */
+/* Live RAG inspector: source imports, retrieval evidence, and answers come from the API. */
 function renderRag(){
   const result = state.ragResult;
   const evidenceItems = result ? (result.retrievedEvidence && result.retrievedEvidence.length ? result.retrievedEvidence : result.citations.map((citation, index)=>({...citation,citationNumber:index+1,snippet:''}))) : [];
@@ -3627,7 +3370,7 @@ async function submitFederalRegisterImport(event){
     // waiting for them to open the inbox. A repeat import indexes nothing and alerts nobody.
     if(!body.ingestion?.alreadyIndexed) loadNotifications();
   }catch(error){
-    state.ingestError = error instanceof TypeError ? 'Cannot reach Spring Boot. Open this page through http://localhost:8080, not directly as a file.' : error.message;
+    state.ingestError = error instanceof TypeError ? 'Cannot reach the API. Open the app through its web server and check app/config.js.' : error.message;
   }finally{
     state.ingestLoading = false;
     render();
@@ -3645,7 +3388,7 @@ async function submitRagQuery(event){
     const body = await parseApiResponse(response);
     state.ragResult = body;
   }catch(error){
-    state.ragError = error instanceof TypeError ? 'Cannot reach Spring Boot. Open this page through http://localhost:8080, not directly as a file.' : error.message;
+    state.ragError = error instanceof TypeError ? 'Cannot reach the API. Open the app through its web server and check app/config.js.' : error.message;
   }finally{
     state.ragLoading = false;
     render();

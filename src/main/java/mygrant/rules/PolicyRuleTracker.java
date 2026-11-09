@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import mygrant.common.Confidence;
+import mygrant.anomalies.EffectiveDateConflictEvent;
 import mygrant.policies.PolicyDocument;
 import mygrant.policies.PolicyDocumentRepository;
 import mygrant.policies.PolicyStatus;
@@ -268,6 +269,10 @@ public class PolicyRuleTracker {
         PolicyStatus docStage = RuleStages.of(document.getStatus());
         boolean aboutDate = aboutEffectiveDate(document);
         LocalDate docDate = effectiveDate(document, docStage, aboutDate);
+        if (before.effectiveDate() != null && docDate != null && !before.effectiveDate().equals(docDate)) {
+            events.publishEvent(new EffectiveDateConflictEvent(document.getId(), rule.id(), before.effectiveDate(), docDate,
+                    "Linked primary document reports a different effective date."));
+        }
         RuleSource source = RuleSource.of(document);
         // A delay notice must give a new date, so one that cannot be read is flagged. A correction
         // that names none fixed something else and changes nothing.

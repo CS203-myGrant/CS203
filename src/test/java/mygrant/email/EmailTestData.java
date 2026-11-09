@@ -32,7 +32,7 @@ final class EmailTestData {
     }
 
     static User verifiedUser(Long id) {
-        User user = new User("Student " + id, "student" + id + "@example.com", null, "F-1", null, null);
+        User user = new User("Student " + id, "student" + id + "@example.com", null);
         ReflectionTestUtils.setField(user, "id", id);
         user.setWorkosUserId("user_workos_" + id);
         return user;

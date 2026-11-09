@@ -58,7 +58,7 @@ class ActionItemBackfillParityTest {
     @Test
     void javaRulesMatchTheV30BackfillForAwkwardText() throws Exception {
         User owner = users.saveAndFlush(new User("Parity test", "parity-" + UUID.randomUUID() + "@example.org",
-                "unused", "F-1", null, null));
+                "unused"));
         PolicyDocument policy = policies.saveAndFlush(new PolicyDocument("parity-" + UUID.randomUUID(),
                 "Parity rule", "DHS", "F-1", PolicyStatus.FINAL, SourceType.PRIMARY, LocalDate.of(2026, 10, 1),
                 LocalDate.of(2027, 2, 1), "https://www.federalregister.gov/example", "Text", "hash"));

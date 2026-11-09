@@ -50,7 +50,7 @@ public class PolicyChatService {
     public Answer ask(Long id, String email, Question request) {
         PolicyDocument policy=policies.findById(id);
         var user=users.findByEmail(email).orElseThrow(()->new IllegalStateException("User not found"));
-        var profile=profiles.findById(user.getId()).orElseGet(()->UserProfile.fromUser(user));
+        var profile=profiles.findById(user.getId()).orElseGet(()->UserProfile.empty(user.getId()));
         String content=Jsoup.parse(policy.getContent()==null?"":policy.getContent()).text();
         if(content.isBlank()) return reply(policy,"There is no source text available to answer this question. Please read the original source or contact the support team.",true,null,Confidence.LOW);
         ObjectNode profileFacts=mapper.valueToTree(profile);
@@ -155,7 +155,7 @@ public class PolicyChatService {
     }
 
     /** Selects bounded, overlapping passages from the entire stored source, including later provisions. */
-    static String passages(String text,String question) {
+    public static String passages(String text,String question) {
         if(text.length()<=18000) return text;
         Set<String> terms=new HashSet<>(Arrays.asList(question.toLowerCase(Locale.ROOT).split("\\W+")));
         terms.removeIf(t->t.length()<4);

@@ -97,8 +97,8 @@ class ProcessingForecastIntegrationTest {
 
     private User applicant(LocalDate filingDate) {
         User user = users.save(new User("Forecast test", "forecast-" + UUID.randomUUID() + "@example.org",
-                "unused", "F-1", null, null));
-        UserProfile profile = UserProfile.fromUser(user);
+                "unused"));
+        UserProfile profile = UserProfile.registrationProfile(user.getId(), "F-1", null, null, null, null);
         profile.setI765FilingDate(filingDate);
         profile.setOptStartDate(LocalDate.of(2026, 5, 1));
         profiles.save(profile);

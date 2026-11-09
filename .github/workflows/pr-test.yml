@@ -32,6 +32,14 @@ jobs:
       DATABASE_USERNAME: policy_user
       DATABASE_PASSWORD: policy_password
       JWT_SECRET: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      # CI tests mock provider clients. A closed local address makes any accidental live call
+      # fail immediately instead of reaching OpenAI or Anthropic.
+      OPENAI_API_KEY: ci-not-configured
+      OPENAI_BASE_URL: http://127.0.0.1:9
+      ANTHROPIC_API_KEY: ci-not-configured
+      ANTHROPIC_BASE_URL: http://127.0.0.1:9
+      RESEND_API_KEY: ""
+      WORKOS_API_KEY: ""
 
     steps:
       - name: Check out source
@@ -49,8 +57,17 @@ jobs:
       - name: Check API contract
         run: ./mvnw test -Dtest=OpenApiContractTest
 
-      - name: Run tests
-        run: ./mvnw test
+      - name: Run tests and generate coverage report
+        # verify runs the Testcontainers pgvector flow, the permission matrix, and JaCoCo.
+        run: ./mvnw verify
+
+      - name: Upload JaCoCo coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-coverage-report
+          path: target/site/jacoco/
+          if-no-files-found: warn
 
       - name: Set up Node for dashboard tests
         uses: actions/setup-node@v4

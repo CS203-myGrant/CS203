@@ -505,7 +505,7 @@ class RuleDisputeClearingIntegrationTest {
 
     private User user(UserRole role) {
         String suffix = UUID.randomUUID().toString();
-        User user = new User("Dispute test", "rule-dispute-" + suffix + "@example.com", null, "F-1", null, null);
+        User user = new User("Dispute test", "rule-dispute-" + suffix + "@example.com", null);
         user.setRole(role);
         user.setWorkosUserId("user_rule_dispute_" + suffix);
         user.setProfileComplete(true);

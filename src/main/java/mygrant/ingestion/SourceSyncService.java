@@ -40,6 +40,7 @@ import mygrant.sources.PolicySourceSyncRunRepository;
 import mygrant.sources.PolicySourceType;
 import mygrant.sources.SyncFailure;
 import mygrant.sources.SyncFailureRepository;
+import mygrant.anomalies.AnomalyService;
 
 @Service
 public class SourceSyncService {
@@ -49,6 +50,7 @@ public class SourceSyncService {
     private final PolicySourceRepository sourceRepository;
     private final PolicySourceSyncRunRepository runRepository;
     private final SyncFailureRepository failureRepository;
+    private final AnomalyService anomalyService;
     private final FederalRegisterClient federalRegisterClient;
     private final FederalRegisterIngestionService federalRegister;
     private final VisaBulletinImporter visaBulletin;
@@ -58,7 +60,7 @@ public class SourceSyncService {
     private final int maxDocumentAttempts;
 
     public SourceSyncService(PolicySourceRepository sourceRepository,
-            PolicySourceSyncRunRepository runRepository, SyncFailureRepository failureRepository,
+            PolicySourceSyncRunRepository runRepository, SyncFailureRepository failureRepository, AnomalyService anomalyService,
             FederalRegisterClient federalRegisterClient,
             FederalRegisterIngestionService federalRegister, VisaBulletinImporter visaBulletin,
             NewsRssConnector newsRss, UscisProcessingTimeImporter uscis,
@@ -70,6 +72,7 @@ public class SourceSyncService {
         this.sourceRepository = sourceRepository;
         this.runRepository = runRepository;
         this.failureRepository = failureRepository;
+        this.anomalyService = anomalyService;
         this.federalRegisterClient = federalRegisterClient;
         this.federalRegister = federalRegister;
         this.visaBulletin = visaBulletin;
@@ -139,6 +142,12 @@ public class SourceSyncService {
             runRepository.save(run);
             source.recordFailure(finishedAt, error);
             sourceRepository.save(source);
+            anomalyService.recordSourceFailure(
+                    source.getId(),
+                    "source-sync",
+                    error,
+                    exception
+            );
             return new IngestionSyncResponse(source.getId(), startedAt, finishedAt,
                     0, 0, false, error);
         }
@@ -226,6 +235,7 @@ public class SourceSyncService {
             failure.failedAgain(error, now, maxDocumentAttempts);
         }
         failureRepository.save(failure);
+        anomalyService.recordSourceFailure(source.getId(), documentNumber, error, exception);
         String outcome = failure.isPermanentlyFailed() ? "will not be retried" : "will be retried on the next run";
         LOGGER.warn("Federal Register sync for source {} ({}): document {} failed on attempt {} of {} and {}: {}",
                 source.getId(), source.getName(), documentNumber, failure.getAttempts(), maxDocumentAttempts,

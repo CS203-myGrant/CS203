@@ -64,7 +64,11 @@ class EarlierAssessmentScopeTest {
     }
 
     private User user(boolean active) {
-        User user = new User("Scope test", "scope-" + UUID.randomUUID() + "@example.com", "unused", "F-1", null, null);
+        User user = new User(
+                "Scope test",
+                "scope-" + UUID.randomUUID() + "@example.com",
+                "unused"
+        );
         user.setRole(UserRole.APPLICANT);
         user.setActive(active);
         return users.saveAndFlush(user);

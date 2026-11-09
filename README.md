@@ -12,6 +12,12 @@ Java/Spring Boot backend for profile-aware immigration policy retrieval and impa
 
 ### Recorded choices
 
+- **Frontend stack:** Keep the existing single-file HTML/CSS/JavaScript frontend for
+  this MVP. The current app is served by Spring Boot and its backend-connected
+  screens already use the same-origin API. A React + TypeScript migration would add
+  a separate build and deployment workflow before it is needed for the current
+  scope. The architecture proposal's React recommendation remains a future option
+  if the UI grows enough to benefit from component and type boundaries.
 - **App hosting:** Render image-backed Docker web service. The app is a stateless
   Java 21 Spring Boot HTTP service and already serves the checked-in frontend.
   GitHub Actions builds the repository Dockerfile, publishes a commit-tagged image
@@ -84,7 +90,7 @@ Set these app variables in each service's environment/secret settings:
 | `RESEND_API_KEY` | For email delivery | Resend API credential; secret |
 | `RESEND_FROM_EMAIL` | For email delivery | Verified sender address |
 | `APP_BASE_URL` | For email links | Public HTTPS app URL for this environment |
-| `CORS_ALLOWED_ORIGINS` | Only for a separately hosted frontend | Comma-separated exact frontend origins; omit for same-origin deployment |
+| `CORS_ALLOWED_ORIGINS` | No | Comma-separated frontend origins; defaults to `APP_BASE_URL` plus local development origins. Set explicitly when the frontend uses a different origin from the API |
 | `OPENAI_EMBEDDING_MODEL` | No | Defaults to `text-embedding-3-small`; must support 1024-dimension vectors |
 | `JWT_EXPIRATION_MS` | No | Defaults to `900000` (15 minutes) |
 
@@ -134,13 +140,16 @@ pull requests, required review, and the **Maven tests** status check from the
 `PR build and test` workflow;
 the staging workflow only deploys after a commit reaches that protected branch.
 
-The frontend and API currently ship from the same Spring Boot service. The frontend
-therefore uses the current browser origin as its API origin in staging and production;
-local static previews continue to call `http://localhost:8080`. If the frontend is
-later hosted separately, set `window.MYGRANT_API_ORIGIN` before the app script loads
-and set `CORS_ALLOWED_ORIGINS` on each service to that environment's exact HTTPS
-frontend origin. Do not use `*` for hosted origins. Same-origin deployments do not
-need cross-origin access.
+The frontend and API currently ship from the same Spring Boot service. The browser
+app loads `app/config.js`; leave `apiBaseUrl` empty to use the current browser origin
+in staging and production. Set `APP_BASE_URL` on each Render service to its public
+HTTPS origin. `SecurityConfig` uses `CORS_ALLOWED_ORIGINS` when supplied; otherwise
+the CORS allowlist includes `APP_BASE_URL` and local development origins. For a local
+static preview or separately hosted frontend, set
+`window.MYGRANT_CONFIG.apiBaseUrl` in `app/config.js` to the API origin (for example,
+`http://localhost:8080` for local development). Set `CORS_ALLOWED_ORIGINS` to the
+exact HTTPS frontend origin when the frontend is hosted separately. Do not use `*`
+for hosted origins.
 
 The staging workflow checks password login and protected APIs. Also verify WorkOS
 sign-in returns through the environment's registered HTTPS callback before release.

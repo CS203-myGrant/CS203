@@ -21,7 +21,7 @@ class NotificationStreamTests {
         NotificationService service = org.mockito.Mockito.mock(NotificationService.class);
         NotificationStreamRegistry registry = org.mockito.Mockito.mock(NotificationStreamRegistry.class);
         UserRepository users = org.mockito.Mockito.mock(UserRepository.class);
-        User owner = new User("Owner", "owner@example.com", "hash", "F-1", null, null);
+        User owner = new User("Owner", "owner@example.com", "hash");
         ReflectionTestUtils.setField(owner, "id", 41L);
         when(users.findByEmail("owner@example.com")).thenReturn(Optional.of(owner));
         SseEmitter expected = new SseEmitter(0L);

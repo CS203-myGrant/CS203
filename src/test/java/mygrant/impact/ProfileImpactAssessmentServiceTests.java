@@ -166,9 +166,9 @@ class ProfileImpactAssessmentServiceTests {
         ImpactJudgeService judge = mock(ImpactJudgeService.class);
         User user = new User();
         user.setId(7L);
-        user.setVisaType("F-1");
+        UserProfile profile = UserProfile.registrationProfile(7L, "F-1", null, null, null, null);
         when(users.findByEmail("student@example.com")).thenReturn(Optional.of(user));
-        when(profiles.findById(7L)).thenReturn(Optional.of(UserProfile.fromUser(user)));
+        when(profiles.findById(7L)).thenReturn(Optional.of(profile));
         ProfileFieldConsentRepository consents = mock(ProfileFieldConsentRepository.class);
         when(consents.findByUserId(7L)).thenReturn(List.of());
         return new Harness(server, judge, new ProfileImpactAssessmentService(
@@ -242,8 +242,7 @@ class ProfileImpactAssessmentServiceTests {
         User user = new User();
         user.setId(7L);
         user.setEmail("student@example.com");
-        user.setVisaType("F-1");
-        UserProfile profile = UserProfile.fromUser(user);
+        UserProfile profile = UserProfile.registrationProfile(7L, "F-1", null, null, null, null);
         profile.setUpcomingTravelDate(LocalDate.of(2026, 10, 1));
         when(users.findByEmail("student@example.com")).thenReturn(Optional.of(user));
         when(profiles.findById(7L)).thenReturn(Optional.of(profile));
@@ -295,9 +294,7 @@ class ProfileImpactAssessmentServiceTests {
 
         User user = new User();
         user.setId(7L);
-        user.setVisaType("F-1");
-
-        UserProfile profile = UserProfile.fromUser(user);
+        UserProfile profile = UserProfile.registrationProfile(7L, "F-1", null, null, null, null);
         profile.setCountryOfCitizenship("Malaysia");
         profile.setEmployer("Secret Employer");
 

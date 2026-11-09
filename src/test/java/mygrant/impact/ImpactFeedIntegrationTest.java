@@ -34,6 +34,8 @@ import mygrant.policies.PolicyCountryRestriction;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
 import mygrant.user.UserRole;
+import mygrant.user.UserProfile;
+import mygrant.user.UserProfileRepository;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -44,6 +46,7 @@ class ImpactFeedIntegrationTest {
     @Autowired ObjectMapper mapper;
     @Autowired JwtService jwt;
     @Autowired UserRepository users;
+    @Autowired UserProfileRepository userProfiles;
     @Autowired PolicyDocumentRepository policies;
     @Autowired PolicyRecommendationStore recommendations;
     @Autowired ActionItemService actionItems;
@@ -171,8 +174,7 @@ class ImpactFeedIntegrationTest {
     @Test
     void consolidatedViewCombinesOverlappingPolicyAssessmentsButKeepsAtomicBreakdown() throws Exception {
         User owner = account(UserRole.APPLICANT);
-        owner.setVisaType("H-1B");
-        owner = users.saveAndFlush(owner);
+        userProfiles.saveAndFlush(UserProfile.registrationProfile(owner.getId(), "H-1B", null, null, null, null));
         String proclamation10949 = "https://www.federalregister.gov/documents/2025/06/10/2025-10669/"
                 + "restricting-the-entry-of-foreign-nationals-to-protect-the-united-states-from-foreign";
         String proclamation10973 = "https://www.federalregister.gov/documents/2025/09/24/2025-18601/"
@@ -254,7 +256,7 @@ class ImpactFeedIntegrationTest {
 
     private User account(UserRole role) {
         User user = new User("Impact test", "impact-" + UUID.randomUUID() + "@example.org",
-                "unused", "F-1", null, null);
+                "unused");
         user.setRole(role);
         return users.saveAndFlush(user);
     }

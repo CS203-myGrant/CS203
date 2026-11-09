@@ -68,7 +68,7 @@ class EmailEligibilityTests {
     }
 
     private User verifiedUser() {
-        User user = new User("Student", "student@example.com", null, "F-1", null, null);
+        User user = new User("Student", "student@example.com", null);
         user.setWorkosUserId("user_workos_123");
         return user;
     }

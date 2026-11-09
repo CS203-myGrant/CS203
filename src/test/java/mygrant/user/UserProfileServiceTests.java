@@ -89,7 +89,6 @@ class UserProfileServiceTests {
         assertThat(response.academicLevel()).isEqualTo("Master's");
         assertThat(response.version()).isEqualTo(2);
 
-        assertThat(userCaptor.getValue().getVisaType()).isEqualTo("H-1B");
         assertThat(userCaptor.getValue().isProfileComplete()).isTrue();
     }
 
@@ -123,11 +122,6 @@ class UserProfileServiceTests {
     @Test
     void createsAProfileWithOnlyTheRequiredVisaTypeAndItsConsent() {
         User user = user();
-        user.setVisaType(null);
-        user.setAcademicLevel(null);
-        user.setProgramEndDate(null);
-        user.setCurrentLocation(null);
-        user.setUpcomingTravelDate(null);
         user.setProfileComplete(false);
 
         when(userRepository.findByEmail(user.getEmail()))
@@ -241,21 +235,19 @@ class UserProfileServiceTests {
         User user = new User();
         user.setId(1L);
         user.setEmail("student@example.com");
-        user.setVisaType("F-1");
-        user.setAcademicLevel("Master's");
-        user.setProgramEndDate(LocalDate.parse("2028-05-31"));
         return user;
     }
 
     private UserProfile profile(User user) {
-        return UserProfile.fromUser(user);
+        return UserProfile.registrationProfile(user.getId(), "F-1", "Master's",
+                LocalDate.parse("2028-05-31"), null, null);
     }
 
     @Test
     void clearsCurrentLocationWhenAnEmptyStringIsSupplied() {
     User user = user();
-    user.setCurrentLocation("US");
     UserProfile profile = profile(user);
+    profile.setCurrentLocation("US");
 
     when(userRepository.findByEmail(user.getEmail()))
         .thenReturn(Optional.of(user));
@@ -273,7 +265,7 @@ class UserProfileServiceTests {
     ProfileResponse response = service().updateProfile(user.getEmail(), request);
 
     assertThat(response.currentLocation()).isNull();
-    assertThat(user.getCurrentLocation()).isNull();
+    assertThat(profile.getCurrentLocation()).isNull();
     }
 
     @Test

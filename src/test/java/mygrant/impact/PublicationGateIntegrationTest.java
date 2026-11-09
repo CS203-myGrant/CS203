@@ -35,6 +35,7 @@ class PublicationGateIntegrationTest {
     @Autowired PolicyQuestionHistory history;
     @Autowired ImpactReviewService review;
     @Autowired UserRepository users;
+    @Autowired UserProfileRepository profiles;
     @Autowired PolicyDocumentRepository policies;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper mapper;
@@ -43,10 +44,12 @@ class PublicationGateIntegrationTest {
     PolicyDocument policy;
 
     @BeforeEach void setup() {
-        owner = users.saveAndFlush(new User("Owner", UUID.randomUUID()+"@example.org", "unused", "F-1", null, null));
-        admin = new User("Reviewer", UUID.randomUUID()+"@example.org", "unused", "F-1", null, null);
+        owner = users.saveAndFlush(new User("Owner", UUID.randomUUID()+"@example.org", "unused"));
+        profiles.saveAndFlush(UserProfile.registrationProfile(owner.getId(), "F-1", null, null, null, null));
+        admin = new User("Reviewer", UUID.randomUUID()+"@example.org", "unused");
         admin.setRole(UserRole.ADMIN);
         admin = users.saveAndFlush(admin);
+        profiles.saveAndFlush(UserProfile.registrationProfile(admin.getId(), "F-1", null, null, null, null));
         policy = policies.saveAndFlush(new PolicyDocument("gate-"+UUID.randomUUID(), "Rule", "DHS", "F-1",
                 PolicyStatus.FINAL, SourceType.PRIMARY, LocalDate.of(2026,1,1), null,
                 "https://example.org/rule", "Rule applies.", "hash"));

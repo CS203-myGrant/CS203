@@ -1,6 +1,5 @@
 package mygrant.user;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Instant;
 
@@ -33,21 +32,6 @@ public class User {
     @Column(name = "workos_user_id", unique = true, length = 100)
     private String workosUserId;
 
-    @Column(name = "visa_type", length = 20)
-    private String visaType; // e.g., "F-1", "J-1", "H-1B"
-
-    @Column(name = "academic_level", length = 50)
-    private String academicLevel; // e.g., "PhD", "Undergraduate", "Master's"
-
-    @Column(name = "program_end_date")
-    private LocalDate programEndDate;
-
-    @Column(name = "current_location", length = 20)
-    private String currentLocation; // e.g., "US", "ABROAD"
-
-    @Column(name = "upcoming_travel_date")
-    private LocalDate upcomingTravelDate;
-
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -67,14 +51,11 @@ public class User {
     // Default Constructor for JPA
     public User() {}
 
-    public User(String fullName, String email, String passwordHash, String visaType, String academicLevel, LocalDate programEndDate) {
+    public User(String fullName, String email, String passwordHash) {
         this.fullName = fullName;
         this.email = email;
         this.passwordHash = passwordHash;
-        this.visaType = visaType;
-        this.academicLevel = academicLevel;
-        this.programEndDate = programEndDate;
-    }
+    }   
 
     // Getters and Setters
 
@@ -116,46 +97,6 @@ public class User {
 
     public void setWorkosUserId(String workosUserId) {
         this.workosUserId = workosUserId;
-    }
-
-    public String getVisaType() {
-        return visaType;
-    }
-
-    public void setVisaType(String visaType) {
-        this.visaType = visaType;
-    }
-
-    public String getAcademicLevel() {
-        return academicLevel;
-    }
-
-    public void setAcademicLevel(String academicLevel) {
-        this.academicLevel = academicLevel;
-    }
-
-    public LocalDate getProgramEndDate() {
-        return programEndDate;
-    }
-
-    public void setProgramEndDate(LocalDate programEndDate) {
-        this.programEndDate = programEndDate;
-    }
-
-    public String getCurrentLocation() {
-        return currentLocation;
-    }
-
-    public void setCurrentLocation(String currentLocation) {
-        this.currentLocation = currentLocation;
-    }
-
-    public LocalDate getUpcomingTravelDate() {
-        return upcomingTravelDate;
-    }
-
-    public void setUpcomingTravelDate(LocalDate upcomingTravelDate) {
-        this.upcomingTravelDate = upcomingTravelDate;
     }
 
     public LocalDateTime getCreatedAt() {
@@ -200,13 +141,9 @@ public class User {
         this.email = null;
         this.passwordHash = null;
         this.workosUserId = null;
-        this.visaType = null;
-        this.academicLevel = null;
-        this.programEndDate = null;
-        this.currentLocation = null;
-        this.upcomingTravelDate = null;
         this.profileComplete = false;
         this.active = false;
+
         if (this.deletedAt == null) {
             this.deletedAt = deletedAt;
         }
