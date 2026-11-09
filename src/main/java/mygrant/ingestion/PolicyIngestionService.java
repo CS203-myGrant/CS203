@@ -31,6 +31,8 @@ import mygrant.rules.RuleIdentifier;
 @Service
 public class PolicyIngestionService {
 
+    private static final int EMBEDDING_BATCH_SIZE = 50;
+
     private final PolicyDocumentRepository policyRepository;
     private final VectorStore vectorStore;
     private final ApplicationEventPublisher eventPublisher;
@@ -113,14 +115,7 @@ public class PolicyIngestionService {
                 request.extractionReviewRequired(), request.specialDocumentHolderRule());
 
         PolicyDocument saved = policyRepository.save(policy);
-        List<Document> sources = Arrays.stream(saved.getVisaType().split(","))
-                .map(String::trim)
-                .map(visaType -> new Document(saved.getExternalId() + ":" + visaType,
-                        indexedContent, createMetadata(saved, visaType)))
-                .toList();
-        List<Document> chunks = textSplitter.apply(sources);
-
-        vectorStore.add(chunks);
+        int chunksIndexed = indexChunks(saved, indexedContent);
 
         Instant indexedAt = Instant.now();
         saved.markIndexed(indexedAt);
@@ -137,7 +132,21 @@ public class PolicyIngestionService {
             eventPublisher.publishEvent(PolicyIndexedEvent.from(saved, rule.changeAlerted()));
         }
 
-        return new IngestionResponse(saved.getId(), saved.getExternalId(), chunks.size(), indexedAt, false);
+        return new IngestionResponse(saved.getId(), saved.getExternalId(), chunksIndexed, indexedAt, false);
+    }
+
+    /** Rebuilds search chunks only. Does not recreate rules or publish policy alerts. */
+    int indexChunks(PolicyDocument policy, String content) {
+        List<Document> sources = Arrays.stream(policy.getVisaType().split(","))
+                .map(String::trim)
+                .map(visaType -> new Document(policy.getExternalId() + ":" + visaType,
+                        content, createMetadata(policy, visaType)))
+                .toList();
+        List<Document> chunks = textSplitter.apply(sources);
+        for (int start = 0; start < chunks.size(); start += EMBEDDING_BATCH_SIZE) {
+            vectorStore.add(chunks.subList(start, Math.min(start + EMBEDDING_BATCH_SIZE, chunks.size())));
+        }
+        return chunks.size();
     }
 
     private Map<String, Object> createMetadata(PolicyDocument policy, String visaType) {

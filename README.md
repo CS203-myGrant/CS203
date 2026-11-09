@@ -783,9 +783,25 @@ representative RSS sample for offline tests; it contains synthetic article text.
 The Federal Register API does not require an API key. The import endpoint downloads a
 document's metadata and complete raw text, detects supported visa categories from policy
 language, and passes the result through the normal PostgreSQL and pgvector ingestion path.
-The complete source text is retained in PostgreSQL. To keep the first demo's embedding
-job manageable, only its opening 6,000 characters (including the rule summary) are
-indexed in pgvector; RAG cannot answer questions about sections outside that excerpt.
+The complete source text is retained in PostgreSQL and indexed in pgvector, including
+passages after the first 6,000 characters. Chunks are embedded in batches of 50 to
+keep embedding requests manageable. A long rule can take longer and use more embedding
+tokens than a short one.
+
+After deploying this change, an admin can repair Federal Register documents already
+stored with the old 6,000-character limit. This uses the saved full text and does not
+download it again, recreate a rule, or send policy alerts:
+
+```bash
+curl -s -X POST http://localhost:8080/api/v1/ingestion/federal-register/reindex \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq
+```
+
+The response gives `documentsReindexed` and `chunksIndexed`. Run it once with a working
+OpenAI embedding key. It processes each document in its own transaction and can be
+rerun safely if it stops partway through. This repairs search and citations only.
+`ProfileImpactAssessmentService` still sends at most the first 12,000 characters to
+the assessment model; choosing relevant chunks for that prompt remains separate work.
 
 Restart Spring Boot after pulling new code, then import a document by its Federal Register
 document number:

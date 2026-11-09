@@ -40,15 +40,18 @@ public class IngestionController {
     private final FederalRegisterIngestionService federalRegisterIngestionService;
     private final SourceSyncService sourceSyncService;
     private final EmbeddingRebuildService embeddingRebuildService;
+    private final FederalRegisterReindexService federalRegisterReindexService;
 
     public IngestionController(PolicyIngestionService ingestionService,
             FederalRegisterIngestionService federalRegisterIngestionService,
             SourceSyncService sourceSyncService,
-            EmbeddingRebuildService embeddingRebuildService) {
+            EmbeddingRebuildService embeddingRebuildService,
+            FederalRegisterReindexService federalRegisterReindexService) {
         this.ingestionService = ingestionService;
         this.federalRegisterIngestionService = federalRegisterIngestionService;
         this.sourceSyncService = sourceSyncService;
         this.embeddingRebuildService = embeddingRebuildService;
+        this.federalRegisterReindexService = federalRegisterReindexService;
     }
 
     /**
@@ -111,6 +114,16 @@ public class IngestionController {
     @ApiResponse(responseCode = "200", description = "How many chunks were re-embedded")
     public Map<String, Integer> rebuildEmbeddings() {
         return Map.of("chunksReembedded", embeddingRebuildService.rebuild());
+    }
+
+    /** Backfills full-text chunks from Federal Register documents already stored. */
+    @PostMapping("/federal-register/reindex")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Re-index saved Federal Register full text",
+            description = "Replaces old search chunks from saved documents longer than 6,000 characters. "
+                    + "Does not download sources or create new policy alerts. Requires a working embedding provider.")
+    public FederalRegisterReindexService.ReindexResult reindexFederalRegister() {
+        return federalRegisterReindexService.rebuild();
     }
 
     /** Admin health view for all configured policy sources. */

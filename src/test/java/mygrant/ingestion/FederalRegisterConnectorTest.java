@@ -78,6 +78,25 @@ class FederalRegisterConnectorTest {
     }
 
     @Test
+    void forwardsFullTextBeyondSixThousandCharactersForIndexing() {
+        var document = new FederalRegisterDocument("2026-12345", "F-1 student rule", "Rule",
+                LocalDate.of(2026, 10, 1), null,
+                "https://www.federalregister.gov/d/2026-12345", "https://example.com/raw.txt", List.of());
+        String content = "Opening text. ".repeat(550) + "Final exemption for students.";
+        assertThat(content.length()).isGreaterThan(6_000);
+        when(client.getDocument(document.documentNumber())).thenReturn(document);
+        when(client.downloadFullText(document.rawTextUrl())).thenReturn(content);
+        when(classifier.classify(document.title(), content))
+                .thenReturn(new VisaClassification(true, false, false, List.of("F-1"), List.of("F-1")));
+        when(policyIngestion.ingest(any(IngestPolicyRequest.class), eq(content), any()))
+                .thenReturn(new IngestionResponse(42L, document.documentNumber(), 1, Instant.now(), false));
+
+        service().ingest(new FederalRegisterImportRequest(document.documentNumber(), "admin@example.com", false));
+
+        verify(policyIngestion).ingest(any(IngestPolicyRequest.class), eq(content), any());
+    }
+
+    @Test
     void unsupportedVisaIsRejectedBeforePersistence() {
         var document = new FederalRegisterDocument("2026-12345", "Unrelated rule", "Rule",
                 LocalDate.now(), null, "https://example.com/html", "https://example.com/raw", List.of());
