@@ -36,14 +36,15 @@ public class ImpactReviewController {
     }
 
     @GetMapping
-    @Operation(summary = "List pending impact drafts for a reviewer")
+    @Operation(summary = "List pending assessment and answer drafts for a reviewer")
     @ApiResponse(responseCode = "200", description = "Up to 100 pending drafts")
     public List<ImpactReviewService.PendingImpact> pending(Principal principal) {
         return service.pending(principal.getName());
     }
 
     @PatchMapping("/{id}")
-    @Operation(summary = "Publish a human-corrected impact assessment")
+    @Operation(summary = "Publish a human-corrected assessment or answer",
+            description = "For Policy Q&A drafts, summary supplies the corrected answer. Existing manager membership scope applies.")
     @ApiResponse(responseCode = "200", description = "Published correction and new version")
     @ApiResponse(responseCode = "400", description = "Invalid correction details")
     @ApiResponse(responseCode = "404", description = "Assessment not found")

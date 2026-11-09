@@ -16,6 +16,9 @@ public class PolicyQuestionHistory {
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
     private final UserRepository users;
+    private mygrant.impact.OutputPublicationService publication;
+    @org.springframework.beans.factory.annotation.Autowired
+    void setPublication(mygrant.impact.OutputPublicationService publication) { this.publication = publication; }
     public PolicyQuestionHistory(JdbcTemplate jdbc,ObjectMapper mapper,UserRepository users){this.jdbc=jdbc;this.mapper=mapper;this.users=users;}
     private Long owner(String email){return users.findByEmail(email).orElseThrow(()->new IllegalStateException("User not found")).getId();}
     private final String scope=" user_id = ? AND policy_id IS NOT DISTINCT FROM ? ";
@@ -26,9 +29,17 @@ public class PolicyQuestionHistory {
             catch(com.fasterxml.jackson.core.JsonProcessingException e){throw new IllegalStateException("Invalid saved question history",e);}
         };
     }
+    @org.springframework.transaction.annotation.Transactional
     public void record(String email,Long policyId,String question,Object response){
-        try{jdbc.update("INSERT INTO policy_question_history (user_id,policy_id,question,response_json) VALUES (?,?,?,?)",
-                owner(email),policyId,question,mapper.writeValueAsString(response));}
+        try{
+            Long userId = owner(email);
+            Long id = jdbc.queryForObject("INSERT INTO policy_question_history (user_id,policy_id,question,response_json) VALUES (?,?,?,?) RETURNING id",
+                    Long.class, userId,policyId,question,mapper.writeValueAsString(response));
+            var evaluation = mapper.valueToTree(response).path("evaluation").path("evaluationId");
+            if (publication != null && evaluation.isTextual()) {
+                publication.attachAnswer(id, userId, policyId, java.util.UUID.fromString(evaluation.asText()));
+            }
+        }
         catch(com.fasterxml.jackson.core.JsonProcessingException e){throw new IllegalStateException("Unable to save question history",e);}
     }
     public Page<Entry> list(String email,Long policyId,Pageable pageable){

@@ -63,6 +63,32 @@ class RagServiceTests {
     }
 
     @Test
+    void differentChunksFromOneSourceKeepSeparateCitationsAndPromptNumbers() {
+        var metadata = java.util.Map.<String,Object>of("externalId","same-policy","title","Policy","agency","DHS",
+                "status","FINAL","sourceType","PRIMARY","publicationDate","2026-01-01","sourceUrl","https://example.org");
+        var first = org.springframework.ai.document.Document.builder().id("chunk-A").text("First passage").metadata(metadata).build();
+        var second = org.springframework.ai.document.Document.builder().id("chunk-B").text("Second passage").metadata(metadata).build();
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(first, second, first));
+        when(generator.generate(any(), any())).thenReturn("First claim [1]. Second claim [2].");
+        when(judge.evaluateAnswer(any(), any(), anyList())).thenReturn(new mygrant.impact.JudgeEvaluation(
+                mygrant.impact.JudgeEvaluation.Verdict.YES, "Supported", "judge"));
+
+        var response = ragService.query(new RagQueryRequest("What changed?", "F-1"));
+
+        assertThat(response.citations()).extracting(mygrant.rag.dto.CitationResponse::chunkId)
+                .containsExactly("chunk-A", "chunk-B");
+        assertThat(response.citations()).extracting(mygrant.rag.dto.CitationResponse::externalId)
+                .containsExactly("same-policy", "same-policy");
+        assertThat(response.retrievedEvidence()).extracting(mygrant.rag.dto.RetrievedEvidenceResponse::citationNumber)
+                .containsExactly(1, 2);
+        assertThat(response.retrievedEvidence()).extracting(mygrant.rag.dto.RetrievedEvidenceResponse::chunkId)
+                .containsExactly("chunk-A", "chunk-B");
+        verify(generator).generate(any(), org.mockito.ArgumentMatchers.argThat(context ->
+                context.contains("[1] Chunk ID: chunk-A") && context.contains("[2] Chunk ID: chunk-B")));
+        verify(judge).evaluateAnswer(any(), any(), org.mockito.ArgumentMatchers.eq(response.citations()));
+    }
+
+    @Test
     void generatedAnswerMustPassJudgeBeforeBeingReturned() {
         var document=org.springframework.ai.document.Document.builder().text("A proposed policy source")
                 .metadata(java.util.Map.of("externalId","doc","title","Policy","agency","DHS","status","PROPOSED",

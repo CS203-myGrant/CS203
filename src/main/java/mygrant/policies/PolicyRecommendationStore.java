@@ -26,6 +26,10 @@ public class PolicyRecommendationStore {
     private final UserRepository users;
     private final UserProfileRepository profiles;
     private final ActionItemService actionItems;
+    private mygrant.impact.EvaluationStore evaluations;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setEvaluationStore(mygrant.impact.EvaluationStore evaluations) { this.evaluations = evaluations; }
 
     public PolicyRecommendationStore(JdbcTemplate jdbc, ObjectMapper mapper,
             UserRepository users, UserProfileRepository profiles, ActionItemService actionItems) {
@@ -44,6 +48,18 @@ public class PolicyRecommendationStore {
         String hash = fingerprint(profile, policy);
         // Serialize concurrent clicks, including requests handled by different app instances.
         jdbc.execute("SELECT pg_advisory_xact_lock(" + user.getId().intValue() + "," + policy.getId().intValue() + ")");
+        var human = jdbc.query("""
+                SELECT assessment_json, publication_status FROM policy_recommendations
+                WHERE user_id = ? AND policy_id = ? AND input_hash = ? AND reviewed_by_human = TRUE
+                FOR UPDATE
+                """, (rs, row) -> new String[] {rs.getString(1), rs.getString(2)}, user.getId(), policy.getId(), hash);
+        if (!human.isEmpty()) {
+            if (!"PUBLISHED".equals(human.getFirst()[1])) return awaitingReview(0);
+            try { return mapper.readValue(human.getFirst()[0], ProfileImpactAssessment.class); }
+            catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                throw new IllegalStateException("Human-reviewed assessment is unreadable", e);
+            }
+        }
         List<String> saved = jdbc.queryForList("""
                 SELECT assessment_json FROM policy_recommendations
                 WHERE user_id = ? AND policy_id = ? AND input_hash = ?
@@ -58,8 +74,24 @@ public class PolicyRecommendationStore {
             }
         }
         ProfileImpactAssessment result = generate.get();
-        // Provider outages are retryable and are never persisted. Unapproved model
-        // output is stored for review but never returned to an applicant.
+        if (result.urgency() == ImpactUrgency.UNAVAILABLE && result.evaluation() != null
+                && result.evaluation().evaluationId() != null && evaluations != null) {
+            var evaluation = result.evaluation();
+            var raw = evaluations.candidate(evaluation.evaluationId());
+            if (raw.isPresent()) {
+                try {
+                    var candidate = mapper.readValue(raw.get(), ProfileImpactAssessment.class);
+                    result = new ProfileImpactAssessment(candidate.urgency(), candidate.confidence(),
+                            candidate.summary(), candidate.reasons(), candidate.recommendedActions(),
+                            candidate.missingInformation(), true, candidate.provider(), candidate.model(),
+                            evaluation, candidate.attempts());
+                } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
+                    throw new IllegalStateException("Stored candidate is unreadable", exception);
+                }
+            }
+        }
+        // Generation outages with no candidate remain retryable. Evaluated candidates,
+        // including evaluator outages, are held for review and withheld from applicants.
         if (result.urgency() != ImpactUrgency.UNAVAILABLE) {
             boolean published = approved(result);
             Long id = jdbc.queryForObject("""
@@ -72,15 +104,17 @@ public class PolicyRecommendationStore {
                         severity = EXCLUDED.severity,
                         version = policy_recommendations.version + 1,
                         updated_at = CURRENT_TIMESTAMP
+                    WHERE policy_recommendations.reviewed_by_human = FALSE
                     RETURNING id
                     """.formatted(published ? "PUBLISHED" : "PENDING_REVIEW", severity(result)),
                     Long.class, user.getId(), policy.getId(), hash, json(result));
+            if (evaluations != null && result.evaluation() != null && result.evaluation().evaluationId() != null) {
+                evaluations.attachAssessment(result.evaluation().evaluationId(), id, user.getId(), policy.getId());
+            }
             if (published) {
                 actionItems.syncForAssessment(id);
             } else {
-                return new ProfileImpactAssessment(ImpactUrgency.UNAVAILABLE, 0,
-                        "This assessment is awaiting review.", List.of(), List.of(), List.of(),
-                        true, "Review queue", "", null, result.attempts());
+                return awaitingReview(result.attempts());
             }
         }
         return result;
@@ -145,6 +179,12 @@ public class PolicyRecommendationStore {
         } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
             throw new IllegalStateException("Unable to serialize policy assessment", exception);
         }
+    }
+
+    private static ProfileImpactAssessment awaitingReview(int attempts) {
+        return new ProfileImpactAssessment(ImpactUrgency.UNAVAILABLE, 0,
+                "This assessment is awaiting review.", List.of(), List.of(), List.of(),
+                true, "Review queue", "", null, attempts);
     }
 
     private static boolean approved(ProfileImpactAssessment assessment) {

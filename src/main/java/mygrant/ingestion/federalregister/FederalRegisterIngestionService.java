@@ -45,6 +45,13 @@ public class FederalRegisterIngestionService
     private final EntryRestrictionExtractor restrictionExtractor;
     private final PolicyIngestionService ingestionService;
     private final ProfileImpactAssessmentService impactAssessmentService;
+    private mygrant.policies.PolicyRecommendationStore recommendations;
+    private mygrant.policies.PolicyService policies;
+    @Autowired
+    void setPublication(mygrant.policies.PolicyRecommendationStore recommendations, mygrant.policies.PolicyService policies) {
+        this.recommendations = recommendations;
+        this.policies = policies;
+    }
     private final AtomicReference<ConnectorHealth> currentHealth =
             new AtomicReference<>(ConnectorHealth.notChecked(SOURCE));
 
@@ -131,10 +138,12 @@ public class FederalRegisterIngestionService
                 content,
                 RuleIdentifiers.fromFederalRegisterApi(document.docketIds(), document.regulationIdNumbers()));
 
-        ProfileImpactAssessment impactAssessment = request.assessImpact()
-                ? impactAssessmentService.assess(request.userEmail(), document, prepared.agency(), content,
-                        classification, PolicyAssessmentInputs.restrictionContext(restrictions))
-                : null;
+        java.util.function.Supplier<ProfileImpactAssessment> generate = () -> impactAssessmentService.assess(
+                request.userEmail(), document, prepared.agency(), content, classification,
+                PolicyAssessmentInputs.restrictionContext(restrictions));
+        ProfileImpactAssessment impactAssessment = !request.assessImpact() ? null
+                : recommendations == null ? generate.get()
+                : recommendations.getOrGenerate(request.userEmail(), policies.findById(ingestion.policyId()), generate);
 
         return new FederalRegisterIngestionResponse(
                 document.documentNumber(), document.title(), document.type(), prepared.agency(),
