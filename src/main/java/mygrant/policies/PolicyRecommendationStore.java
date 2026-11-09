@@ -68,7 +68,7 @@ public class PolicyRecommendationStore {
         if (!saved.isEmpty()) {
             try {
                 var assessment = mapper.readValue(saved.getFirst(), ProfileImpactAssessment.class);
-                if (approved(assessment)) return assessment;
+                return assessment;
             } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
                 // A previously saved response may no longer match the current response format.
             }
@@ -90,10 +90,10 @@ public class PolicyRecommendationStore {
                 }
             }
         }
-        // Generation outages with no candidate remain retryable. Evaluated candidates,
-        // including evaluator outages, are held for review and withheld from applicants.
+        // Generation outages with no candidate remain retryable. A successful candidate
+        // remains visible if independent review is unavailable or rejects it; its saved
+        // evaluation and requiresHumanReview flag make that state explicit to the user.
         if (result.urgency() != ImpactUrgency.UNAVAILABLE) {
-            boolean published = approved(result);
             Long id = jdbc.queryForObject("""
                     INSERT INTO policy_recommendations
                         (user_id, policy_id, input_hash, assessment_json, publication_status, severity)
@@ -106,16 +106,12 @@ public class PolicyRecommendationStore {
                         updated_at = CURRENT_TIMESTAMP
                     WHERE policy_recommendations.reviewed_by_human = FALSE
                     RETURNING id
-                    """.formatted(published ? "PUBLISHED" : "PENDING_REVIEW", severity(result)),
+                    """.formatted("PUBLISHED", severity(result)),
                     Long.class, user.getId(), policy.getId(), hash, json(result));
             if (evaluations != null && result.evaluation() != null && result.evaluation().evaluationId() != null) {
                 evaluations.attachAssessment(result.evaluation().evaluationId(), id, user.getId(), policy.getId());
             }
-            if (published) {
-                actionItems.syncForAssessment(id);
-            } else {
-                return awaitingReview(result.attempts());
-            }
+            actionItems.syncForAssessment(id);
         }
         return result;
     }
@@ -167,7 +163,7 @@ public class PolicyRecommendationStore {
                 """, String.class, user.getId(), policy.getId(), fingerprint(profile, policy));
         if (saved.isEmpty()) return java.util.Optional.empty();
         try {
-            return java.util.Optional.of(mapper.readValue(saved.getFirst(), ProfileImpactAssessment.class)).filter(PolicyRecommendationStore::approved);
+            return java.util.Optional.of(mapper.readValue(saved.getFirst(), ProfileImpactAssessment.class));
         } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
             return java.util.Optional.empty();
         }
@@ -185,11 +181,6 @@ public class PolicyRecommendationStore {
         return new ProfileImpactAssessment(ImpactUrgency.UNAVAILABLE, 0,
                 "This assessment is awaiting review.", List.of(), List.of(), List.of(),
                 true, "Review queue", "", null, attempts);
-    }
-
-    private static boolean approved(ProfileImpactAssessment assessment) {
-        return assessment.urgency() != ImpactUrgency.UNAVAILABLE && assessment.evaluation() != null
-                && assessment.evaluation().verdict() == mygrant.impact.JudgeEvaluation.Verdict.YES;
     }
 
     private static String severity(ProfileImpactAssessment assessment) {

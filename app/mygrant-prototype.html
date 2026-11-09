@@ -2014,13 +2014,18 @@ function policySummary(content){
 
 function renderPolicyRecommendation(assessment){
   const unavailable=assessment.urgency==='UNAVAILABLE';
+  const independentlyChecked=assessment.evaluation?.verdict==='YES';
+  const unverifiedNotice=!unavailable && !independentlyChecked
+    ? `<p class="rag-status">This assessment was not independently verified. Check the official source or <button class="btn ghost small" type="button" onclick="openFeedback()">contact myGRANT support</button>.</p>`
+    : '';
   return `<section class="detail-card" aria-labelledby="policy-impact-heading">
     <h2 id="policy-impact-heading">How this affects you</h2>
-    ${assessment.evaluation?`<p class="rag-status">${assessment.evaluation.verdict==='YES'?'AI cross-check passed':'Independent review: '+escapeHtml(assessment.evaluation.verdict)}</p>`:''}
-    <div class="tag-row"><span class="tag">${escapeHtml(formatUrgency(assessment.urgency))}</span>${assessment.requiresHumanReview?'<span class="tag">Needs human review</span>':''}</div>
+    ${assessment.evaluation?`<p class="rag-status">${independentlyChecked?'AI cross-check passed':'Independent review: '+escapeHtml(assessment.evaluation.verdict)}</p>`:''}
+    <div class="tag-row"><span class="tag">${escapeHtml(formatUrgency(assessment.urgency))}</span>${!unavailable && !independentlyChecked?'<span class="tag">Not independently verified</span>':assessment.requiresHumanReview?'<span class="tag">Needs human review</span>':''}</div>
     <p style="line-height:1.7;">${escapeHtml(assessment.summary)}</p>
     ${(assessment.reasons || []).length?`<h3>Why this matters for your profile</h3><ul>${assessment.reasons.map(reason=>`<li>${escapeHtml(reason)}</li>`).join('')}</ul>`:''}
     ${!unavailable?`<h3>What to do next</h3><ol>${(assessment.recommendedActions || []).map(action=>`<li style="margin-bottom:12px;">${escapeHtml(action)}</li>`).join('')}</ol><p class="rag-status">Based on your saved profile and the policy source. Confirm important decisions with a qualified adviser.</p>`:''}
+    ${unverifiedNotice}
     </section>`;
 }
 

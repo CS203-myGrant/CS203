@@ -111,7 +111,7 @@ class ProfileImpactAssessmentServiceTests {
     }
 
     @Test
-    void unavailableJudgeWithholdsUnverifiedAssessment() throws Exception {
+    void unavailableJudgeReturnsUnverifiedAssessment() throws Exception {
         Harness harness = harness();
         harness.respondWithCandidate("Unverified claim");
         when(harness.judge.evaluate(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
@@ -120,8 +120,8 @@ class ProfileImpactAssessmentServiceTests {
         ProfileImpactAssessment result = harness.service.assess("student@example.com", document(),
                 "DHS", "policy content", classification());
 
-        assertThat(result.urgency()).isEqualTo(ImpactUrgency.UNAVAILABLE);
-        assertThat(result.summary()).doesNotContain("Unverified claim");
+        assertThat(result.urgency()).isEqualTo(ImpactUrgency.HIGH);
+        assertThat(result.summary()).isEqualTo("Unverified claim");
         assertThat(result.requiresHumanReview()).isTrue();
         assertThat(result.evaluation().verdict()).isEqualTo(JudgeEvaluation.Verdict.UNAVAILABLE);
         assertThat(result.attempts()).isEqualTo(1);
@@ -129,15 +129,32 @@ class ProfileImpactAssessmentServiceTests {
     }
 
     @Test
-    void rejectedJudgeWithholdsAssessmentAndActions() throws Exception {
+    void rejectedJudgeReturnsUnverifiedAssessment() throws Exception {
         Harness harness=harness();
         harness.respondWithCandidate("Unsupported claim");
         when(harness.judge.evaluate(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(new JudgeEvaluation(JudgeEvaluation.Verdict.NO,"Unsupported","judge"));
         var result=harness.service.assess("student@example.com",document(),"DHS","policy content",classification());
-        assertThat(result.urgency()).isEqualTo(ImpactUrgency.UNAVAILABLE);
-        assertThat(result.summary()).doesNotContain("Unsupported claim");
+        assertThat(result.urgency()).isEqualTo(ImpactUrgency.HIGH);
+        assertThat(result.summary()).isEqualTo("Unsupported claim");
+        assertThat(result.requiresHumanReview()).isTrue();
         assertThat(result.evaluation().verdict()).isEqualTo(JudgeEvaluation.Verdict.NO);
+        harness.server.verify();
+    }
+
+    @Test
+    void judgeFailureReturnsTheGeneratedAssessmentAsUnverified() throws Exception {
+        Harness harness = harness();
+        harness.respondWithCandidate("Generated despite judge failure");
+        when(harness.judge.evaluate(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new IllegalStateException("judge unavailable"));
+
+        var result = harness.service.assess("student@example.com", document(), "DHS", "policy content", classification());
+
+        assertThat(result.urgency()).isEqualTo(ImpactUrgency.HIGH);
+        assertThat(result.summary()).isEqualTo("Generated despite judge failure");
+        assertThat(result.requiresHumanReview()).isTrue();
+        assertThat(result.evaluation().verdict()).isEqualTo(JudgeEvaluation.Verdict.UNAVAILABLE);
         harness.server.verify();
     }
 
