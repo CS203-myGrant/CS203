@@ -43,6 +43,7 @@ import mygrant.rules.PolicyRuleNotFoundException;
 import mygrant.rules.RuleNotDisputedException;
 import mygrant.sources.PolicySourceNotFoundException;
 import mygrant.user.UserNotFoundException;
+import mygrant.anomalies.AnomalyNotFoundException;
 
 
 /**
@@ -57,6 +58,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     private static final String UNEXPECTED = "Something went wrong. Please try again later.";
+
+    @ExceptionHandler(AnomalyNotFoundException.class)
+    public ResponseEntity<ApiError> handleAnomalyNotFound(AnomalyNotFoundException exception) {
+        return response(HttpStatus.NOT_FOUND, exception.getMessage(), Map.of());
+    }
 
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ApiError> handleInvalidCredentials(InvalidCredentialsException exception) {

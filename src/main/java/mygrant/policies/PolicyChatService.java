@@ -155,7 +155,7 @@ public class PolicyChatService {
     }
 
     /** Selects bounded, overlapping passages from the entire stored source, including later provisions. */
-    static String passages(String text,String question) {
+    public static String passages(String text,String question) {
         if(text.length()<=18000) return text;
         Set<String> terms=new HashSet<>(Arrays.asList(question.toLowerCase(Locale.ROOT).split("\\W+")));
         terms.removeIf(t->t.length()<4);

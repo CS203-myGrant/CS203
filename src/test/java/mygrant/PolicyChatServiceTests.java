@@ -1,4 +1,4 @@
-package mygrant.policies;
+package mygrant;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -19,6 +19,7 @@ import mygrant.policies.PolicyQuestionHistory;
 import mygrant.policies.PolicyRecommendationStore;
 import mygrant.policies.PolicyService;
 import mygrant.policies.PolicyStatus;
+import mygrant.policies.SourceType;
 import mygrant.user.*;
 
 class PolicyChatServiceTests {

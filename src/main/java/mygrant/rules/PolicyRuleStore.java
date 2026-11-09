@@ -96,6 +96,15 @@ public class PolicyRuleStore {
                 """, state(state).addValue("id", ruleId).addValue("asOf", primaryAsOf, Types.DATE));
     }
 
+    /** Admin correction of a disputed effective date; preserves an auditable history entry. */
+    public long applyAdminEffectiveDate(Rule before, RuleState after, RuleSource source, String actor, String reason) {
+        updateRule(before.id(), after, before.primaryAsOf());
+        MapSqlParameterSource p = state(after).addValue("ruleId", before.id()).addValue("previousStage", before.state().primaryStage().name())
+                .addValue("previousDate", before.state().effectiveDate(), Types.DATE).addValue("previousDisputed", before.state().disputed())
+                .addValue("sourceId", source.policyId(), Types.BIGINT).addValue("sourceExternalId", source.externalId()).addValue("sourceType", source.sourceType().name()).addValue("sourceUrl", source.url()).addValue("sourceTitle", source.title()).addValue("sourceAgency", source.agency()).addValue("observedOn", source.publishedOn(), Types.DATE).addValue("actor", actor).addValue("reason", truncate(reason,2000)).addValue("key", UUID.randomUUID().toString());
+        return jdbc.queryForObject("INSERT INTO policy_rule_history (rule_id,primary_stage,effective_date,disputed,previous_primary_stage,previous_effective_date,previous_disputed,applied,alerted,about_effective_date,source_policy_id,source_external_id,source_type,source_url,source_title,source_agency,observed_on,recorded_by,actor_email,reason,dedupe_key) VALUES (:ruleId,:stage,:effectiveDate,:disputed,:previousStage,:previousDate,:previousDisputed,TRUE,FALSE,TRUE,:sourceId,:sourceExternalId,:sourceType,:sourceUrl,:sourceTitle,:sourceAgency,:observedOn,'ADMIN',:actor,:reason,:key) RETURNING id",p,Long.class);
+    }
+
     void saveIdentifiers(long policyId, Collection<RuleIdentifier> identifiers) {
         if (identifiers.isEmpty()) {
             return;

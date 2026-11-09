@@ -264,7 +264,7 @@ class NotificationServiceTests {
     @Test
     void visaAndNationalityOverlapUsesOneExistingPolicyAlert() {
         User applicant = user(7L, "overlap@example.com");
-        UserProfile profile = UserProfile.fromUser(applicant);
+        UserProfile profile = profile(applicant, "F-1", null, null, null, null);
         profile.setCountryOfCitizenship("AF");
         when(userRepository.findByRole(UserRole.APPLICANT)).thenReturn(List.of(applicant));
         when(consents.findByUserId(7L)).thenReturn(List.of(new ProfileFieldConsent(7L,
@@ -291,7 +291,7 @@ class NotificationServiceTests {
     @Test
     void missingConsentedNationalityDoesNotGuessAnAffectedCountry() {
         User applicant = user(7L, "missing-nationality@example.com");
-        UserProfile profile = UserProfile.fromUser(applicant);
+        UserProfile profile = profile(applicant, "F-1", null, null, null, null);
         when(userRepository.findByRole(UserRole.APPLICANT)).thenReturn(List.of(applicant));
         when(consents.findByUserId(7L)).thenReturn(List.of(new ProfileFieldConsent(7L,
                 ProfileFieldDefinition.COUNTRY_OF_CITIZENSHIP, java.time.Instant.now())));

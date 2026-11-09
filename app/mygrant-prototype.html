@@ -498,6 +498,7 @@
     <div id="nav-admin" class="nav-group" style="display:none;">
       <div class="nav-label">System</div>
       <a class="nav-link" data-view="admin" onclick="goto('admin')">Monitored sources</a>
+      <a class="nav-link" data-view="anomalies" onclick="goto('anomalies')">Anomalies</a>
       <a class="nav-link" data-view="visaBulletin" onclick="goto('visaBulletin')">Visa Bulletin</a>
       <a class="nav-link" data-view="rag" onclick="goto('rag')">RAG inspector</a>
       <a class="nav-link" data-view="feedbackInbox" onclick="goto('feedbackInbox')">Feedback inbox<span class="nav-badge nav-feedback-badge" style="display:none;">0</span></a>
@@ -716,6 +717,7 @@ const initialState = () => ({
   bulletinPreference: 'ALL',
   bulletinChart: 'ALL',
   bulletinArea: 'ALL'
+  ,anomalies: [], anomaliesLoading: false, anomaliesError: null, anomalyStatus: 'OPEN', anomalyType: 'ALL'
 });
 let state = initialState();
 let notificationStreamController = null;
@@ -1302,6 +1304,7 @@ function goto(view, param){
   if(view==='manager' && state.role==='manager') loadManagerDashboard();
   if(view==='queue' && state.role==='manager') loadReviewQueue();
   if(view==='admin' && state.role==='admin'){ loadAdminUsers(); loadAdminSources(); loadTestClock(); loadPolicies(); }
+  if(view==='anomalies' && state.role==='admin') loadAnomalies();
   if(view==='visaBulletin' && state.role==='admin'){ loadVisaBulletin(); }
   if(view==='feedback') openHumanFeedback();
   if(view==='feedbackInbox'){ state.inboxLastSeen=Date.now(); updateInboxBadge(state.staffConversations); loadStaffConversations(); }
@@ -1397,6 +1400,7 @@ function render(){
   else if(state.view==='manager') main.innerHTML = renderManager();
   else if(state.view==='queue') main.innerHTML = renderQueue();
   else if(state.view==='admin') main.innerHTML = renderAdmin();
+  else if(state.view==='anomalies') main.innerHTML = renderAnomalies();
   else if(state.view==='visaBulletin') main.innerHTML = renderVisaBulletin();
   else if(state.view==='rag') main.innerHTML = renderRag();
   else if(state.view==='feedback') main.innerHTML = renderFeedback();
@@ -3050,6 +3054,25 @@ function renderVisaBulletin(){
   `;
 }
 
+async function loadAnomalies(){
+  state.anomaliesLoading=true; state.anomaliesError=null; render();
+  const filter=new URLSearchParams({size:'100'}); if(state.anomalyStatus!=='ALL')filter.set('status',state.anomalyStatus); if(state.anomalyType!=='ALL')filter.set('type',state.anomalyType);
+  try { const page=await parseApiResponse(await apiFetch(`/api/v1/anomalies?${filter}`)); state.anomalies=page.content||[]; }
+  catch(error){ state.anomaliesError=error.message; } finally { state.anomaliesLoading=false; if(state.view==='anomalies') render(); }
+}
+async function resolveAnomaly(id,status){
+  const note=prompt(status==='IGNORED'?'Why is this safe to ignore?':'Resolution note:'); if(!note) return;
+  const anomaly=state.anomalies.find(a=>a.id===id); let correctEffectiveDate=null;
+  if(status==='RESOLVED'&&anomaly?.type==='EFFECTIVE_DATE_CONFLICT'){ correctEffectiveDate=prompt('Correct effective date (YYYY-MM-DD):'); if(!correctEffectiveDate)return; }
+  try { await parseApiResponse(await apiFetch(`/api/v1/anomalies/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,note,correctEffectiveDate})})); showToast('Anomaly updated.'); await loadAnomalies(); } catch(error){showToast(error.message);}
+}
+function renderAnomalies(){
+  if(state.anomaliesLoading)return '<p class="rag-status">Loading anomalies…</p>';
+  if(state.anomaliesError)return `<div class="rag-error">${escapeHtml(state.anomaliesError)}</div>`;
+  const rows=state.anomalies.map(a=>`<tr><td><strong>${escapeHtml(a.type)}</strong><br><span class="tag">${escapeHtml(a.status)}</span></td><td>${escapeHtml(a.details)}<br><small>Policy ${a.policyId??'—'} · Rule ${a.ruleId??'—'} · Source ${a.sourceId??'—'}</small>${a.resolutionNote?`<br><small>Resolution: ${escapeHtml(a.resolutionNote)} (${escapeHtml(a.resolvedBy||'')})</small>`:''}</td><td>${escapeHtml(formatTimestamp(a.createdAt))}</td><td>${a.status==='OPEN'?`<button class="btn small" onclick="resolveAnomaly(${a.id},'RESOLVED')">Resolve</button> <button class="btn ghost small" onclick="resolveAnomaly(${a.id},'IGNORED')">Ignore</button>`:'—'}</td></tr>`).join('');
+  const types=['ALL','EFFECTIVE_DATE_CONFLICT','UNCERTAIN_RULE_LINK','MALFORMED_SOURCE_DATA','CLASSIFICATION_FAILED']; const statuses=['ALL','OPEN','RESOLVED','IGNORED'];
+  return `<div class="page-head"><h1>Anomalies</h1><p class="sub">Review conflicting or unreliable source data.</p></div><div class="form-grid"><div class="field"><label>Status</label><select onchange="state.anomalyStatus=this.value;loadAnomalies()">${statuses.map(x=>`<option ${state.anomalyStatus===x?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Type</label><select onchange="state.anomalyType=this.value;loadAnomalies()">${types.map(x=>`<option ${state.anomalyType===x?'selected':''}>${x}</option>`).join('')}</select></div></div><button class="btn ghost small" onclick="loadAnomalies()">Refresh</button><table><tr><th>Type</th><th>Details and related records</th><th>Reported</th><th>Action</th></tr>${rows||'<tr><td colspan="4">No anomalies match these filters.</td></tr>'}</table>`;
+}
 function renderAdmin(){
   const rows = state.adminSources.map(source=>{
     const health = source.health;
