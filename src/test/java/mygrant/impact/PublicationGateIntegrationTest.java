@@ -131,7 +131,8 @@ class PublicationGateIntegrationTest {
     @Test void humanCorrectionSurvivesAutomatedRejectionAndRegeneration() throws Exception {
         UUID id = assessment("NO");
         long reviewId = jdbc.queryForObject("SELECT id FROM policy_recommendations WHERE user_id = ?", Long.class, owner.getId());
-        jdbc.update("UPDATE policy_recommendations SET publication_status = 'PENDING_REVIEW' WHERE id = ?", reviewId);
+        jdbc.update("UPDATE policy_recommendations SET publication_status = 'PENDING_REVIEW', "
+                + "version = version + 1 WHERE id = ?", reviewId);
         review.publishCorrection(reviewId, admin.getEmail(), new ImpactReviewController.Correction(
                 "LOW", 95, "Human correction", List.of("Verified"), List.of("Read official source"), List.of()));
         String corrected = jdbc.queryForObject("SELECT assessment_json FROM policy_recommendations WHERE id = ?", String.class, reviewId);
