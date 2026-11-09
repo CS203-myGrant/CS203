@@ -166,6 +166,9 @@
   .entry-body{padding:16px 18px;}
   .entry-body h3{font-family:var(--serif);font-size:19px;margin:0 0 6px;font-weight:700;}
   .entry-body p{font-size:16px;color:var(--text);margin:0 0 10px;line-height:1.55;}
+  .processing-timeline .entry{grid-template-columns:6px minmax(0,1fr);}
+  .processing-timeline .entry-body{min-width:0;overflow-wrap:anywhere;}
+  .processing-timeline select{max-width:100%;margin:8px 12px 8px 0;}
   .tag-row{display:flex;gap:8px;flex-wrap:wrap;}
   .tag{font-size:13px;font-weight:600;padding:2px 8px;border-radius:2px;background:var(--base-lightest);color:var(--text);border:0;}
   .tag.confidence-high{color:var(--calm-text);background:var(--calm-bg);}
@@ -673,6 +676,11 @@ const initialState = () => ({
   impactDetailLoading: false,
   impactDetailError: null,
   actions: null,
+  processingForecasts: null,
+  processingForecastError: null,
+  forecastSeries: {},
+  forecastAlerts: null,
+  forecastAlertsError: null,
   actionsError: null,
   actionsLoading: false,
   actionsTab: 'active',
@@ -1368,7 +1376,7 @@ function goto(view, param){
   updateBreadcrumb(view);
   render();
   // Reload both on every visit so a policy imported since login shows up here.
-  if(view==='dashboard'){ loadPolicies(); loadNotifications(); loadImpacts(); loadActions(); loadTestClock(); }
+  if(view==='dashboard'){ loadPolicies(); loadNotifications(); loadImpacts(); loadActions(); loadForecasts(); loadForecastAlerts(); loadTestClock(); }
   if(view==='manager' && state.role==='manager') loadManagerDashboard();
   if(view==='queue' && state.role==='manager') loadReviewQueue();
   if(view==='admin' && state.role==='admin'){ loadAdminUsers(); loadAdminSources(); loadTestClock(); loadPolicies(); }
@@ -1544,6 +1552,13 @@ function renderLiveDashboard(){
       </div>
     </div>`;
   }).join('');
+  const forecastAlertRows=(state.forecastAlerts || []).map(alert=>`
+    <div class="entry urgency-high"><div class="flag"></div>
+      <div class="entry-case">${escapeHtml(alert.formType)}<br>Timing warning</div>
+      <div class="entry-body"><h3>USCIS decision may miss your deadline</h3>
+        <p>${escapeHtml(alert.message)}</p>
+        <span class="tag action">${escapeHtml(formatDate(alert.deadlineDate))} deadline</span>
+      </div></div>`).join('');
 
   // Under the test clock, a policy published after the simulated date has not happened yet.
   const clockToday=state.testClock?.today;
@@ -1569,19 +1584,117 @@ function renderLiveDashboard(){
       ${'Notification' in window && Notification.permission==='granted' ? '<span class="tag">Browser notifications enabled</span>' : ('Notification' in window && Notification.permission==='denied' ? '<span class="tag">Browser notifications blocked</span>' : (permissionPromptedThisSession ? '<span class="tag">Permission request sent</span>' : '<button class="btn ghost small" onclick="requestBrowserNotifications()">Enable browser notifications</button>'))}
     </div>
 
+    ${renderProcessingTimeline()}
     ${renderImpactFeed()}
     ${renderActionChecklist()}
     <div class="block-label">Notifications${state.unreadCount ? ` &middot; ${state.unreadCount} unread` : ''}</div>
+    ${state.forecastAlertsError ? `<div class="rag-error">${escapeHtml(state.forecastAlertsError)}</div>` : ''}
+    ${forecastAlertRows}
     ${state.notificationsError ? `<div class="rag-error">${escapeHtml(state.notificationsError)}</div>` : ''}
     ${state.notifications===null
       ? (state.notificationsError ? '' : '<div class="empty">Loading notifications...</div>')
-      : notificationRows || '<div class="empty"><div class="big">Nothing yet</div>You will be notified here when a policy affecting your visa category is published.</div>'}
+      : notificationRows || (forecastAlertRows ? '' : '<div class="empty"><div class="big">Nothing yet</div>You will be notified here when a policy affecting your visa category is published.</div>')}
 
     <div class="block-label" style="margin-top:32px;">All policies for ${escapeHtml(visaType || 'your profile')}</div>
     ${state.policyError ? `<div class="rag-error">${escapeHtml(state.policyError)}</div>` : ''}
     ${state.policyRecords===null
       ? (state.policyError ? '' : '<div class="empty">Loading policies...</div>')
       : policyRows || '<div class="empty"><div class="big">No matching policies yet</div>Import a Federal Register document from the RAG inspector.</div>'}`;
+}
+
+async function loadForecastAlerts(){
+  if(state.role!=='student') return;
+  const account=state.user?.email;
+  try{
+    const response=await apiFetch('/api/v1/forecast/deadline-alerts');
+    const alerts=await parseApiResponse(response);
+    if(state.user?.email!==account || state.role!=='student') return;
+    state.forecastAlerts=alerts;
+    state.forecastAlertsError=null;
+  }catch(error){
+    if(state.user?.email!==account) return;
+    state.forecastAlertsError=error.message;
+  }
+  if(state.view==='dashboard') render();
+}
+
+async function loadForecasts(){
+  if(state.role!=='student') return;
+  const account=state.user?.email;
+  state.processingForecasts=null;
+  state.processingForecastError=null;
+  if(state.view==='dashboard') render();
+  const forms=['I-765','I-539'];
+  const results=await Promise.allSettled(forms.map(form=>{
+    const selected=state.forecastSeries?.[form];
+    const params=new URLSearchParams({formType:form});
+    if(selected){ params.set('formCategory',selected.category); params.set('office',selected.office); }
+    return apiFetch(`/api/v1/forecast/processing-times?${params}`).then(parseApiResponse);
+  }));
+  if(state.user?.email!==account || state.role!=='student') return;
+  state.processingForecasts={};
+  results.forEach((result,index)=>{
+    if(result.status==='fulfilled') state.processingForecasts[forms[index]]=result.value;
+    else state.processingForecastError=result.reason.message || 'Forecast could not be loaded.';
+  });
+  if(state.view==='dashboard') render();
+}
+
+async function selectForecastSeries(form){
+  const index=Number(document.getElementById(`forecast-series-${form}`)?.value);
+  const series=state.processingForecasts?.[form]?.availableSeries?.[index];
+  if(!series) return;
+  const account=state.user?.email;
+  try{
+    const response=await apiFetch('/api/v1/forecast/processing-times/selection',{
+      method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({formType:form,formCategory:series.category,office:series.office})
+    });
+    await parseApiResponse(response);
+    if(state.user?.email!==account) return;
+    state.forecastSeries[form]=series;
+    loadForecasts();
+    loadForecastAlerts();
+  }catch(error){
+    state.processingForecastError=error.message;
+    if(state.view==='dashboard') render();
+  }
+}
+
+function renderProcessingTimeline(){
+  const results=state.processingForecasts;
+  const unavailable={
+    MISSING_FILING_DATE:'Add your filing date in your profile to see a projection.',
+    FILING_DATE_IN_FUTURE:'Your saved filing date is in the future; check it in your profile.',
+    NO_USABLE_HISTORY:'No comparable USCIS snapshots have been imported yet.',
+    INSUFFICIENT_HISTORY:'At least two dated USCIS snapshots are needed.',
+    AMBIGUOUS_SERIES:'Several USCIS categories or offices exist; this forecast needs a matching series.',
+    UNSUPPORTED_FORM:'This form is not supported by the forecast.'
+  };
+  const cards=['I-765','I-539'].map(form=>{
+    const item=results?.[form];
+    if(!item) return `<div class="empty">${results ? 'Forecast unavailable.' : 'Loading forecast…'}</div>`;
+    if(item.status!=='AVAILABLE') return `<div class="entry urgency-low"><div class="flag"></div>
+      <div class="entry-body"><h3>${escapeHtml(form)}</h3><p>${escapeHtml(unavailable[item.reason] || 'Forecast unavailable.')}</p>
+      ${item.reason==='AMBIGUOUS_SERIES' && item.availableSeries?.length ?
+        `<label for="forecast-series-${form}">Your USCIS category and office</label>
+         <select id="forecast-series-${form}">${item.availableSeries.map((series,index)=>
+          `<option value="${index}">${escapeHtml(series.category)} · ${escapeHtml(series.office)}</option>`).join('')}</select>
+         <button class="btn ghost small" onclick="selectForecastSeries('${form}')">Show this series</button>` : ''}
+      ${item.reason==='MISSING_FILING_DATE' ? '<button class="btn ghost small" onclick="goto(\'profile\')">Add filing date</button>' : ''}</div></div>`;
+    return `<div class="entry ${item.deadlineConflict?'urgency-high':'urgency-low'}"><div class="flag"></div>
+      <div class="entry-body"><h3>${escapeHtml(form)} · projected decision window</h3>
+      <p>Filed ${escapeHtml(formatDate(item.filingDate))} · estimated range ${escapeHtml(formatDate(item.rangeStartDate))} to ${escapeHtml(formatDate(item.upperBoundDecisionDate))}.</p>
+      <p>${item.medianDecisionDate ? `Published case median projection: ${escapeHtml(formatDate(item.medianDecisionDate))}.` : 'USCIS has not published a case median for these snapshots.'}</p>
+      ${item.deadlineDate ? `<p>${escapeHtml(item.deadlineType.replaceAll('_',' '))}: ${escapeHtml(formatDate(item.deadlineDate))}.</p>` : ''}
+      ${item.deadlineConflict ? `<p class="rag-error" role="alert">${escapeHtml(item.deadlineWarning)}</p>` : ''}
+      <p class="sub">Based on ${escapeHtml(item.formCategory)} at ${escapeHtml(item.office)}; snapshot dates: ${(item.sourceSnapshotDates || []).map(date=>escapeHtml(formatDate(date))).join(', ')}.</p>
+      <p class="sub">${escapeHtml(item.uncertaintyExplanation)} This is a projection from published times, not a guaranteed decision date.</p>
+      </div></div>`;
+  }).join('');
+  return `<section aria-labelledby="processing-timeline-title"><div class="block-label" id="processing-timeline-title">USCIS processing timeline</div>
+    ${state.processingForecastError ? `<div class="rag-error" role="alert">${escapeHtml(state.processingForecastError)}</div>` : ''}
+    <div class="processing-timeline">${cards}</div></section>`;
 }
 
 async function loadImpacts(){
@@ -2224,6 +2337,16 @@ function renderProfileForm(){
       </div>
 
       <div class="field">
+        <label for="profile-i765-date">I-765 filing date (OPT)</label>
+        <input id="profile-i765-date" type="date" value="${escapeAttribute(profile.i765FilingDate || '')}">
+      </div>
+
+      <div class="field">
+        <label for="profile-i539-date">I-539 filing date (extension of stay)</label>
+        <input id="profile-i539-date" type="date" value="${escapeAttribute(profile.i539FilingDate || '')}">
+      </div>
+
+      <div class="field">
         <label for="profile-priority-date">Priority date</label>
         <input id="profile-priority-date" type="date" value="${escapeAttribute(profile.priorityDate || '')}">
       </div>
@@ -2266,6 +2389,8 @@ async function saveProfile(event){
     visaExpiryDate: value('profile-visa-expiry') || null,
     optStartDate: value('profile-opt-start') || null,
     i140FilingDate: value('profile-i140-date') || null,
+    i765FilingDate: value('profile-i765-date') || null,
+    i539FilingDate: value('profile-i539-date') || null,
     priorityDate: value('profile-priority-date') || null,
     academicLevel: value('profile-academic-level') || null,
     programEndDate: value('profile-program-end') || null,
@@ -2365,6 +2490,8 @@ function profileConsentControls(profile){
     ['VISA_EXPIRY_DATE', 'visaExpiryDate', 'Used to identify approaching visa-expiry deadlines.', false],
     ['OPT_START_DATE', 'optStartDate', 'Used to assess OPT and STEM OPT timing.', false],
     ['I140_FILING_DATE', 'i140FilingDate', 'Used to assess employment-based immigrant-petition timing.', false],
+    ['I765_FILING_DATE', 'i765FilingDate', 'Used to project I-765 processing time.', false],
+    ['I539_FILING_DATE', 'i539FilingDate', 'Used to project I-539 processing time.', false],
     ['PRIORITY_DATE', 'priorityDate', 'Used to assess Visa Bulletin and immigrant-visa changes.', false],
     ['ACADEMIC_LEVEL', 'academicLevel', 'Used to assess education-level rules and student eligibility.', false],
     ['PROGRAM_END_DATE', 'programEndDate', 'Used to identify program-completion deadlines.', false],

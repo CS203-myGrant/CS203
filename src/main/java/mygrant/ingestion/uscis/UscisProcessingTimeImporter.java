@@ -6,6 +6,7 @@ import java.time.LocalDate;
 
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.web.client.RestClient;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -30,19 +31,27 @@ public class UscisProcessingTimeImporter implements DataConnector<String, JsonNo
     private final UscisProcessingTimeParser parser;
     private final UscisProcessingTimeStore store;
     private final RestClient client;
+    private final ApplicationEventPublisher events;
 
     @Autowired
     public UscisProcessingTimeImporter(ObjectMapper json, UscisProcessingTimeParser parser,
-            UscisProcessingTimeStore store, RestClient.Builder builder) {
+            UscisProcessingTimeStore store, RestClient.Builder builder,
+            ApplicationEventPublisher events) {
         this.json = json;
         this.parser = parser;
         this.store = store;
         this.client = builder.build();
+        this.events = events;
+    }
+
+    public UscisProcessingTimeImporter(ObjectMapper json, UscisProcessingTimeParser parser,
+            UscisProcessingTimeStore store, RestClient.Builder builder) {
+        this(json, parser, store, builder, null);
     }
 
     public UscisProcessingTimeImporter(ObjectMapper json, UscisProcessingTimeParser parser,
             UscisProcessingTimeStore store) {
-        this(json, parser, store, RestClient.builder());
+        this(json, parser, store, RestClient.builder(), null);
     }
 
     @Override
@@ -87,6 +96,9 @@ public class UscisProcessingTimeImporter implements DataConnector<String, JsonNo
     public Result persistDeduplicated(UscisProcessingTimeParser.Observation observation,
             String request) {
         UscisProcessingTimeStore.Saved saved = store.save(observation);
+        if (!saved.duplicate() && events != null) {
+            events.publishEvent(new mygrant.forecast.ForecastRiskService.SnapshotSaved(observation.formType()));
+        }
         return new Result(saved.id(), saved.duplicate(), observation.formType(),
                 observation.formCategory(), observation.office(), observation.observedOn(),
                 80, observation.percentileValue(), observation.durationUnit(),

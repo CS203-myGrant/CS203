@@ -52,5 +52,13 @@ jobs:
       - name: Run tests
         run: ./mvnw test
 
+      - name: Set up Node for dashboard tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run dashboard tests
+        run: node --test src/test/js/*.test.cjs
+
       - name: Build Docker image
         run: docker build --tag policy-impact:pr .
