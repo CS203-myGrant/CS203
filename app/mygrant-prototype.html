@@ -196,6 +196,49 @@
   .checklist-item:last-child{border-bottom:none;}
   .checklist-item input{margin-top:3px;width:20px;height:20px;accent-color:var(--primary);}
   .checklist-item.done label{text-decoration:line-through;color:var(--muted);}
+  /* Dashboard task list: intentionally separate from policy-feed entries. */
+  .action-checklist{margin:30px 0 8px;background:var(--panel);border:1px solid var(--base-lighter);border-top:4px solid var(--primary);}
+  .action-checklist__head{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;padding:22px 24px 16px;border-bottom:1px solid var(--base-lighter);}
+  .action-checklist__title{margin:0;font-family:var(--serif);font-size:23px;color:var(--text);}
+  .action-checklist__intro{margin:5px 0 0;color:var(--muted);line-height:1.45;}
+  .action-checklist__count{white-space:nowrap;background:var(--base-lightest);border:1px solid var(--base-lighter);border-radius:999px;padding:5px 10px;font-size:13px;font-weight:700;color:var(--primary);}
+  .action-checklist__tabs{display:flex;gap:4px;padding:12px 24px;background:var(--base-lightest);border-bottom:1px solid var(--base-lighter);}
+  .action-checklist__tabs .btn{border-radius:3px;}
+  .action-checklist__items{padding:0 24px;background:var(--panel);}
+  .task-card{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:14px;align-items:center;margin:0;padding:17px 0;border:0;border-bottom:1px solid var(--base-lighter);border-radius:0;background:transparent;box-shadow:none;}
+  .task-card:last-child{border-bottom:0;}
+  .task-card--complete{opacity:.68;}
+  .task-card--dismissed{opacity:.55;}
+  .task-card__marker{width:26px;height:26px;margin:0;padding:0;border:2px solid var(--primary);border-radius:50%;background:var(--panel);display:grid;place-items:center;color:#fff;font-weight:800;font-size:14px;line-height:1;cursor:pointer;}
+  .task-card__marker:hover{background:var(--base-lightest);}
+  .task-card__marker:focus-visible{outline:3px solid var(--focus);outline-offset:2px;}
+  .task-card--complete .task-card__marker{background:var(--calm);border-color:var(--calm);}
+  .task-card--dismissed .task-card__marker{border-color:var(--muted);color:var(--muted);cursor:default;}
+  .task-card__meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:5px;font-size:13px;color:var(--muted);}
+  .task-card__state{font-weight:700;color:var(--primary);}
+  .task-card__due{font-weight:700;color:#C82716;}
+  .task-card__title{margin:0;font-family:var(--serif);font-size:19px;line-height:1.3;color:var(--text);font-weight:700;}
+  .task-card--complete .task-card__title{text-decoration:line-through;color:var(--muted);}
+  .task-card__body{margin:7px 0 0;line-height:1.5;color:var(--text);}
+  .task-card__source{margin-top:8px;font-size:13px;color:var(--muted);}
+  .task-card__details{grid-column:2 / 4;margin:2px 0 0;color:var(--muted);font-size:14px;}
+  .task-card__details summary{display:inline-flex;align-items:center;gap:7px;cursor:pointer;color:var(--primary);font-weight:700;padding:4px 0;}
+  .task-card__details summary::before{content:'+';font-size:18px;font-weight:400;line-height:1;}
+  .task-card__details[open] summary::before{content:'–';}
+  .task-card__details summary:hover{text-decoration:underline;}
+  .task-card__details[open] summary{margin-bottom:10px;}
+  .task-card__details-content{display:grid;gap:14px;padding:15px 17px;border:1px solid var(--base-lighter);border-left:4px solid var(--primary);background:var(--base-lightest);line-height:1.6;}
+  .task-card__detail-label{display:block;margin-bottom:4px;font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);}
+  .task-card__details-content p{margin:0;color:var(--text);}
+  .task-card__edit-form{display:grid;gap:12px;max-width:620px;}
+  .task-card__edit-form label{display:grid;gap:4px;font-weight:700;color:var(--text);}
+  .task-card__edit-form input,.task-card__edit-form textarea{font:inherit;font-weight:400;padding:7px 9px;border:1px solid var(--field-border);background:#fff;color:var(--text);}
+  .task-card__edit-form textarea{resize:vertical;}
+  .task-card__edit-form div{display:flex;gap:8px;flex-wrap:wrap;}
+  .task-card__deadline-warning{margin:0;padding:10px 12px;border-left:4px solid var(--caution);background:var(--caution-bg);color:#5C4809;line-height:1.45;}
+  .task-card__actions{display:flex;gap:7px;align-items:center;justify-content:flex-end;}
+  .action-checklist__footer{padding:14px 24px 20px;}
+  @media(max-width:700px){.action-checklist__head{padding:18px;}.action-checklist__tabs,.action-checklist__items,.action-checklist__footer{padding-left:18px;padding-right:18px;}.task-card{grid-template-columns:30px minmax(0,1fr);padding:14px 12px;}.task-card__actions,.task-card__details{grid-column:2;justify-content:flex-start;}.action-checklist__count{display:none;}}
   .citation-box{font-family:var(--mono);font-size:13px;background:var(--base-lightest);border-left:6px solid var(--base-lighter);padding:14px 16px;color:var(--text);line-height:1.6;}
 
   /* ---------- PROFILE / FORMS ---------- */
@@ -687,6 +730,7 @@ const initialState = () => ({
   actionsPage: 0,
   actionsTotalPages: 0,
   actionUpdating: null,
+  actionEditing: null,
   unreadCount: 0,
   view: null,
   openAlert: null,
@@ -1853,30 +1897,55 @@ function showActionTab(tab){
 }
 function isActiveAction(item){ return item.status==='PENDING' || item.status==='IN_PROGRESS'; }
 function actionButtons(item){
-  const disabled=state.actionUpdating?' disabled':'';
-  const button=(status,label,primary)=>`<button class="btn ${primary?'':'ghost '}small" type="button"${disabled} onclick="setActionStatus(${Number(item.id)},'${status}')">${label}</button>`;
-  if(!isActiveAction(item)) return button('PENDING','Reopen',false);
-  return `${item.status==='PENDING'?button('IN_PROGRESS','Start',false):''}${button('COMPLETED','Complete',true)}${button('DISMISSED','Dismiss',false)}`;
+  const disabled=state.actionUpdating?'disabled':'';
+  const edit=`<button class="btn ghost small" type="button" ${disabled} onclick="beginActionEdit(${Number(item.id)})">Edit</button>`;
+  return isActiveAction(item)
+    ? `${edit}<button class="btn ghost small" type="button" ${disabled} onclick="setActionStatus(${Number(item.id)},'DISMISSED')">Dismiss</button>`
+    : edit;
+}
+function toggleActionComplete(item){
+  if(item.status==='DISMISSED') return;
+  setActionStatus(Number(item.id),item.status==='COMPLETED'?'PENDING':'COMPLETED');
 }
 /* One checklist row: on the dashboard with its policy, in an impact's detail without. */
 function renderActionItem(item,showPolicy){
   const priority=String(item.priority || '');
-  const flag=priority==='HIGH'?'urgency-high':priority==='MEDIUM'?'urgency-medium':'urgency-low';
+  const taskState=item.status==='COMPLETED'?'complete':item.status==='DISMISSED'?'dismissed':'active';
   const closed=item.status==='COMPLETED'?`Completed ${formatTimestamp(item.completedAt)}`
     :item.status==='DISMISSED'?`Dismissed ${formatTimestamp(item.dismissedAt)}`:'';
-  return `<div class="entry ${flag}${isActiveAction(item)?'':' read'}" aria-label="${escapeAttribute(item.title)}">
-    <div class="flag"></div>
-    <div class="entry-case">${item.deadline?`Due ${escapeHtml(formatDate(item.deadline))}`:'No deadline'}<br>${escapeHtml(ACTION_STATUS_LABELS[item.status] || item.status)}</div>
-    <div class="entry-body">
-      <div class="tag-row"><span class="tag">${escapeHtml(priority)} priority</span>
-        ${item.urgent?'<span class="tag action">Urgent</span>':''}${item.overdue?'<span class="tag action">Overdue</span>':''}</div>
-      <h3>${escapeHtml(item.title)}</h3>
-      ${item.description?`<p>${escapeHtml(item.description)}</p>`:''}
-      ${showPolicy?`<p class="rag-status">From: ${escapeHtml(item.policyTitle)}</p>`:''}
-      ${closed?`<p class="rag-status">${escapeHtml(closed)}</p>`:''}
+  const marker=taskState==='complete'?'&#10003;':taskState==='dismissed'?'&ndash;':'';
+  const completionLabel=item.status==='COMPLETED'?'Mark task incomplete':item.status==='DISMISSED'?'Dismissed task':'Complete task';
+  const visibleMeta=`${item.deadline?`<span class="task-card__due">Due ${escapeHtml(formatDate(item.deadline))}</span>`:'<span>No deadline</span>'}${item.urgent?'<span class="tag action">Urgent</span>':''}${item.overdue?'<span class="tag action">Overdue</span>':''}`;
+  const editing=state.actionEditing===item.id;
+  const editForm=`<form class="task-card__edit-form" onsubmit="saveActionDetails(event,${Number(item.id)})"><label>Deadline<input name="deadline" type="date" value="${escapeAttribute(item.deadline || '')}" data-original-deadline="${escapeAttribute(item.deadline || '')}" oninput="updateDeadlineWarning(this,${Number(item.id)})"></label><p id="deadline-warning-${Number(item.id)}" class="task-card__deadline-warning" role="alert" hidden>Moving this deadline later changes only your personal reminder. It does not extend an official school, USCIS, or government deadline—confirm the official date before relying on it.</p><label>Details<textarea name="description" rows="3" maxlength="4000">${escapeHtml(item.description || '')}</textarea></label><div><button class="btn small" type="submit">Save changes</button><button class="btn ghost small" type="button" onclick="cancelActionEdit()">Cancel</button></div></form>`;
+  const details=`${item.description?`<div><span class="task-card__detail-label">Details</span><p>${escapeHtml(item.description)}</p></div>`:''}${showPolicy?`<div><span class="task-card__detail-label">Policy source</span><p>${escapeHtml(item.policyTitle)}</p></div>`:''}${closed?`<div><span class="task-card__detail-label">Status</span><p>${escapeHtml(closed)}</p></div>`:''}`;
+  return `<article class="task-card task-card--${taskState}" aria-label="${escapeAttribute(item.title)}">
+    <button class="task-card__marker" type="button" aria-label="${completionLabel}" title="${completionLabel}" ${item.status==='DISMISSED'?'disabled':''} onclick="toggleActionComplete(${Number(item.id)})">${marker}</button>
+    <div>
+      <h3 class="task-card__title">${escapeHtml(item.text || item.description || item.title)}</h3>
+      <div class="task-card__meta">${visibleMeta}</div>
     </div>
-    <div class="entry-action" style="gap:8px;flex-wrap:wrap;">${actionButtons(item)}</div>
-  </div>`;
+    <div class="task-card__actions">${actionButtons(item)}</div>
+    ${(details||editing)?`<details class="task-card__details" ${editing?'open':''}><summary>More details</summary><div class="task-card__details-content">${editing?editForm:details}</div></details>`:''}
+  </article>`;
+}
+function beginActionEdit(id){state.actionEditing=id;render();}
+function cancelActionEdit(){state.actionEditing=null;render();}
+function updateDeadlineWarning(input,id){
+  const warning=document.getElementById(`deadline-warning-${id}`);
+  if(!warning) return;
+  const original=input.dataset.originalDeadline;
+  warning.hidden=!(original && input.value && input.value>original);
+}
+async function saveActionDetails(event,id){
+  event.preventDefault();
+  const data=new FormData(event.target);
+  state.actionUpdating=id; render();
+  try{
+    await parseApiResponse(await apiFetch(`/api/v1/actions/${id}/details`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({deadline:data.get('deadline')||null,description:data.get('description').trim()||null})}));
+    state.actionEditing=null; showToast('Checklist details updated.');
+  }catch(error){showToast(error.message);}
+  finally{state.actionUpdating=null; await Promise.all([loadActions(),loadImpacts(),refreshImpactDetail()]);}
 }
 function renderActionChecklist(){
   const tab=ACTION_TABS[state.actionsTab]?state.actionsTab:'active';
@@ -1886,13 +1955,16 @@ function renderActionChecklist(){
   const empty=tab==='completed'?'You have not completed any checklist items yet.'
     :tab==='dismissed'?'You have not dismissed any checklist items.'
     :'Nothing to do right now. Steps from your published impact assessments appear here.';
-  return `<section aria-label="Your checklist">
-    <div class="block-label">Your checklist</div>
-    <div class="tag-row" style="margin-bottom:12px;" role="group" aria-label="Checklist status">${tabs}</div>
+  const count=state.actions===null?'':`${state.actions.length} ${state.actions.length===1?'task':'tasks'}`;
+  return `<section class="action-checklist" aria-labelledby="action-checklist-title">
+    <div class="action-checklist__head">
+      <div><h2 class="action-checklist__title" id="action-checklist-title">Your checklist</h2><p class="action-checklist__intro">Keep track of the next steps suggested by your policy assessments.</p></div>
+      ${count?`<span class="action-checklist__count">${count}</span>`:''}
+    </div>
+    <div class="action-checklist__tabs" role="group" aria-label="Checklist status">${tabs}</div>
     ${state.actionsError?`<div class="rag-error" role="alert">${escapeHtml(state.actionsError)} <button class="btn ghost small" type="button" onclick="loadActions()">Try again</button></div>`:''}
-    ${state.actions===null?'<div class="empty" role="status">Loading your checklist...</div>':rows || (state.actionsError?'':`<div class="empty">${empty}</div>`)}
-    ${state.actionsLoading && state.actions!==null?'<p role="status">Updating your checklist...</p>':''}
-    ${state.actionsPage+1<state.actionsTotalPages?'<button class="btn ghost small" type="button" onclick="loadMoreActions()">Load more</button>':''}
+    <div class="action-checklist__items">${state.actions===null?'<div class="empty" role="status">Loading your checklist...</div>':rows || (state.actionsError?'':`<div class="empty">${empty}</div>`)}</div>
+    ${(state.actionsLoading && state.actions!==null)||state.actionsPage+1<state.actionsTotalPages?`<div class="action-checklist__footer">${state.actionsLoading&&state.actions!==null?'<span role="status">Updating your checklist...</span>':''}${state.actionsPage+1<state.actionsTotalPages?'<button class="btn ghost small" type="button" onclick="loadMoreActions()">Load more tasks</button>':''}</div>`:''}
   </section>`;
 }
 async function setActionStatus(id,status){
