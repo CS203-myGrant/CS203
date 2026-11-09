@@ -121,23 +121,23 @@ public class ProfileImpactAssessmentService {
                 classification,
                 restrictionMetadata
         );
+        final ProfileImpactAssessment candidate;
         try {
-            ProfileImpactAssessment candidate = assessmentFromJson(generator.generateJson(systemPrompt(), context,
+            candidate = assessmentFromJson(generator.generateJson(systemPrompt(), context,
                     responseSchema(), "profile_impact_assessment"), "OpenAI", model);
-            JudgeEvaluation evaluation = judge.evaluate(context, candidate);
-            if (evaluation.verdict() == JudgeEvaluation.Verdict.YES) {
-                return withEvaluation(candidate, evaluation, false);
-            }
-            if (evaluation.verdict() == JudgeEvaluation.Verdict.UNAVAILABLE) {
-                return unavailable("The independent review is temporarily unavailable. Please try again or contact the myGRANT team.", evaluation, 1);
-            }
-            return unavailable("The independent review could not support this assessment. Please contact the myGRANT team for help.",
-                    evaluation, 1);
         } catch (Exception exception) {
-            log.warn("Impact assessment or independent review failed. Error type: {}",
-                    exception.getClass().getSimpleName());
+            log.warn("Impact assessment generation failed. Error type: {}", exception.getClass().getSimpleName());
             return unavailable("Urgency assessment is temporarily unavailable. Please try again or contact the myGRANT team.");
         }
+        final JudgeEvaluation evaluation;
+        try {
+            evaluation = judge.evaluate(context, candidate);
+        } catch (Exception exception) {
+            log.warn("Independent impact review failed. Error type: {}", exception.getClass().getSimpleName());
+            return withEvaluation(candidate, new JudgeEvaluation(JudgeEvaluation.Verdict.UNAVAILABLE,
+                    "The independent evaluation could not be completed.", judge.model()), true);
+        }
+        return withEvaluation(candidate, evaluation, evaluation.verdict() != JudgeEvaluation.Verdict.YES);
     }
 
     private ProfileImpactAssessment assessmentFromJson(String json, String provider, String providerModel)
