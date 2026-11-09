@@ -137,12 +137,14 @@ public class ActionItemService {
         MapSqlParameterSource params = new MapSqlParameterSource("userId", userId);
         String where = " WHERE a.user_id = :userId AND " + ImpactVisibility.VISIBLE;
         boolean archivedItems = Boolean.TRUE.equals(archived);
-        where += archivedItems ? " AND r.archived_at IS NOT NULL" : " AND r.archived_at IS NULL";
         List<String> statusNames = names(statuses);
+        if (archivedItems) {
+            where += " AND r.archived_at IS NOT NULL";
+        } else if (statusNames.isEmpty()) {
+            where += " AND r.archived_at IS NULL";
+        }
         if (statusNames.isEmpty()) {
-            if (!archivedItems) {
-                where += " AND a.status IN ('PENDING', 'IN_PROGRESS')";
-            }
+            if (!archivedItems) where += " AND a.status IN ('PENDING', 'IN_PROGRESS')";
         } else {
             where += " AND a.status IN (:statuses)";
             params.addValue("statuses", statusNames);
