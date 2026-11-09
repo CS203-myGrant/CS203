@@ -185,6 +185,26 @@ public class ActionItemService {
         return jdbc.query(SELECT + " WHERE a.id = :id", Map.of("id", id), (rs, row) -> map(rs, today)).getFirst();
     }
 
+    /** Updates the checklist owner's personal deadline and notes without changing policy evidence or status. */
+    @Transactional
+    public ActionItemView updateDetails(String email, long id, LocalDate deadline, String description) {
+        long userId = userId(email);
+        List<Long> owners = jdbc.query("SELECT a.user_id" + FROM + " WHERE a.id = :id AND "
+                + ImpactVisibility.VISIBLE + " FOR UPDATE OF a", Map.of("id", id), (rs, row) -> rs.getLong(1));
+        if (owners.isEmpty()) {
+            throw new ActionItemNotFoundException();
+        }
+        if (owners.getFirst() != userId) {
+            throw new ActionItemAccessDeniedException();
+        }
+        jdbc.update("UPDATE action_items SET deadline = :deadline, description = :description, "
+                + "updated_at = CURRENT_TIMESTAMP WHERE id = :id",
+                new MapSqlParameterSource("id", id).addValue("deadline", deadline, Types.DATE)
+                        .addValue("description", description, Types.VARCHAR));
+        return jdbc.query(SELECT + " WHERE a.id = :id", Map.of("id", id),
+                (rs, row) -> map(rs, clock.today(userId))).getFirst();
+    }
+
     /** Every item of these assessments, whatever its status, by position: one query for a feed page. */
     @Transactional(readOnly = true)
     public Map<Long, List<ActionItemView>> itemsForAssessments(long userId, Collection<Long> assessmentIds) {

@@ -24,7 +24,7 @@ function page(fetch){
   return context;
 }
 
-test('loads active items by default and shows title, description, priority, deadline and policy',async()=>{
+test('loads active items by default with visible deadline and urgency plus expandable details',async()=>{
   const calls=[];
   const view=page(async path=>{calls.push(path);return {content:[
     item(1,{title:'Renew your I-20',description:'Renew your I-20 before it expires and keep a copy',
@@ -35,27 +35,23 @@ test('loads active items by default and shows title, description, priority, dead
   const rendered=view.renderActionChecklist();
   assert.match(rendered,/Your checklist/);
   assert.match(rendered,/Renew your I-20/);
-  assert.match(rendered,/keep a copy/);
-  assert.match(rendered,/HIGH priority/);
   assert.match(rendered,/Due on 2026-11-05/);
-  assert.match(rendered,/No deadline/);
-  assert.match(rendered,/From: Student status rule/);
   assert.match(rendered,/>Urgent</);
-  assert.match(rendered,/>Overdue</);
-  assert.match(rendered,/>Start</);
-  assert.match(rendered,/>Complete</);
+  assert.match(rendered,/<summary>More details<\/summary>/);
+  assert.match(rendered,/Renew your I-20 before it expires and keep a copy/);
+  assert.match(rendered,/aria-label="Complete task"/);
   assert.match(rendered,/>Dismiss</);
-  assert.doesNotMatch(rendered,/>Reopen</);
+  assert.doesNotMatch(rendered,/HIGH priority|>Start<|>Complete</);
 });
 
 test('an item without a description or urgency shows neither',()=>{
   const view=page(async()=>({}));
   const rendered=view.renderActionItem(item(3),true);
-  assert.equal((rendered.match(/<p>/g) || []).length,0);
+  assert.doesNotMatch(rendered,/task-card__detail-label">Details/);
   assert.doesNotMatch(rendered,/Urgent|Overdue/);
 });
 
-test('completed and dismissed tabs ask for their status and offer Reopen',async()=>{
+test('completed and dismissed tabs request their corresponding statuses',async()=>{
   const calls=[];
   const view=page(async path=>{calls.push(path);return {content:[item(5,{status:'COMPLETED',
     completedAt:'2026-10-31T10:00:00Z'})],totalPages:1};});
@@ -63,22 +59,18 @@ test('completed and dismissed tabs ask for their status and offer Reopen',async(
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(calls[0],'/api/v1/actions?page=0&size=50&status=COMPLETED');
   const rendered=view.renderActionChecklist();
-  assert.match(rendered,/>Reopen</);
-  assert.match(rendered,/Completed at 2026-10-31T10:00:00Z/);
+  assert.match(rendered,/aria-label="Mark task incomplete"/);
+  assert.match(rendered,/<summary>More details<\/summary>/);
   assert.doesNotMatch(rendered,/>Complete</);
   view.showActionTab('dismissed');
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(calls[1],'/api/v1/actions?page=0&size=50&status=DISMISSED');
 });
 
-test('buttons follow the item status',()=>{
+test('active checklist tasks retain a dismiss action',()=>{
   const view=page(async()=>({}));
-  const started=view.actionButtons(item(6,{status:'IN_PROGRESS'}));
-  assert.doesNotMatch(started,/>Start</);
-  assert.match(started,/setActionStatus\(6,'COMPLETED'\)/);
-  assert.match(started,/setActionStatus\(6,'DISMISSED'\)/);
-  assert.match(view.actionButtons(item(7,{status:'DISMISSED'})),/setActionStatus\(7,'PENDING'\)/);
-  assert.match(view.actionButtons(item(8)),/setActionStatus\(8,'IN_PROGRESS'\)/);
+  assert.match(view.actionButtons(item(6)),/setActionStatus\(6,'DISMISSED'\)/);
+  assert.match(view.actionButtons(item(6)),/>Dismiss</);
 });
 
 test('a status change PATCHes the item then refetches the checklist, feed and open detail',async()=>{
@@ -130,7 +122,7 @@ test('impact card previews at most two active items',()=>{
   assert.doesNotMatch(rendered,/Third open step/);
 });
 
-test('impact detail lists every item with its status and buttons',()=>{
+test('impact detail keeps the task completion and dismiss controls available',()=>{
   const view=page(async()=>({}));
   view.state.impactDetail={id:4,severity:'MEDIUM',summary:'Summary',policyTitle:'Policy 4',
     policyAgency:'DHS',confidence:85,confidenceLabel:'HIGH',createdAt:'2026-10-30T00:00:00Z',
@@ -138,11 +130,10 @@ test('impact detail lists every item with its status and buttons',()=>{
     disclaimer:'Not legal advice',actionItems:[item(1,{status:'DISMISSED',dismissedAt:'2026-10-31T00:00:00Z'}),
       item(2,{status:'IN_PROGRESS'})]};
   const rendered=view.renderImpactDetail();
-  assert.match(rendered,/Dismissed<\/div>/);
-  assert.match(rendered,/In progress<\/div>/);
-  assert.match(rendered,/setActionStatus\(1,'PENDING'\)/);
-  assert.match(rendered,/setActionStatus\(2,'COMPLETED'\)/);
-  assert.doesNotMatch(rendered,/From: /);
+  assert.match(rendered,/task-card--dismissed/);
+  assert.match(rendered,/task-card--active/);
+  assert.match(rendered,/>Dismiss</);
+  assert.doesNotMatch(rendered,/Source: /);
 });
 
 test('loading, empty and error states',async()=>{
@@ -165,6 +156,6 @@ test('item text is escaped',()=>{
   const rendered=view.renderActionItem(item(1,{title:'<img src=x>',description:'<script>bad</script>',
     policyTitle:'<b>Policy</b>'}),true);
   assert.doesNotMatch(rendered,/<script>|<img|<b>/);
-  assert.match(rendered,/&lt;script&gt;bad&lt;\/script&gt;/);
   assert.match(rendered,/aria-label="&lt;img src=x&gt;"/);
+  assert.match(rendered,/&lt;script&gt;bad&lt;\/script&gt;/);
 });
