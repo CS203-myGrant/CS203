@@ -9,6 +9,7 @@ public record RetrievedEvidenceResponse(
         String sourceType,
         String sourceUrl,
         Double similarityScore,
-        String snippet
+        String snippet,
+        String chunkId
 ) {
 }

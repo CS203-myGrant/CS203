@@ -32,6 +32,9 @@ public class ImpactReviewService {
     private final UserRepository users;
     private final ActionItemService actionItems;
     private final ApplicationEventPublisher eventPublisher;
+    private OutputPublicationService publication;
+    @Autowired
+    void setPublication(OutputPublicationService publication) { this.publication = publication; }
 
     @Autowired
     public ImpactReviewService(JdbcTemplate jdbc, ObjectMapper mapper, UserRepository users,
@@ -64,8 +67,9 @@ public class ImpactReviewService {
         }
         String sql = """
                 SELECT r.id, r.user_id, r.policy_id, p.title, r.assessment_json, r.generated_at,
-                       p.source_url, p.content
+                       p.source_url, p.content, o.id AS output_id
                 FROM policy_recommendations r JOIN policy_documents p ON p.id = r.policy_id
+                LEFT JOIN stored_ai_outputs o ON o.review_id = r.id
                 WHERE r.publication_status = 'PENDING_REVIEW'
                 """ + scope + """
                 ORDER BY r.generated_at, r.id LIMIT 100
@@ -128,6 +132,11 @@ public class ImpactReviewService {
                     version = version + 1, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """, json, severity, reviewerId, id);
+        String outputType = jdbc.queryForObject("SELECT output_type FROM policy_recommendations WHERE id = ?", String.class, id);
+        if ("ANSWER".equals(outputType)) {
+            publication.publishHumanAnswer(id, correction.summary().trim());
+            return new ReviewResult(id, versions.getFirst() + 1, true, "PUBLISHED", Instant.now());
+        }
         // The correction's actions replace the old ones; the owner's progress on kept items stays.
         actionItems.syncForAssessment(id);
         return new ReviewResult(id, versions.getFirst() + 1, true, "PUBLISHED", Instant.now());
@@ -192,7 +201,7 @@ public class ImpactReviewService {
             return new PendingImpact(rs.getLong("id"), rs.getLong("user_id"),
                     rs.getLong("policy_id"), rs.getString("title"), assessment.summary(),
                     rs.getTimestamp("generated_at").toInstant(), rs.getString("source_url"),
-                    reviewExcerpt(rs.getString("content")), assessment.provider());
+                    reviewExcerpt(rs.getString("content")), assessment.provider(), rs.getObject("output_id", java.util.UUID.class));
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Stored pending impact is unreadable", exception);
         }
@@ -229,7 +238,7 @@ public class ImpactReviewService {
 
     public record PendingImpact(long id, long userId, long policyId,
             String policyTitle, String draftSummary, Instant createdAt,
-            String sourceUrl, String sourceExcerpt, String reviewType) {}
+            String sourceUrl, String sourceExcerpt, String reviewType, java.util.UUID outputId) {}
     public record ReviewResult(long id, int version, boolean reviewedByHuman,
             String publicationStatus, Instant reviewedAt) {}
 }

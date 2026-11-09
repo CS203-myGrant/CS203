@@ -37,7 +37,7 @@ class EvaluationPersistenceIntegrationTest {
         var judge = new ImpactJudgeService(builder, mapper, "test", "mock-judge", "https://judge.test");
         judge.setEvaluationStore(store);
         var citations = List.of(new CitationResponse("source", "Title", "DHS", "FINAL", "PRIMARY",
-                "2026-01-01", null, "https://example.org", 1.0));
+                "2026-01-01", null, "https://example.org", 1.0, "chunk-A"));
         var grounded = judge.evaluateAnswer("Source [1]: Rule applies.", "Rule applies [1].", citations);
         var invalid = judge.evaluateAnswer("Source [1]: Rule applies.", "Rule applies [2].", citations);
         for (var evaluation : List.of(grounded, invalid)) {

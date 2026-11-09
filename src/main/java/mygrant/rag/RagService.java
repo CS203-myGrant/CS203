@@ -67,6 +67,11 @@ public class RagService {
     }
 
     private RagQueryResponse answer(String question,String visaType,List<Document> evidence){
+        // Repeated retrieval hits for one chunk share one citation; chunks from
+        // the same source retain their separate identities and numbers.
+        Map<String, Document> chunks = new LinkedHashMap<>();
+        for (Document chunk : evidence) chunks.putIfAbsent(chunk.getId(), chunk);
+        evidence = List.copyOf(chunks.values());
         if (evidence.isEmpty()) {
             return insufficientEvidence();
         }
@@ -97,11 +102,10 @@ public class RagService {
 
     private String formatEvidence(List<Document> evidence) {
         StringBuilder context = new StringBuilder();
-        Map<String,Integer> numbers=new LinkedHashMap<>();
         for (int index = 0; index < evidence.size(); index++) {
             Document document = evidence.get(index);
-            context.append("[%d] %s | %s | %s%n%s%n%n".formatted(
-                    numbers.computeIfAbsent(metadata(document,"externalId"),key->numbers.size()+1),
+            context.append("[%d] Chunk ID: %s | %s | %s | %s%n%s%n%n".formatted(
+                    index + 1, document.getId(),
                     metadata(document, "title"),
                     metadata(document, "status"),
                     metadata(document, "sourceUrl"),
@@ -111,10 +115,10 @@ public class RagService {
     }
 
     private List<CitationResponse> createCitations(List<Document> evidence) {
-        Map<String, CitationResponse> citations = new LinkedHashMap<>();
+        List<CitationResponse> citations = new ArrayList<>();
         for (Document document : evidence) {
             String externalId = metadata(document, "externalId");
-            citations.putIfAbsent(externalId, new CitationResponse(
+            citations.add(new CitationResponse(
                     externalId,
                     metadata(document, "title"),
                     metadata(document, "agency"),
@@ -123,21 +127,21 @@ public class RagService {
                     metadata(document, "publicationDate"),
                     optionalMetadata(document, "effectiveDate"),
                     metadata(document, "sourceUrl"),
-                    document.getScore()));
+                    document.getScore(), document.getId()));
         }
-        return List.copyOf(citations.values());
+        return List.copyOf(citations);
     }
 
     private List<RetrievedEvidenceResponse> createRetrievedEvidence(List<Document> evidence,
             List<CitationResponse> citations) {
         Map<String, Integer> citationNumbers = new LinkedHashMap<>();
         for (int index = 0; index < citations.size(); index++) {
-            citationNumbers.put(citations.get(index).externalId(), index + 1);
+            citationNumbers.put(citations.get(index).chunkId(), index + 1);
         }
 
         return evidence.stream()
                 .map(document -> new RetrievedEvidenceResponse(
-                        citationNumbers.getOrDefault(metadata(document, "externalId"), 0),
+                        citationNumbers.getOrDefault(document.getId(), 0),
                         metadata(document, "externalId"),
                         metadata(document, "title"),
                         metadata(document, "agency"),
@@ -145,7 +149,7 @@ public class RagService {
                         metadata(document, "sourceType"),
                         metadata(document, "sourceUrl"),
                         document.getScore(),
-                        evidenceSnippet(document.getText())))
+                        evidenceSnippet(document.getText()), document.getId()))
                 .toList();
     }
 

@@ -18,7 +18,7 @@ import org.springframework.web.client.RestClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 class ImpactJudgeServiceTests {
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
 
     @Test
     void sendsClaudeSchemaAndReadsYesVerdict() throws Exception {
@@ -98,7 +98,7 @@ class ImpactJudgeServiceTests {
     }
     private List<mygrant.rag.dto.CitationResponse> citations() {
         return List.of(new mygrant.rag.dto.CitationResponse("actual-policy", "Policy", "DHS", "FINAL",
-                "PRIMARY", "2026-01-01", null, "https://example.org/policy", 0.9));
+                "PRIMARY", "2026-01-01", null, "https://example.org/policy", 0.9, "chunk-A"));
     }
 
     private String response(double faithfulness, double relevance, String verdict) throws Exception {
@@ -108,11 +108,45 @@ class ImpactJudgeServiceTests {
     }
 
     @Test
+    void sourceOnlyLegacyCitationCannotEstablishChunkMembership() {
+        var builder = RestClient.builder();
+        var server = MockRestServiceServer.bindTo(builder).build();
+        var judge = new ImpactJudgeService(builder, mapper, "key", "judge", "https://claude.test");
+        var sourceOnly = List.of(new mygrant.rag.dto.CitationResponse("actual-policy", "Policy", "DHS", "FINAL",
+                "PRIMARY", "2026-01-01", null, "https://example.org/policy", 0.9));
+        var result = judge.evaluateAnswer("[1] Old source-level evidence", "Claim [1]", sourceOnly);
+        assertThat(result.verdict()).isEqualTo(JudgeEvaluation.Verdict.NO);
+        assertThat(result.citationsValid()).isFalse();
+        server.verify();
+    }
+
+    @Test
+    void secondRetrievedChunkOfSameSourcePassesButUnretrievedThirdChunkFails() throws Exception {
+        var builder = RestClient.builder();
+        var server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo("https://claude.test/v1/messages"))
+                .andRespond(withSuccess(response(1, 1, "YES"), MediaType.APPLICATION_JSON));
+        var judge = new ImpactJudgeService(builder, mapper, "key", "judge", "https://claude.test");
+        var chunks = List.of(citations().getFirst(), new mygrant.rag.dto.CitationResponse(
+                "actual-policy", "Policy", "DHS", "FINAL", "PRIMARY", "2026-01-01", null,
+                "https://example.org/policy", 0.9, "chunk-B"));
+        var supported = judge.evaluateAnswer("[1] Chunk ID: chunk-A: First fact.\n[2] Chunk ID: chunk-B: Second fact.",
+                "Second fact [2]", chunks);
+        assertThat(supported.verdict()).isEqualTo(JudgeEvaluation.Verdict.YES);
+        assertThat(supported.citationsValid()).isTrue();
+        var unseen = judge.evaluateAnswer("Question mentions chunk-C [3], but supplied chunks are [1] and [2].",
+                "Fact from unseen chunk [3]", chunks);
+        assertThat(unseen.verdict()).isEqualTo(JudgeEvaluation.Verdict.NO);
+        assertThat(unseen.citationsValid()).isFalse();
+        server.verify();
+    }
+
+    @Test
     void groundedAnswerIsScoredVersionedAndPersisted() throws Exception {
         RestClient.Builder builder = RestClient.builder();
         var server = MockRestServiceServer.bindTo(builder).build();
         server.expect(requestTo("https://claude.test/v1/messages"))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("grounded-output-v1")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("grounded-output-v2-chunks")))
                 .andRespond(withSuccess(response(1, 0.9, "YES"), MediaType.APPLICATION_JSON));
         var judge = new ImpactJudgeService(builder, mapper, "key", "judge", "https://claude.test");
         var store = org.mockito.Mockito.mock(EvaluationStore.class);

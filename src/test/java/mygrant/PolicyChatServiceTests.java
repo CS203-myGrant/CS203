@@ -64,6 +64,19 @@ class PolicyChatServiceTests {
         assertTrue(service.ask(21L,"owner@example.org",new PolicyChatService.Question("Why?",List.of())).requiresReview());
         verifyNoInteractions(generator);
     }
+    @Test void followUpNumbersEachRetrievedChunkInsteadOfMergingTheSource(){
+        when(retrieval.search(any(),anyString(),eq(21L))).thenReturn(List.of(
+                org.springframework.ai.document.Document.builder().id("chunk-A").text("First retrieved passage").build(),
+                org.springframework.ai.document.Document.builder().id("chunk-B").text("Second retrieved passage").build()));
+        when(generator.generateJson(anyString(),anyString(),anyMap(),anyString()))
+                .thenReturn("{\"answer\":\"Second passage [2].\",\"requiresReview\":false}");
+        var result=service.ask(21L,"owner@example.org",new PolicyChatService.Question("Why?",List.of()));
+        assertEquals(List.of("chunk-A","chunk-B"),result.citations().stream().map(mygrant.rag.dto.CitationResponse::chunkId).toList());
+        assertEquals(List.of("doc","doc"),result.citations().stream().map(mygrant.rag.dto.CitationResponse::externalId).toList());
+        verify(generator).generateJson(anyString(),argThat(context -> context.contains("[1] Chunk ID: chunk-A")
+                && context.contains("[2] Chunk ID: chunk-B") && !context.contains("SUMMARY: Proposed student admission rule")),anyMap(),anyString());
+        verify(judge).evaluateAnswer(anyString(),eq(result.answer()),eq(result.citations()));
+    }
     @Test void providerFailureReturnsRetryable503(){
         when(generator.generateJson(anyString(),anyString(),anyMap(),anyString())).thenThrow(new IllegalStateException("secret provider details"));
         var exception=assertThrows(ResponseStatusException.class,()->service.ask(21L,"owner@example.org",new PolicyChatService.Question("Why?",List.of())));
