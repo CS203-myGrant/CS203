@@ -71,5 +71,16 @@ class AnomalyServiceTests {
                 .hasMessageContaining("correctEffectiveDate");
     }
 
+    @Test
+    void givesAClientSafeErrorForAnUnlinkedDateConflict() {
+        Anomaly anomaly = new Anomaly(AnomalyType.EFFECTIVE_DATE_CONFLICT, null, null, null, "dates differ");
+        when(anomalies.findById(12L)).thenReturn(Optional.of(anomaly));
+
+        assertThatThrownBy(() -> service().resolve(12L, AnomalyStatus.RESOLVED,
+                "verified", LocalDate.of(2026, 11, 9), "admin@example.com"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("no linked rule and policy");
+    }
+
     private AnomalyService service() { return new AnomalyService(anomalies, rules, policies, events); }
 }

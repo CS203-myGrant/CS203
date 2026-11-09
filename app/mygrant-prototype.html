@@ -247,6 +247,7 @@
   /* ---------- PROFILE / FORMS ---------- */
   .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px 28px;background:var(--panel);border:1px solid var(--base-lighter);padding:28px;}
   .anomaly-refresh{margin:16px 0 20px;}
+  .anomaly-actions{display:flex;flex-direction:column;align-items:flex-start;gap:12px;}
   .field{display:flex;flex-direction:column;gap:6px;}
   .field label{font-size:16px;color:var(--text);}
   .field:has(> input[required]) > label[for]::after,.field:has(> select[required]) > label[for]::after{content:" (*Required)";color:var(--urgent);}
@@ -3094,13 +3095,24 @@ async function loadAnomalies(){
 async function resolveAnomaly(id,status){
   const note=prompt(status==='IGNORED'?'Why is this safe to ignore?':'Resolution note:'); if(!note) return;
   const anomaly=state.anomalies.find(a=>a.id===id); let correctEffectiveDate=null;
-  if(status==='RESOLVED'&&anomaly?.type==='EFFECTIVE_DATE_CONFLICT'){ correctEffectiveDate=prompt('Correct effective date (YYYY-MM-DD):'); if(!correctEffectiveDate)return; }
+  if(status==='RESOLVED'&&anomaly?.type==='EFFECTIVE_DATE_CONFLICT'){
+    if(anomaly.policyId==null||anomaly.ruleId==null){
+      showToast('This date conflict is not linked to a policy rule, so it cannot update a stored date. Ignore it or recreate it from the linked source.');
+      return;
+    }
+    correctEffectiveDate=prompt('Correct effective date (YYYY-MM-DD):');
+    if(!correctEffectiveDate)return;
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(correctEffectiveDate)||Number.isNaN(Date.parse(`${correctEffectiveDate}T00:00:00Z`))){
+      showToast('Enter the date as YYYY-MM-DD, for example 2026-11-09.');
+      return;
+    }
+  }
   try { await parseApiResponse(await apiFetch(`/api/v1/anomalies/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,note,correctEffectiveDate})})); showToast('Anomaly updated.'); await loadAnomalies(); } catch(error){showToast(error.message);}
 }
 function renderAnomalies(){
   if(state.anomaliesLoading)return '<p class="rag-status">Loading anomalies…</p>';
   if(state.anomaliesError)return `<div class="rag-error">${escapeHtml(state.anomaliesError)}</div>`;
-  const rows=state.anomalies.map(a=>`<tr><td><strong>${escapeHtml(a.type)}</strong><br><span class="tag">${escapeHtml(a.status)}</span></td><td>${escapeHtml(a.details)}<br><small>Policy ${a.policyId??'—'} · Rule ${a.ruleId??'—'} · Source ${a.sourceId??'—'}</small>${a.resolutionNote?`<br><small>Resolution: ${escapeHtml(a.resolutionNote)} (${escapeHtml(a.resolvedBy||'')})</small>`:''}</td><td>${escapeHtml(formatTimestamp(a.createdAt))}</td><td>${a.status==='OPEN'?`<button class="btn small" onclick="resolveAnomaly(${a.id},'RESOLVED')">Resolve</button> <button class="btn ghost small" onclick="resolveAnomaly(${a.id},'IGNORED')">Ignore</button>`:'—'}</td></tr>`).join('');
+  const rows=state.anomalies.map(a=>`<tr><td><strong>${escapeHtml(a.type)}</strong><br><span class="tag">${escapeHtml(a.status)}</span></td><td>${escapeHtml(a.details)}<br><small>Policy ${a.policyId??'—'} · Rule ${a.ruleId??'—'} · Source ${a.sourceId??'—'}</small>${a.resolutionNote?`<br><small>Resolution: ${escapeHtml(a.resolutionNote)} (${escapeHtml(a.resolvedBy||'')})</small>`:''}</td><td>${escapeHtml(formatTimestamp(a.createdAt))}</td><td>${a.status==='OPEN'?`<div class="anomaly-actions"><button class="btn small" onclick="resolveAnomaly(${a.id},'RESOLVED')">Resolve</button><button class="btn ghost small" onclick="resolveAnomaly(${a.id},'IGNORED')">Ignore</button></div>`:'—'}</td></tr>`).join('');
   const types=['ALL','EFFECTIVE_DATE_CONFLICT','UNCERTAIN_RULE_LINK','MALFORMED_SOURCE_DATA','CLASSIFICATION_FAILED']; const statuses=['ALL','OPEN','RESOLVED','IGNORED'];
   return `<div class="page-head"><h1>Anomalies</h1><p class="sub">Review conflicting or unreliable source data.</p></div><div class="form-grid"><div class="field"><label>Status</label><select onchange="state.anomalyStatus=this.value;loadAnomalies()">${statuses.map(x=>`<option ${state.anomalyStatus===x?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Type</label><select onchange="state.anomalyType=this.value;loadAnomalies()">${types.map(x=>`<option ${state.anomalyType===x?'selected':''}>${x}</option>`).join('')}</select></div></div><button class="btn ghost small anomaly-refresh" onclick="loadAnomalies()">Refresh</button><table><tr><th>Type</th><th>Details and related records</th><th>Reported</th><th>Action</th></tr>${rows||'<tr><td colspan="4">No anomalies match these filters.</td></tr>'}</table>`;
 }
