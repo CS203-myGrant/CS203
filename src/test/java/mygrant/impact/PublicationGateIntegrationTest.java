@@ -78,8 +78,9 @@ class PublicationGateIntegrationTest {
         var withheld = new ProfileImpactAssessment(ImpactUrgency.UNAVAILABLE, 0, "Unavailable notice",
                 List.of(), List.of(), List.of(), true, "OpenAI", "test", evaluation, 1);
         var response = recommendations.getOrGenerate(owner.getEmail(), policy, () -> withheld);
-        assertThat(response.summary()).isEqualTo("This assessment is awaiting review.");
-        assertThat(response.recommendedActions()).isEmpty();
+        assertThat(response.summary()).isEqualTo("Raw draft");
+        assertThat(response.recommendedActions()).containsExactly("Read the rule");
+        assertThat(response.requiresHumanReview()).isTrue();
         return evaluation.evaluationId();
     }
 
@@ -93,19 +94,16 @@ class PublicationGateIntegrationTest {
                 .when(judge).evaluateAnswer(anyString(), anyString(), anyList());
     }
 
-    @Test void evaluatorOutageQueuesRawAssessmentAndRepeatedEvaluationUsesSameReview() throws Exception {
+    @Test void evaluatorOutageKeepsRawAssessmentVisibleAndUnverified() throws Exception {
         UUID id = assessment("UNAVAILABLE");
         stubAssessment("NO");
         var first = publication.evaluate(id);
         var second = publication.evaluate(id);
         assertThat(second.reviewId()).isEqualTo(first.reviewId());
-        assertThat(second.publicationStatus()).isEqualTo("PENDING_REVIEW");
-        assertThat(review.pending(admin.getEmail())).singleElement().satisfies(pending -> {
-            assertThat(pending.draftSummary()).isEqualTo("Raw draft");
-            assertThat(pending.outputId()).isEqualTo(id);
-        });
+        assertThat(second.publicationStatus()).isEqualTo("PUBLISHED");
+        assertThat(review.pending(admin.getEmail())).isEmpty();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM action_items WHERE assessment_id = ?",
-                Long.class, first.reviewId())).isZero();
+                Long.class, first.reviewId())).isEqualTo(1L);
     }
 
     @Test void passingReevaluationPublishesHeldAssessmentAndCreatesActions() throws Exception {
@@ -132,7 +130,8 @@ class PublicationGateIntegrationTest {
 
     @Test void humanCorrectionSurvivesAutomatedRejectionAndRegeneration() throws Exception {
         UUID id = assessment("NO");
-        long reviewId = review.pending(admin.getEmail()).getFirst().id();
+        long reviewId = jdbc.queryForObject("SELECT id FROM policy_recommendations WHERE user_id = ?", Long.class, owner.getId());
+        jdbc.update("UPDATE policy_recommendations SET publication_status = 'PENDING_REVIEW' WHERE id = ?", reviewId);
         review.publishCorrection(reviewId, admin.getEmail(), new ImpactReviewController.Correction(
                 "LOW", 95, "Human correction", List.of("Verified"), List.of("Read official source"), List.of()));
         String corrected = jdbc.queryForObject("SELECT assessment_json FROM policy_recommendations WHERE id = ?", String.class, reviewId);
@@ -149,9 +148,9 @@ class PublicationGateIntegrationTest {
         UUID id = assessment("NO");
         jdbc.update("UPDATE policy_recommendations SET reviewed_by_human = TRUE WHERE user_id = ?", owner.getId());
         stubAssessment("YES");
-        assertThat(publication.evaluate(id).publicationStatus()).isEqualTo("PENDING_REVIEW");
+        assertThat(publication.evaluate(id).publicationStatus()).isEqualTo("PUBLISHED");
         assertThat(recommendations.getOrGenerate(owner.getEmail(), policy, () -> { throw new AssertionError("Human hold bypassed"); }).urgency())
-                .isEqualTo(ImpactUrgency.UNAVAILABLE);
+                .isEqualTo(ImpactUrgency.LOW);
     }
 
     UUID answer(String text, String verdict) throws Exception {
