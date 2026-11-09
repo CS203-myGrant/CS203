@@ -49,8 +49,10 @@ public class ActionItemController {
             @Parameter(description = "Only these statuses; repeat for more than one")
             @RequestParam(required = false) List<ActionStatus> status,
             @Parameter(description = "Only these priorities; repeat for more than one")
-            @RequestParam(required = false) List<ActionPriority> priority) {
-        return service.list(principal.getName(), pageable, status, priority);
+            @RequestParam(required = false) List<ActionPriority> priority,
+            @Parameter(description = "When true, return items whose policy assessment is archived")
+            @RequestParam(required = false) Boolean archived) {
+        return service.list(principal.getName(), pageable, status, priority, archived);
     }
 
     @PatchMapping("/{id}")

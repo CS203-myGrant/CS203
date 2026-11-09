@@ -129,16 +129,20 @@ public class ActionItemService {
      */
     @Transactional(readOnly = true)
     public Page<ActionItemView> list(String email, Pageable pageable, Collection<ActionStatus> statuses,
-            Collection<ActionPriority> priorities) {
+            Collection<ActionPriority> priorities, Boolean archived) {
         if (pageable.getPageSize() > 100 || pageable.getPageSize() < 1) {
             throw new IllegalArgumentException("Page size must be between 1 and 100");
         }
         long userId = userId(email);
         MapSqlParameterSource params = new MapSqlParameterSource("userId", userId);
         String where = " WHERE a.user_id = :userId AND " + ImpactVisibility.VISIBLE;
+        boolean archivedItems = Boolean.TRUE.equals(archived);
+        where += archivedItems ? " AND r.archived_at IS NOT NULL" : " AND r.archived_at IS NULL";
         List<String> statusNames = names(statuses);
         if (statusNames.isEmpty()) {
-            where += " AND a.status IN ('PENDING', 'IN_PROGRESS') AND r.archived_at IS NULL";
+            if (!archivedItems) {
+                where += " AND a.status IN ('PENDING', 'IN_PROGRESS')";
+            }
         } else {
             where += " AND a.status IN (:statuses)";
             params.addValue("statuses", statusNames);
