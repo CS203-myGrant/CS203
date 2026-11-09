@@ -1,3 +1,4 @@
+-- V39 is reserved for the processing-forecast migration already on main.
 -- Keep the original candidate and exact evidence for admin re-evaluation.
 -- Ownership is attached before an application response is returned.
 CREATE TABLE stored_ai_outputs (

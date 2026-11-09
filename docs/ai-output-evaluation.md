@@ -70,7 +70,7 @@ fields; old verdict-only results are not backfilled with fabricated scores.
 Rejected candidates are evaluated and audited before their replacement notice
 is returned. The notice carries the rejected candidate's evaluation; the notice
 itself was not scored. Raw rejected output, profile, question and judge rationale
-are not stored in the append-only audit table. V39 separately retains the candidate,
+are not stored in the append-only audit table. V40 separately retains the candidate,
 exact evidence context, ordered citations, and latest evaluation in `stored_ai_outputs`
 for publication review and admin re-evaluation. This is an intentional increase in
 retention: snapshots can include consented profile facts and question context. Attached
@@ -127,7 +127,7 @@ Content-Type: application/json
 pending review entries. The response contains `outputId`, the new `evaluation`, effective
 `publicationStatus`, `reviewedByHuman`, and `reviewId`. A re-evaluation's new audit UUID
 is an attempt ID; continue using the original `outputId` for subsequent requests. Missing,
-unknown, unowned, or pre-V39 outputs return 404; malformed requests return 400. Applicants
+unknown, unowned, or pre-V40 outputs return 404; malformed requests return 400. Applicants
 and managers receive 403; anonymous callers receive 401.
 
 Re-evaluation uses the stored candidate and original evidence, never client-supplied text
@@ -154,11 +154,28 @@ without duplicate review entries, human correction preservation, recorded human 
 invalid-citation answer review, and redaction after a previously passing answer fails.
 `EvaluationControllerSecurityTest` covers admin access, applicant/manager/anonymous denial,
 and request validation. All 86 targeted unit, PostgreSQL integration, security and API
-contract checks passed against `cs203_88_evaluation_test`, including V39 migration and
+contract checks passed against `cs203_88_evaluation_test`, including the publication-gate migration and
 review/feed/action/manager/ingestion regressions. Tests mock AI HTTP responses; no live
 model calls were made.
 
 ## Full-suite validation (2026-11-09)
+
+### PR migration compatibility correction
+
+PR #60's base (`842e943`) already contains
+`V39__create_processing_forecast.sql`. The original publication-gate migration
+also used V39, so the merged PR failed application startup with
+`Found more than one migration with version 39`, before the API contract could
+run. The publication-gate migration is now V40. Branch-only validation did not
+expose this collision; CI validates the combined PR and base branch.
+
+The corrected merge applies all 40 migrations and passes the API contract and
+the full Maven suite: 571 tests across 104 classes, zero failures, errors or
+skips, on a fresh isolated `cs203_88_ci_v40_test` database. Earlier local test databases
+containing the original publication-gate V39 were not repaired or modified;
+use a fresh database when validating the corrected migration sequence.
+
+### Earlier branch-only verification
 
 The complete Maven test suite passed against the isolated
 `cs203_88_evaluation_test` PostgreSQL database: **555 tests across 98 test
