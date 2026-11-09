@@ -243,6 +243,7 @@
 
   /* ---------- PROFILE / FORMS ---------- */
   .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px 28px;background:var(--panel);border:1px solid var(--base-lighter);padding:28px;}
+  .anomaly-refresh{margin:16px 0 20px;}
   .field{display:flex;flex-direction:column;gap:6px;}
   .field label{font-size:16px;color:var(--text);}
   .field:has(> input[required]) > label[for]::after,.field:has(> select[required]) > label[for]::after{content:" (*Required)";color:var(--urgent);}
@@ -3071,7 +3072,7 @@ function renderAnomalies(){
   if(state.anomaliesError)return `<div class="rag-error">${escapeHtml(state.anomaliesError)}</div>`;
   const rows=state.anomalies.map(a=>`<tr><td><strong>${escapeHtml(a.type)}</strong><br><span class="tag">${escapeHtml(a.status)}</span></td><td>${escapeHtml(a.details)}<br><small>Policy ${a.policyId??'—'} · Rule ${a.ruleId??'—'} · Source ${a.sourceId??'—'}</small>${a.resolutionNote?`<br><small>Resolution: ${escapeHtml(a.resolutionNote)} (${escapeHtml(a.resolvedBy||'')})</small>`:''}</td><td>${escapeHtml(formatTimestamp(a.createdAt))}</td><td>${a.status==='OPEN'?`<button class="btn small" onclick="resolveAnomaly(${a.id},'RESOLVED')">Resolve</button> <button class="btn ghost small" onclick="resolveAnomaly(${a.id},'IGNORED')">Ignore</button>`:'—'}</td></tr>`).join('');
   const types=['ALL','EFFECTIVE_DATE_CONFLICT','UNCERTAIN_RULE_LINK','MALFORMED_SOURCE_DATA','CLASSIFICATION_FAILED']; const statuses=['ALL','OPEN','RESOLVED','IGNORED'];
-  return `<div class="page-head"><h1>Anomalies</h1><p class="sub">Review conflicting or unreliable source data.</p></div><div class="form-grid"><div class="field"><label>Status</label><select onchange="state.anomalyStatus=this.value;loadAnomalies()">${statuses.map(x=>`<option ${state.anomalyStatus===x?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Type</label><select onchange="state.anomalyType=this.value;loadAnomalies()">${types.map(x=>`<option ${state.anomalyType===x?'selected':''}>${x}</option>`).join('')}</select></div></div><button class="btn ghost small" onclick="loadAnomalies()">Refresh</button><table><tr><th>Type</th><th>Details and related records</th><th>Reported</th><th>Action</th></tr>${rows||'<tr><td colspan="4">No anomalies match these filters.</td></tr>'}</table>`;
+  return `<div class="page-head"><h1>Anomalies</h1><p class="sub">Review conflicting or unreliable source data.</p></div><div class="form-grid"><div class="field"><label>Status</label><select onchange="state.anomalyStatus=this.value;loadAnomalies()">${statuses.map(x=>`<option ${state.anomalyStatus===x?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Type</label><select onchange="state.anomalyType=this.value;loadAnomalies()">${types.map(x=>`<option ${state.anomalyType===x?'selected':''}>${x}</option>`).join('')}</select></div></div><button class="btn ghost small anomaly-refresh" onclick="loadAnomalies()">Refresh</button><table><tr><th>Type</th><th>Details and related records</th><th>Reported</th><th>Action</th></tr>${rows||'<tr><td colspan="4">No anomalies match these filters.</td></tr>'}</table>`;
 }
 function renderAdmin(){
   const rows = state.adminSources.map(source=>{

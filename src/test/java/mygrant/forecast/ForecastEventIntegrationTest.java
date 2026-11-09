@@ -29,9 +29,9 @@ class ForecastEventIntegrationTest {
         String category = "SYNTHETIC-OPT-" + suffix;
         String office = "Synthetic office";
         User user = users.save(new User("Forecast event test", "forecast-event-" + suffix + "@example.org",
-                "unused", "F-1", null, null));
+                "unused"));
         try {
-            UserProfile profile = UserProfile.fromUser(user);
+            UserProfile profile = UserProfile.registrationProfile(user.getId(), "F-1", null, null, null, null);
             profile.setI765FilingDate(LocalDate.of(2026, 1, 1));
             profile.setOptStartDate(LocalDate.of(2026, 2, 1));
             profiles.save(profile);

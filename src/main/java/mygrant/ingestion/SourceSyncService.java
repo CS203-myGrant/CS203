@@ -142,6 +142,12 @@ public class SourceSyncService {
             runRepository.save(run);
             source.recordFailure(finishedAt, error);
             sourceRepository.save(source);
+            anomalyService.recordSourceFailure(
+                    source.getId(),
+                    "source-sync",
+                    error,
+                    exception
+            );
             return new IngestionSyncResponse(source.getId(), startedAt, finishedAt,
                     0, 0, false, error);
         }
