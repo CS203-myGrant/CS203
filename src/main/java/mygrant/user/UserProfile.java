@@ -22,6 +22,12 @@ public class UserProfile {
     @Column(name = "visa_type", nullable = false, length = 20)
     private String visaType;
 
+    @Column(name = "immigrant_category", length = 30)
+    private String immigrantCategory;
+
+    @Column(name = "chargeability_area", length = 100)
+    private String chargeabilityArea;
+
     @Column(name = "country_of_origin", length = 100)
     private String countryOfOrigin;
 
@@ -48,6 +54,12 @@ public class UserProfile {
 
     @Column(name = "i140_filing_date")
     private LocalDate i140FilingDate;
+
+    @Column(name = "i765_filing_date")
+    private LocalDate i765FilingDate;
+
+    @Column(name = "i539_filing_date")
+    private LocalDate i539FilingDate;
 
     @Column(name = "priority_date")
     private LocalDate priorityDate;
@@ -105,6 +117,22 @@ public class UserProfile {
 
     public void setVisaType(String visaType) {
         this.visaType = visaType;
+    }
+
+    public String getImmigrantCategory() {
+        return immigrantCategory;
+    }
+
+    public void setImmigrantCategory(String immigrantCategory) {
+        this.immigrantCategory = immigrantCategory;
+    }
+
+    public String getChargeabilityArea() {
+        return chargeabilityArea;
+    }
+
+    public void setChargeabilityArea(String chargeabilityArea) {
+        this.chargeabilityArea = chargeabilityArea;
     }
 
     public String getCountryOfOrigin() {
@@ -174,6 +202,11 @@ public class UserProfile {
     public LocalDate getI140FilingDate() {
         return i140FilingDate;
     }
+
+    public LocalDate getI765FilingDate() { return i765FilingDate; }
+    public void setI765FilingDate(LocalDate date) { this.i765FilingDate = date; }
+    public LocalDate getI539FilingDate() { return i539FilingDate; }
+    public void setI539FilingDate(LocalDate date) { this.i539FilingDate = date; }
 
     public void setI140FilingDate(LocalDate i140FilingDate) {
         this.i140FilingDate = i140FilingDate;

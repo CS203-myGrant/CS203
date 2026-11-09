@@ -1,10 +1,12 @@
 package mygrant.user;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +16,8 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
 
 import mygrant.auth.JwtService;
 import mygrant.common.DuplicateEmailException;
@@ -76,6 +80,20 @@ class UserControllerTest {
     }
 
     @Test
+    void refreshReturnsNewAccessAndRefreshTokens() throws Exception {
+        LoginResponse response = successResponse();
+        response.setRefreshToken("new-refresh-token");
+        when(userService.refresh("old-refresh-token")).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"old-refresh-token\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").value("token"))
+                .andExpect(jsonPath("$.refreshToken").value("new-refresh-token"));
+    }
+
+    @Test
     void invalidLoginReturnsUnauthorized() throws Exception {
         when(userService.loginUser(any()))
                 .thenThrow(new InvalidCredentialsException("Invalid email or password"));
@@ -102,8 +120,9 @@ class UserControllerTest {
                                   "visaType": "F-1"
                                 }
                                 """))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message").value("An account with that email already exists"));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Registration could not be completed"))
+                .andExpect(jsonPath("$.validationErrors.userEmail").doesNotExist());
     }
 
     @Test
@@ -132,6 +151,18 @@ class UserControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message")
                         .value("Request body is invalid. Check the JSON and date values."));
+    }
+
+    @Test
+    void logoutRevokesThePresentedRefreshToken() throws Exception {
+    mockMvc.perform(post("/api/v1/auth/logout")
+                    .principal(new UsernamePasswordAuthenticationToken(
+                        "student@example.com", null))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"refreshToken\":\"device-a-refresh-token\"}"))
+            .andExpect(status().isNoContent());
+
+    verify(userService).logout("student@example.com", "device-a-refresh-token");
     }
 
     private LoginResponse successResponse() {

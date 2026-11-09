@@ -9,6 +9,7 @@ public record ProfileImpactAssessment(
         String summary,
         List<String> reasons,
         List<String> recommendedActions,
+        List<String> missingInformation,
         boolean requiresHumanReview,
         String provider,
         String model,

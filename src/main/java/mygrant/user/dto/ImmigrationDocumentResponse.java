@@ -11,7 +11,9 @@ public record ImmigrationDocumentResponse(
         String fileName,
         String contentType,
         long sizeBytes,
-        Instant uploadedAt
+        Instant uploadedAt,
+        String issuingAuthority,
+        boolean policyMatchingConsent
 ) {
     public static ImmigrationDocumentResponse from(ImmigrationDocument document) {
         return new ImmigrationDocumentResponse(
@@ -20,7 +22,9 @@ public record ImmigrationDocumentResponse(
                 document.getFileName(),
                 document.getContentType(),
                 document.getSizeBytes(),
-                document.getUploadedAt()
+                document.getUploadedAt(),
+                document.getIssuingAuthority(),
+                document.hasPolicyMatchingConsent()
         );
     }
 }

@@ -51,9 +51,13 @@ public class VisaTypeClassifier {
         // use those explicit signals instead of incidental full-text mentions.
         boolean titleHasSignal = SIGNALS.values().stream()
                 .flatMap(List::stream).anyMatch(normalizedTitle::contains);
-        return titleHasSignal
-                ? classifyTitle(normalizedTitle)
-                : classifyFullText(content.toLowerCase(Locale.ROOT));
+        if (titleHasSignal) {
+            return classifyTitle(normalizedTitle);
+        }
+        if (content == null || content.isBlank()) {
+            return result(List.of(), List.of());
+        }
+        return classifyFullText(content.toLowerCase(Locale.ROOT));
     }
 
     private VisaClassification classifyTitle(String normalizedTitle) {

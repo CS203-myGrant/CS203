@@ -21,12 +21,29 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import mygrant.policies.PolicyDocument;
+import mygrant.policies.PolicyDocumentRepository;
 import mygrant.policies.PolicyIndexedEvent;
+import mygrant.policies.PolicyStatus;
+import mygrant.policies.SourceType;
+import mygrant.rules.PolicyChangedEvent;
+import mygrant.rules.PolicyRuleStore;
+import mygrant.rules.RuleChange;
+import mygrant.rules.RuleSource;
+import mygrant.rules.RuleState;
+import mygrant.testclock.TestClock;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
 import mygrant.user.UserRole;
 import mygrant.user.UserProfile;
 import mygrant.user.UserProfileRepository;
+import mygrant.user.ImmigrationDocument;
+import mygrant.user.ImmigrationDocumentRepository;
+import mygrant.user.ImmigrationDocumentType;
+import mygrant.user.ProfileFieldConsentRepository;
+import mygrant.user.ProfileFieldConsent;
+import mygrant.user.ProfileFieldDefinition;
+import mygrant.policies.PolicyRecommendationStore;
 
 /** Verifies who is notified about a new policy and that inbox access is scoped to the owner. */
 @ExtendWith(MockitoExtension.class)
@@ -43,6 +60,18 @@ class NotificationServiceTests {
 
     @Mock
     private NotificationStreamRegistry streamRegistry;
+
+    @Mock
+    private PolicyDocumentRepository policyRepository;
+
+    @Mock
+    private PolicyRuleStore ruleStore;
+
+    @Mock private ImmigrationDocumentRepository immigrationDocuments;
+    @Mock private ProfileFieldConsentRepository consents;
+    @Mock private PolicyRecommendationStore recommendations;
+
+    private final TestClock testClock = new TestClock(true);
 
     @Captor
     private ArgumentCaptor<List<Notification>> saved;
@@ -75,6 +104,80 @@ class NotificationServiceTests {
     }
 
     @Test
+    void aPolicyThatMovedItsRuleGetsNoGenericAlert() {
+        service().onPolicyIndexed(new PolicyIndexedEvent(3L, "Fixed Time Period of Admission", List.of("F-1"),
+                LocalDate.parse("2026-09-15"), "Final rule.", LocalDate.parse("2026-07-17"), true));
+
+        verify(notificationRepository, org.mockito.Mockito.never()).saveAll(anyList());
+        verify(userRepository, org.mockito.Mockito.never()).findByRoleAndVisaTypeIn(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void aRuleChangeAlertSaysWhatMovedAndBelongsToTheDocumentThatMovedIt() {
+        User student = user(7L, "student@example.com");
+        when(userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("F-1", "J-1")))
+                .thenReturn(List.of(student));
+
+        service().onPolicyChanged(change(5L, new RuleState(PolicyStatus.FINAL, LocalDate.parse("2026-09-15"), false),
+                new RuleState(PolicyStatus.FINAL, LocalDate.parse("2026-11-01"), false), "Homeland Security Department"));
+
+        verify(notificationRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).singleElement().satisfies(notification -> {
+            assertThat(notification.getPolicyId()).isEqualTo(5L);
+            assertThat(notification.getMessage()).isEqualTo("Rule update for F-1, J-1: effective date moved from "
+                    + "15 Sep 2026 to 1 Nov 2026: Fixed Time Period of Admission");
+        });
+        verify(streamRegistry).publish(org.mockito.ArgumentMatchers.eq(7L), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void aRepeatedChangeEventSkipsReadersAlreadyAlerted() {
+        User alerted = user(7L, "student@example.com");
+        User other = user(8L, "other@example.com");
+        when(userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("F-1", "J-1")))
+                .thenReturn(List.of(alerted, other));
+        when(notificationRepository.findUserIdsByPolicyId(5L)).thenReturn(java.util.Set.of(7L));
+
+        service().onPolicyChanged(change(5L, new RuleState(PolicyStatus.PROPOSED, null, false),
+                new RuleState(PolicyStatus.FINAL, LocalDate.parse("2026-09-15"), false), "Homeland Security Department"));
+
+        verify(notificationRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).singleElement()
+                .satisfies(notification -> assertThat(notification.getUserId()).isEqualTo(8L));
+    }
+
+    @Test
+    void theTestClockSyncUsesTheChangeWordingForADocumentThatMovedItsRule() {
+        User student = user(7L, "student@example.com");
+        LocalDate today = LocalDate.parse("2026-09-30");
+        testClock.setUserDate(7L, today);
+        when(policyRepository.findBySourceTypeAndPublicationDateLessThanEqualOrderByPublicationDateAscIdAsc(
+                SourceType.PRIMARY, today)).thenReturn(List.of(policy(5L, "Fixed Time Period of Admission", "F-1,J-1")));
+        var row = new PolicyRuleStore.HistoryRow(1L, 9L, new RuleState(PolicyStatus.FINAL, LocalDate.parse("2026-09-15"), false),
+                new RuleState(PolicyStatus.PROPOSED, null, false), true, true, false,
+                new RuleSource(5L, "FR-5", SourceType.PRIMARY, "https://example.gov", "Fixed Time Period of Admission",
+                        "DHS", LocalDate.parse("2026-09-01")), mygrant.rules.RecordedBy.INGESTION, java.time.Instant.now());
+        when(ruleStore.alertedChangeFrom(5L)).thenReturn(Optional.of(
+                new PolicyRuleStore.AlertedChange("Fixed Time Period of Admission", row)));
+
+        service().syncToTestClock(student);
+
+        verify(notificationRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).singleElement().satisfies(notification -> assertThat(notification.getMessage())
+                .isEqualTo("Rule update for F-1, J-1: moved from proposed to final, effective 15 Sep 2026: "
+                        + "Fixed Time Period of Admission"));
+    }
+
+    private static PolicyChangedEvent change(long sourceId, RuleState previous, RuleState current, String agency) {
+        return new PolicyChangedEvent(9L, 1L, "Fixed Time Period of Admission", previous, current,
+                RuleChange.between(previous, current),
+                new RuleSource(sourceId, "FR-" + sourceId, SourceType.PRIMARY, "https://example.gov",
+                        "Fixed Time Period of Admission", agency, LocalDate.parse("2026-09-01")),
+                List.of("F-1", "J-1"), "Fixed Time Period of Admission", "Sets a fixed period of admission.");
+    }
+
+    @Test
     void pushFailureDoesNotFailNotificationCreation() {
         User student = user(7L, "student@example.com");
         when(userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("F-1")))
@@ -86,6 +189,136 @@ class NotificationServiceTests {
 
         verify(notificationRepository).saveAll(saved.capture());
         assertThat(saved.getValue()).hasSize(1);
+    }
+
+    @Test
+    void matchesExplicitlyConsentedPalestinianAuthorityTravelDocumentHolderCase() {
+        User traveler = user(7L, "traveler@example.com");
+        when(userRepository.findByRole(UserRole.APPLICANT)).thenReturn(List.of(traveler));
+        when(immigrationDocuments.findByUserIdAndPolicyMatchingConsentTrue(7L)).thenReturn(List.of(
+                new ImmigrationDocument(7L, ImmigrationDocumentType.TRAVEL_DOCUMENT, "travel.pdf",
+                        "application/pdf", 10, new byte[] {1}, "PA", true)));
+        NotificationService service = new NotificationService(notificationRepository, userRepository,
+                userProfileRepository, new PolicyImpactRules(), streamRegistry, policyRepository,
+                testClock, ruleStore, consents, immigrationDocuments, recommendations);
+
+        service.onPolicyIndexed(new PolicyIndexedEvent(3L, "Entry proclamation", List.of("ENTRY_RESTRICTION"),
+                null, "Restriction applies to PA-issued travel documents.", LocalDate.now(), java.util.Set.of(),
+                true, false, true));
+
+        verify(notificationRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).extracting(Notification::getUserId).containsExactly(7L);
+        assertThat(saved.getValue().getFirst().getMessage()).contains("travelers using a PA-issued travel document");
+    }
+
+    @Test
+    void entryRestrictionDoesNotNotifyVisaMatchesOutsideAffectedCountries() {
+        User affectedCitizen = user(7L, "affected@example.com");
+        User incidentalVisaMention = user(8L, "other@example.com");
+        UserProfile affectedProfile = UserProfile.fromUser(affectedCitizen);
+        affectedProfile.setCountryOfCitizenship("Afghanistan");
+        UserProfile otherProfile = UserProfile.fromUser(incidentalVisaMention);
+        otherProfile.setCountryOfCitizenship("Malaysia");
+        when(userRepository.findByRole(UserRole.APPLICANT))
+                .thenReturn(List.of(affectedCitizen, incidentalVisaMention));
+        when(consents.findByUserId(7L)).thenReturn(List.of(new ProfileFieldConsent(7L,
+                ProfileFieldDefinition.COUNTRY_OF_CITIZENSHIP, java.time.Instant.now())));
+        when(consents.findByUserId(8L)).thenReturn(List.of(new ProfileFieldConsent(8L,
+                ProfileFieldDefinition.COUNTRY_OF_CITIZENSHIP, java.time.Instant.now())));
+        when(userProfileRepository.findById(7L)).thenReturn(Optional.of(affectedProfile));
+        when(userProfileRepository.findById(8L)).thenReturn(Optional.of(otherProfile));
+        lenient().when(userProfileRepository.findAllById(List.of(7L))).thenReturn(List.of(affectedProfile));
+
+        new NotificationService(notificationRepository, userRepository, userProfileRepository,
+                new PolicyImpactRules(), streamRegistry, policyRepository, testClock,
+                ruleStore, consents, immigrationDocuments, recommendations)
+                .onPolicyIndexed(new PolicyIndexedEvent(3L, "Entry proclamation mentioning F-1",
+                List.of("F-1"), null, "Entry restrictions for nationals of Afghanistan.",
+                null, java.util.Set.of("AF"), true, false, false));
+
+        verify(userRepository, org.mockito.Mockito.never())
+                .findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("F-1"));
+        verify(notificationRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).extracting(Notification::getUserId).containsExactly(7L);
+    }
+
+    @Test
+    void entryRestrictionDoesNotMatchCitizenshipWithoutConsent() {
+        User applicant = user(7L, "applicant@example.com");
+        UserProfile profile = UserProfile.fromUser(applicant);
+        profile.setCountryOfCitizenship("Afghanistan");
+        when(userRepository.findByRole(UserRole.APPLICANT)).thenReturn(List.of(applicant));
+        new NotificationService(notificationRepository, userRepository, userProfileRepository,
+                new PolicyImpactRules(), streamRegistry, policyRepository, testClock,
+                ruleStore, consents, immigrationDocuments, recommendations)
+                .onPolicyIndexed(new PolicyIndexedEvent(3L, "Entry proclamation",
+                List.of("ENTRY_RESTRICTION"), null, "Entry restrictions for nationals of Afghanistan.",
+                null, java.util.Set.of("AF"), true, false, false));
+
+        verify(notificationRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).isEmpty();
+    }
+
+    @Test
+    void visaAndNationalityOverlapUsesOneExistingPolicyAlert() {
+        User applicant = user(7L, "overlap@example.com");
+        UserProfile profile = UserProfile.fromUser(applicant);
+        profile.setCountryOfCitizenship("AF");
+        when(userRepository.findByRole(UserRole.APPLICANT)).thenReturn(List.of(applicant));
+        when(consents.findByUserId(7L)).thenReturn(List.of(new ProfileFieldConsent(7L,
+                ProfileFieldDefinition.COUNTRY_OF_CITIZENSHIP, java.time.Instant.now())));
+        when(userProfileRepository.findById(7L)).thenReturn(Optional.of(profile));
+        when(notificationRepository.findUserIdsByPolicyId(3L)).thenReturn(java.util.Set.of());
+
+        new NotificationService(notificationRepository, userRepository, userProfileRepository,
+                new PolicyImpactRules(), streamRegistry, policyRepository, testClock,
+                ruleStore, consents, immigrationDocuments, recommendations)
+                .onPolicyIndexed(new PolicyIndexedEvent(3L, "Overlapping restriction", List.of("F-1"), null,
+                        "Entry restriction for nationals of Afghanistan; F-1 is mentioned in source context.",
+                        LocalDate.parse("2025-06-10"), java.util.Set.of("AF"), true, false, false));
+
+        verify(notificationRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).singleElement().satisfies(row -> {
+            assertThat(row.getUserId()).isEqualTo(7L);
+            assertThat(row.getPolicyId()).isEqualTo(3L);
+        });
+        verify(userRepository, org.mockito.Mockito.never())
+                .findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("F-1"));
+    }
+
+    @Test
+    void missingConsentedNationalityDoesNotGuessAnAffectedCountry() {
+        User applicant = user(7L, "missing-nationality@example.com");
+        UserProfile profile = UserProfile.fromUser(applicant);
+        when(userRepository.findByRole(UserRole.APPLICANT)).thenReturn(List.of(applicant));
+        when(consents.findByUserId(7L)).thenReturn(List.of(new ProfileFieldConsent(7L,
+                ProfileFieldDefinition.COUNTRY_OF_CITIZENSHIP, java.time.Instant.now())));
+        when(userProfileRepository.findById(7L)).thenReturn(Optional.of(profile));
+
+        new NotificationService(notificationRepository, userRepository, userProfileRepository,
+                new PolicyImpactRules(), streamRegistry, policyRepository, testClock,
+                ruleStore, consents, immigrationDocuments, recommendations)
+                .onPolicyIndexed(new PolicyIndexedEvent(3L, "Entry restriction", List.of(), null,
+                        "Entry restriction for nationals of Afghanistan.", LocalDate.parse("2025-06-10"),
+                        java.util.Set.of("AF"), true, false, false));
+
+        verify(notificationRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).isEmpty();
+    }
+
+    @Test
+    void repeatedIndexEventDoesNotCreateASecondAlertForTheSameAssessment() {
+        User applicant = user(7L, "already-alerted@example.com");
+        when(userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("F-1")))
+                .thenReturn(List.of(applicant));
+        when(notificationRepository.findUserIdsByPolicyId(3L)).thenReturn(java.util.Set.of(7L));
+
+        service().onPolicyIndexed(new PolicyIndexedEvent(3L, "F-1 policy", List.of("F-1"), null, "Policy."));
+
+        verify(notificationRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).isEmpty();
+        verify(streamRegistry, org.mockito.Mockito.never()).publish(org.mockito.ArgumentMatchers.eq(7L),
+                org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -274,6 +507,24 @@ class NotificationServiceTests {
     }
 
     @Test
+    void aDelayNoticesGenericAlertLeavesOutTheFederalRegistersEffectiveOn() {
+        // Sent only when its new date could not be read; effective_on is not that date.
+        User worker = user(7L, "worker@example.com");
+        when(userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("H-1B"))).thenReturn(List.of(worker));
+        String title = "Modification of Registration Requirement; Delay of Effective Date";
+
+        service().onPolicyIndexed(new PolicyIndexedEvent(3L, title, List.of("H-1B"), LocalDate.parse("2021-01-08"),
+                "ACTION: Final rule; delay of effective date.\n\nSUMMARY: The rule is delayed."));
+        service().onPolicyIndexed(new PolicyIndexedEvent(4L, "Fee schedule update", List.of("H-1B"),
+                LocalDate.parse("2021-03-09"), "ACTION: Final rule.\n\nSUMMARY: Adjusts filing fees."));
+
+        verify(notificationRepository, org.mockito.Mockito.times(2)).saveAll(saved.capture());
+        assertThat(saved.getAllValues()).extracting(batch -> batch.getFirst().getMessage()).containsExactly(
+                "New policy that may affect H-1B: " + title,
+                "New policy that may affect H-1B: Fee schedule update (effective 2021-03-09)");
+    }
+
+    @Test
     void doesNotFlagActionWhenTheUserHasNotFilledInTheAffectedField() {
         User student = user(7L, "student@example.com"); // no program end date, no academic level
         student.setAcademicLevel(null);
@@ -289,6 +540,47 @@ class NotificationServiceTests {
     }
 
     @Test
+    void holdsBackAlertsFromReadersWhoseTestClockIsBeforePublication() {
+        User early = user(7L, "early@example.com");
+        User current = user(8L, "current@example.com");
+        when(userRepository.findByRoleAndVisaTypeIn(UserRole.APPLICANT, List.of("F-1")))
+                .thenReturn(List.of(early, current));
+        testClock.setUserDate(7L, LocalDate.parse("2026-08-31"));
+
+        service().onPolicyIndexed(new PolicyIndexedEvent(3L, "Fee update", List.of("F-1"), null,
+                "Fees change.", LocalDate.parse("2026-09-01")));
+
+        verify(notificationRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).singleElement()
+                .satisfies(notification -> assertThat(notification.getUserId()).isEqualTo(8L));
+    }
+
+    @Test
+    void testClockSyncAlertsOnlyPoliciesForTheUsersCurrentCategory() {
+        User worker = user(7L, "worker@example.com");
+        worker.setVisaType("H-1B");
+        testClock.setUserDate(7L, LocalDate.parse("2026-09-30"));
+        LocalDate today = LocalDate.parse("2026-09-30");
+        when(notificationRepository.deleteForPoliciesPublishedAfter(7L, today)).thenReturn(2);
+        when(notificationRepository.findPolicyIdsByUserId(7L)).thenReturn(java.util.Set.of(1L));
+        when(policyRepository.findBySourceTypeAndPublicationDateLessThanEqualOrderByPublicationDateAscIdAsc(
+                SourceType.PRIMARY, today)).thenReturn(List.of(
+                        policy(1L, "Already alerted", "H-1B"),
+                        policy(2L, "Student rule", "F-1,J-1"),
+                        policy(3L, "Worker fee rule", "F-1,H-1B")));
+
+        var sync = service().syncToTestClock(worker);
+
+        verify(notificationRepository).saveAll(saved.capture());
+        assertThat(saved.getValue()).singleElement().satisfies(notification -> {
+            assertThat(notification.getPolicyId()).isEqualTo(3L);
+            assertThat(notification.getMessage()).contains("Worker fee rule");
+        });
+        verify(streamRegistry).publish(org.mockito.ArgumentMatchers.eq(7L), org.mockito.ArgumentMatchers.any());
+        assertThat(sync).isEqualTo(new NotificationService.InboxSync(1, 2));
+    }
+
+    @Test
     void markReadOnlyFindsTheCallersOwnNotification() {
         when(userRepository.findByEmail("student@example.com"))
                 .thenReturn(Optional.of(user(7L, "student@example.com")));
@@ -297,6 +589,26 @@ class NotificationServiceTests {
         assertThatThrownBy(() -> service()
                 .markRead("student@example.com", 99L))
                 .isInstanceOf(NotificationNotFoundException.class);
+    }
+
+    @Test
+    void getOnlyReturnsTheCallersOwnNotification() {
+        Notification own = new Notification(7L, 1, 3L, "Own alert", List.of());
+        when(userRepository.findByEmail("student@example.com"))
+                .thenReturn(Optional.of(user(7L, "student@example.com")));
+        when(notificationRepository.findByIdAndUserId(1L, 7L)).thenReturn(Optional.of(own));
+        // Notification 2 belongs to someone else, so the owner-scoped lookup finds nothing.
+        when(notificationRepository.findByIdAndUserId(2L, 7L)).thenReturn(Optional.empty());
+        when(notificationRepository.findByIdAndUserId(99L, 7L)).thenReturn(Optional.empty());
+
+        assertThat(service().get("student@example.com", 1L).message()).isEqualTo("Own alert");
+        Throwable otherUsers = org.assertj.core.api.Assertions.catchThrowable(
+                () -> service().get("student@example.com", 2L));
+        Throwable missing = org.assertj.core.api.Assertions.catchThrowable(
+                () -> service().get("student@example.com", 99L));
+        assertThat(otherUsers).isInstanceOf(NotificationNotFoundException.class);
+        assertThat(missing).isInstanceOf(NotificationNotFoundException.class);
+        assertThat(otherUsers.getMessage()).isEqualTo(missing.getMessage().replace("99", "2"));
     }
 
     @Test
@@ -350,8 +662,18 @@ class NotificationServiceTests {
                 userRepository,
                 userProfileRepository,
                 new PolicyImpactRules(),
-                streamRegistry
+                streamRegistry,
+                policyRepository,
+                testClock,
+                ruleStore
         );
+    }
+
+    private PolicyDocument policy(Long id, String title, String visaTypes) {
+        PolicyDocument policy = new PolicyDocument("FR-" + id, title, "DHS", visaTypes, PolicyStatus.FINAL,
+                SourceType.PRIMARY, LocalDate.parse("2026-09-01"), null, "https://example.gov", "Text.", "hash");
+        ReflectionTestUtils.setField(policy, "id", id);
+        return policy;
     }
 
     private User user(Long id, String email) {

@@ -1,0 +1,12 @@
+spring:
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+  ai:
+    openai:
+      # No placeholder here: a hosted app without a key fails at startup, not on first import.
+      api-key: ${OPENAI_API_KEY}
+
+jwt:
+  secret: ${JWT_SECRET}

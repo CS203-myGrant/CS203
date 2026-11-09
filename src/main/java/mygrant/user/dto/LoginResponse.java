@@ -15,7 +15,8 @@ public class LoginResponse {
     private LocalDate programEndDate;
     private String currentLocation;
     private LocalDate upcomingTravelDate;
-    private String token; // Optional placeholder for JWT authentication
+    private String token;
+    private String refreshToken;
     private UserRole role;
     private boolean profileComplete;
 
@@ -38,6 +39,11 @@ public class LoginResponse {
     public LoginResponse(User user, String token) {
         this(user);
         this.token = token;
+    }
+
+    public LoginResponse(User user, String token, String refreshToken) {
+        this(user, token);
+        this.refreshToken = refreshToken;
     }
 
     // Getters and Setters
@@ -112,6 +118,14 @@ public class LoginResponse {
 
     public void setToken(String token) {
         this.token = token;
+    }
+
+    public String getRefreshToken() {
+        return refreshToken;
+    }
+
+    public void setRefreshToken(String refreshToken) {
+        this.refreshToken = refreshToken;
     }
 
     public UserRole getRole() {

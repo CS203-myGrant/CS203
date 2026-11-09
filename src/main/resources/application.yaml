@@ -25,14 +25,26 @@ spring:
     open-in-view: false
 
   ai:
+    # Spring AI is used only for embeddings. Chat goes through OpenAiGenerationService,
+    # so every other OpenAI model the starter offers is switched off.
     model:
-      embedding: ollama
-    ollama:
-      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      embedding: openai
+      chat: none
+      image: none
+      audio:
+        speech: none
+        transcription: none
+      moderation: none
+    openai:
+      # The starter refuses to start without a key, so tests and CI that never embed
+      # anything get a placeholder; a real call with it fails with HTTP 401.
+      api-key: ${OPENAI_API_KEY:not-configured}
       embedding:
-        model: ${OLLAMA_EMBEDDING_MODEL:mxbai-embed-large}
-      chat:
-        model: ${OLLAMA_CHAT_MODEL:llama3.2}
+        options:
+          model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+          # Matches the pgvector column below, so switching from the old 1024-dimension
+          # Ollama model needed no schema change. Change both together.
+          dimensions: 1024
     vectorstore:
       pgvector:
         initialize-schema: true
@@ -43,19 +55,63 @@ spring:
         table-name: policy_chunks
         schema-validation: false
 
+app:
+  cors:
+    allowed-origins: "${CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}"
+
 jwt:
   secret: ${JWT_SECRET}
-  expiration-ms: ${JWT_EXPIRATION_MS:3600000}
+  expiration-ms: ${JWT_EXPIRATION_MS:900000}
+  refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
 
-groq:
-  api-key: ${GROQ_API_KEY:}
-  model: ${GROQ_MODEL:openai/gpt-oss-20b}
-  judge-model: ${GROQ_JUDGE_MODEL:qwen/qwen3.8-27b}
-  base-url: ${GROQ_BASE_URL:https://api.groq.com/openai/v1}
+admin:
+  bootstrap:
+    email: ${ADMIN_EMAIL:}
+    password: ${ADMIN_PASSWORD:}
+
+openai:
+  api-key: ${OPENAI_API_KEY:}
+  model: ${OPENAI_MODEL:gpt-6.1-sol}
+  base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+
+anthropic:
+  api-key: ${ANTHROPIC_API_KEY:}
+  judge-model: ${ANTHROPIC_JUDGE_MODEL:claude-haiku-5-5}
+  base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
+
+mygrant:
+  # TEMPORARY testing aid: lets admins and applicants move the app's "today" to when a
+  # policy is published, from the admin page and profile settings. Set to false to hide it.
+  test-clock:
+    enabled: ${TEST_CLOCK_ENABLED:true}
+  rules:
+    # CS203-86: link documents stored before policy rules existed, in the background after startup.
+    # Idempotent; a failure is logged and the application keeps running.
+    backfill-on-startup: ${RULES_BACKFILL_ON_STARTUP:true}
+  email:
+    app-base-url: ${APP_BASE_URL:http://localhost:8080}
+    # Local demos only: also email password-registered accounts, whose address is unverified.
+    allow-unverified-recipients: ${EMAIL_ALLOW_UNVERIFIED_RECIPIENTS:false}
+    # Set to false to run no email jobs at all. Sending also needs RESEND_API_KEY and RESEND_FROM_EMAIL.
+    jobs-enabled: ${EMAIL_JOBS_ENABLED:true}
+    dispatch-interval: ${EMAIL_DISPATCH_INTERVAL:30s}
+    max-attempts: ${EMAIL_MAX_ATTEMPTS:4}
+    retry-backoff: ${EMAIL_RETRY_BACKOFF:1m,5m,15m}
+    immediate-lookback: ${EMAIL_IMMEDIATE_LOOKBACK:24h}
+    stuck-after: ${EMAIL_STUCK_AFTER:10m}
+    batch-size: ${EMAIL_BATCH_SIZE:50}
+    # Spring cron (second minute hour day month weekday), run in digest-zone.
+    digest-cron: ${EMAIL_DIGEST_CRON:0 0 8 * * *}
+    digest-zone: ${EMAIL_DIGEST_ZONE:America/New_York}
+    digest-lookback: ${EMAIL_DIGEST_LOOKBACK:48h}
 
 springdoc:
+  # Every JSON endpoint is documented as application/json rather than */*.
+  default-produces-media-type: application/json
   swagger-ui:
     path: /swagger-ui.html
+    # Within each feature section, list operations alphabetically by path.
+    operations-sorter: alpha
 
 management:
   endpoints:
@@ -67,5 +123,6 @@ management:
       show-details: when-authorized
 
 server:
+  port: ${PORT:8080}
   error:
     include-message: never

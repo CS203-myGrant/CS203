@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SYNTHETIC TEST FIXTURE (CS203-86): not real Guardian articles. Written to test how news is tied to
+     the real rule DHS Docket ICEB-2025-0001 / RIN 1653-AA95 (Federal Register 2025-16554 and 2026-14439).
+     The links are what real coverage carries: an article almost never quotes the docket or RIN. -->
+<rss version="2.0"><channel>
+  <title>US immigration | The Guardian</title>
+  <link>https://www.theguardian.com/us-news/usimmigration</link>
+  <item>
+    <title>Judge blocks rule ending open-ended stays for F-1 students</title>
+    <link>https://www.theguardian.com/us-news/2026/oct/01/judge-blocks-student-visa-rule</link>
+    <description><![CDATA[<p>A federal judge granted a preliminary injunction against the
+      <a href="https://www.federalregister.gov/d/2026-14439">Department of Homeland Security's final rule</a>
+      fixing the admission period for F-1 students and J-1 exchange visitors. The
+      <a href="https://www.regulations.gov/docket/ICEB-2025-0001">rulemaking docket</a> lists the comments.</p>]]></description>
+    <pubDate>Thu, 01 Oct 2026 14:00:00 GMT</pubDate>
+  </item>
+  <item>
+    <title>What the new admission rule means for F-1 students</title>
+    <link>https://www.theguardian.com/us-news/2026/jul/20/f1-admission-rule-explainer</link>
+    <description><![CDATA[<p>Students will be admitted for a fixed length of stay instead of duration of status, under the
+      <a href="https://www.federalregister.gov/documents/2026/07/17/2026-14439/establishing-a-fixed-time-period-of-admission">final rule</a>
+      published in July. Extensions of stay will need an application.</p>]]></description>
+    <pubDate>Mon, 20 Jul 2026 09:00:00 GMT</pubDate>
+  </item>
+  <item>
+    <title>Universities sue over F-1 student admission limits</title>
+    <link>https://www.theguardian.com/us-news/2026/oct/02/universities-sue-student-visa</link>
+    <description><![CDATA[<p>A group of universities filed a lawsuit over limits on how long F-1 students may stay.</p>]]></description>
+    <pubDate>Fri, 02 Oct 2026 10:00:00 GMT</pubDate>
+  </item>
+</channel></rss>

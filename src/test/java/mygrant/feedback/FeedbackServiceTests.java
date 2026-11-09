@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageRequest;
 
 import mygrant.user.User;
 import mygrant.user.UserRepository;
@@ -53,7 +54,7 @@ class FeedbackServiceTests {
     void applicantCannotOpenStaffInbox() {
         when(userRepository.findByEmail(applicant.getEmail())).thenReturn(Optional.of(applicant));
 
-        assertThatThrownBy(() -> service.staffConversations(applicant.getEmail()))
+        assertThatThrownBy(() -> service.staffConversations(applicant.getEmail(), PageRequest.of(0, 20)))
                 .isInstanceOf(FeedbackAccessDeniedException.class);
     }
 

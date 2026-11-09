@@ -1,0 +1,217 @@
+package mygrant.ingestion;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+
+import java.time.Instant;
+import java.util.Optional;
+import java.util.List;
+
+import mygrant.auth.JwtAuthenticationFilter;
+import mygrant.auth.JwtService;
+import mygrant.auth.SecurityConfig;
+import mygrant.ingestion.dto.IngestionResponse;
+import mygrant.ingestion.connector.ConnectorHealth;
+import mygrant.ingestion.dto.IngestionStatusResponse;
+import mygrant.ingestion.dto.SyncFailureResponse;
+import mygrant.ingestion.SourceSyncService;
+import mygrant.ingestion.connector.SourceIdentity;
+import mygrant.ingestion.federalregister.FederalRegisterIngestionService;
+import mygrant.policies.SourceType;
+import mygrant.sources.SyncFailure;
+import mygrant.user.User;
+import mygrant.user.UserRepository;
+import mygrant.user.UserRole;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+
+@WebMvcTest(IngestionController.class)
+@Import({SecurityConfig.class, JwtAuthenticationFilter.class})
+class IngestionControllerSecurityTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockBean
+    private PolicyIngestionService ingestionService;
+
+    @MockBean
+    private FederalRegisterIngestionService federalRegisterIngestionService;
+
+    @MockBean
+    private SourceSyncService sourceSyncService;
+
+    @MockBean
+    private EmbeddingRebuildService embeddingRebuildService;
+
+    @MockBean
+    private FederalRegisterReindexService federalRegisterReindexService;
+
+    @MockBean
+    private JwtService jwtService;
+
+    @MockBean
+    private UserRepository userRepository;
+
+    @Test
+    void applicantCannotIngestPolicy() throws Exception {
+        stubToken(UserRole.APPLICANT);
+
+        mockMvc.perform(post("/api/v1/ingestion/documents")
+                        .header("Authorization", "Bearer token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validRequest()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminCanIngestPolicy() throws Exception {
+        stubToken(UserRole.ADMIN);
+        when(ingestionService.ingestRecordedByAdmin(any()))
+                .thenReturn(new IngestionResponse(1L, "policy-1", 1, Instant.now(), false));
+
+        mockMvc.perform(post("/api/v1/ingestion/documents")
+                        .header("Authorization", "Bearer token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validRequest()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.policyId").value(1));
+        // Marked as the admin's, so a court order posted here can dispute a rule an admin cleared.
+        org.mockito.Mockito.verify(ingestionService).ingestRecordedByAdmin(any());
+        org.mockito.Mockito.verify(ingestionService, org.mockito.Mockito.never()).ingest(any());
+    }
+
+    @Test
+    void onlyAdminCanSeeFederalRegisterConnectorHealth() throws Exception {
+        stubToken(UserRole.ADMIN);
+        when(federalRegisterIngestionService.health()).thenReturn(ConnectorHealth.notChecked(
+                new SourceIdentity("FEDERAL_REGISTER", SourceType.PRIMARY)));
+        mockMvc.perform(get("/api/v1/ingestion/federal-register/health")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.source.id").value("FEDERAL_REGISTER"))
+                .andExpect(jsonPath("$.status").value("NOT_CHECKED"));
+
+        stubToken(UserRole.APPLICANT);
+        mockMvc.perform(get("/api/v1/ingestion/federal-register/health")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminCanSeeAllConnectorHealthButApplicantCannot() throws Exception {
+        stubToken(UserRole.ADMIN);
+        when(sourceSyncService.status()).thenReturn(List.of(
+                new IngestionStatusResponse(1L, "Federal Register", mygrant.sources.PolicySourceType.FEDERAL_REGISTER,
+                        "https://www.federalregister.gov", true, null, 0, 0, 0, null),
+                new IngestionStatusResponse(2L, "Visa Bulletin", mygrant.sources.PolicySourceType.VISA_BULLETIN,
+                        "https://travel.state.gov", true, null, 0, 0, 0, null)));
+        mockMvc.perform(get("/api/v1/ingestion/status")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].sourceType").value("FEDERAL_REGISTER"))
+                .andExpect(jsonPath("$.content[1].sourceType").value("VISA_BULLETIN"))
+                .andExpect(jsonPath("$.totalElements").value(2));
+
+        stubToken(UserRole.APPLICANT);
+        mockMvc.perform(get("/api/v1/ingestion/status")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void onlyAdminCanRebuildEmbeddings() throws Exception {
+        stubToken(UserRole.APPLICANT);
+        mockMvc.perform(post("/api/v1/ingestion/embeddings/rebuild")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isForbidden());
+
+        stubToken(UserRole.ADMIN);
+        when(embeddingRebuildService.rebuild()).thenReturn(12);
+        mockMvc.perform(post("/api/v1/ingestion/embeddings/rebuild")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.chunksReembedded").value(12));
+    }
+
+    @Test
+    void onlyAdminCanReindexSavedFederalRegisterText() throws Exception {
+        stubToken(UserRole.APPLICANT);
+        mockMvc.perform(post("/api/v1/ingestion/federal-register/reindex")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isForbidden());
+
+        stubToken(UserRole.ADMIN);
+        when(federalRegisterReindexService.rebuild())
+                .thenReturn(new FederalRegisterReindexService.ReindexResult(2, 24));
+        mockMvc.perform(post("/api/v1/ingestion/federal-register/reindex")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentsReindexed").value(2))
+                .andExpect(jsonPath("$.chunksIndexed").value(24));
+    }
+
+    @Test
+    void onlyAdminCanSeeDocumentsTheSyncCouldNotImport() throws Exception {
+        stubToken(UserRole.ADMIN);
+        when(sourceSyncService.failures(eq(SyncFailure.Status.RETRYING), any())).thenReturn(new PageImpl<>(List.of(
+                new SyncFailureResponse(4L, 1L, "Federal Register", "2026-12345", SyncFailure.Status.RETRYING, 2, 5,
+                        "Upstream unavailable", Instant.parse("2026-11-05T01:00:00Z"),
+                        Instant.parse("2026-11-06T01:00:00Z"), null))));
+        mockMvc.perform(get("/api/v1/ingestion/sync-failures").param("status", "RETRYING")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].documentId").value("2026-12345"))
+                .andExpect(jsonPath("$.content[0].sourceName").value("Federal Register"))
+                .andExpect(jsonPath("$.content[0].status").value("RETRYING"))
+                .andExpect(jsonPath("$.content[0].attempts").value(2))
+                .andExpect(jsonPath("$.content[0].maxAttempts").value(5))
+                .andExpect(jsonPath("$.content[0].lastError").value("Upstream unavailable"));
+        verify(sourceSyncService).failures(eq(SyncFailure.Status.RETRYING), any());
+
+        stubToken(UserRole.APPLICANT);
+        mockMvc.perform(get("/api/v1/ingestion/sync-failures")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isForbidden());
+    }
+
+    private void stubToken(UserRole role) {
+        User user = new User();
+        user.setEmail("security-test@example.com");
+        user.setRole(role);
+
+        when(jwtService.extractSubject("token")).thenReturn(user.getEmail());
+        when(jwtService.extractRole("token")).thenReturn(role.name());
+        when(jwtService.isAccessTokenValid("token", user.getEmail())).thenReturn(true);
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+    }
+
+    private String validRequest() {
+        return """
+                {
+                  "externalId": "policy-1",
+                  "title": "Policy title",
+                  "agency": "Agency",
+                  "visaType": "F-1",
+                  "status": "FINAL",
+                  "sourceType": "PRIMARY",
+                  "publicationDate": "2026-10-19",
+                  "sourceUrl": "https://example.com/policy-1",
+                  "content": "Policy content"
+                }
+                """;
+    }
+}

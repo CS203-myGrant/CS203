@@ -40,6 +40,12 @@ public class ImmigrationDocument {
     @Column(nullable = false)
     private byte[] content;
 
+    @Column(name = "issuing_authority", length = 40)
+    private String issuingAuthority;
+
+    @Column(name = "policy_matching_consent", nullable = false)
+    private boolean policyMatchingConsent;
+
     @CreationTimestamp
     @Column(name = "uploaded_at", nullable = false, updatable = false)
     private Instant uploadedAt;
@@ -53,13 +59,17 @@ public class ImmigrationDocument {
             String fileName,
             String contentType,
             long sizeBytes,
-            byte[] content) {
+            byte[] content,
+            String issuingAuthority,
+            boolean policyMatchingConsent) {
         this.userId = userId;
         this.documentType = documentType;
         this.fileName = fileName;
         this.contentType = contentType;
         this.sizeBytes = sizeBytes;
         this.content = content;
+        this.issuingAuthority = issuingAuthority;
+        this.policyMatchingConsent = policyMatchingConsent;
     }
 
     public Long getId() {
@@ -93,4 +103,7 @@ public class ImmigrationDocument {
     public Instant getUploadedAt() {
         return uploadedAt;
     }
+    public String getIssuingAuthority() { return issuingAuthority; }
+    public boolean hasPolicyMatchingConsent() { return policyMatchingConsent; }
+    public void setPolicyMatchingConsent(boolean consent) { this.policyMatchingConsent = consent; }
 }

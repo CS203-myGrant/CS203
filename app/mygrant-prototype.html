@@ -127,6 +127,7 @@
     display:inline-flex;align-items:center;gap:8px;padding:12px 14px;font-size:15px;font-weight:700;color:#fff;
     text-decoration:none;border-bottom:4px solid transparent;margin-bottom:-4px;cursor:pointer;
   }
+  button.nav-link{background:none;border:0;border-bottom:4px solid transparent;font-family:inherit;}
   .nav-link:hover{background:var(--ink-soft);color:#fff;}
   .nav-link.active{border-bottom-color:#fff;background:var(--ink-soft);}
   .nav-badge{font-size:12px;font-weight:700;background:var(--urgent);color:#fff;padding:0 7px;border-radius:10px;min-width:20px;text-align:center;line-height:18px;}
@@ -156,11 +157,18 @@
   .entry.urgency-high .flag{background:var(--urgent);}
   .entry.urgency-medium .flag{background:#E5A000;}
   .entry.urgency-low .flag{background:var(--calm);}
+  .entry.impact-critical .flag{background:var(--urgent);}
+  .entry.impact-medium .flag{background:#E5A000;}
+  .entry.impact-low .flag{background:var(--calm);}
+  .entry.impact-critical{background:var(--urgent-bg);}
   .entry.read{opacity:0.72;}
   .entry-case{font-family:var(--mono);font-size:12px;color:var(--muted);padding:18px 0 18px 16px;}
   .entry-body{padding:16px 18px;}
   .entry-body h3{font-family:var(--serif);font-size:19px;margin:0 0 6px;font-weight:700;}
   .entry-body p{font-size:16px;color:var(--text);margin:0 0 10px;line-height:1.55;}
+  .processing-timeline .entry{grid-template-columns:6px minmax(0,1fr);}
+  .processing-timeline .entry-body{min-width:0;overflow-wrap:anywhere;}
+  .processing-timeline select{max-width:100%;margin:8px 12px 8px 0;}
   .tag-row{display:flex;gap:8px;flex-wrap:wrap;}
   .tag{font-size:13px;font-weight:600;padding:2px 8px;border-radius:2px;background:var(--base-lightest);color:var(--text);border:0;}
   .tag.confidence-high{color:var(--calm-text);background:var(--calm-bg);}
@@ -194,18 +202,34 @@
   .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px 28px;background:var(--panel);border:1px solid var(--base-lighter);padding:28px;}
   .field{display:flex;flex-direction:column;gap:6px;}
   .field label{font-size:16px;color:var(--text);}
-  .field:has(input[required]) label::after,.field:has(select[required]) label::after{content:" (*Required)";color:var(--urgent);}
+  .field:has(> input[required]) > label[for]::after,.field:has(> select[required]) > label[for]::after{content:" (*Required)";color:var(--urgent);}
   .field input, .field select, .field textarea{
     font-family:var(--sans);font-size:17px;padding:8px 10px;height:42px;border:1px solid var(--field-border);border-radius:0;background:#fff;color:var(--text);
   }
   .field input[type="file"]{height:auto;padding:10px;border-style:dashed;}
   .field input:focus, .field select:focus, .field textarea:focus{outline:4px solid var(--focus);outline-offset:0;}
+  .consent-panel{grid-column:1/-1;border-top:1px solid var(--base-lighter);padding-top:24px;margin-top:4px;}
+  .consent-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;}
+  .consent-card{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--base-lighter);border-radius:6px;padding:12px;background:#fff;line-height:1.4;}
+  .consent-entry{display:flex;flex-direction:column;gap:10px;border:1px solid var(--base-lighter);border-radius:6px;padding:12px;background:#fff;}
+  .consent-entry .consent-card{border:0;border-radius:0;padding:0;background:transparent;}
+  .consent-card input{width:auto;min-height:0;margin:3px 0 0;accent-color:var(--primary);}
+  .consent-card__name{display:block;font-weight:700;color:var(--text);font-size:14px;}
+  .consent-card__meta{font-weight:600;color:var(--muted);font-size:12px;}
+  .consent-card__purpose{display:block;margin-top:3px;color:var(--muted);font-size:13px;}
+  .consent-card__remove{align-self:flex-start;margin:0;border-color:var(--urgent);color:var(--urgent);font-size:12px;}
   .form-actions{grid-column:1/-1;display:flex;justify-content:flex-start;gap:10px;margin-top:6px;}
 
   /* ---------- TABLE (manager/admin) ---------- */
   table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--text);}
   th{text-align:left;font-size:15px;color:var(--text);font-weight:700;padding:10px 14px;border:1px solid var(--text);background:var(--base-lighter);}
   td{padding:12px 14px;font-size:16px;border:1px solid var(--text);vertical-align:middle;}
+  .bulletin-controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:18px 0;}
+  .bulletin-controls .field{min-width:190px;}
+  .bulletin-controls .field input,.bulletin-controls .field select{width:100%;}
+  .bulletin-table-wrap{max-height:500px;overflow:auto;border:1px solid var(--text);}
+  .bulletin-table-wrap table{border:0;min-width:820px;}
+  .bulletin-table-wrap th{position:sticky;top:0;z-index:1;}
   .status-dot{display:inline-flex;align-items:center;gap:7px;}
   .status-dot::before{content:'';width:9px;height:9px;border-radius:50%;background:var(--calm);}
   .status-dot.warn::before{background:var(--urgent);}
@@ -213,6 +237,10 @@
   .stat-box{background:var(--base-lightest);border-top:4px solid var(--primary);padding:20px;}
   .stat-box .num{font-family:var(--serif);font-size:36px;font-weight:700;color:var(--ink);}
   .stat-box .lbl{font-size:15px;color:var(--text);margin-top:4px;}
+  .manager-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;}
+  .manager-add-form{display:flex;align-items:end;gap:12px;margin:12px 0 20px;}
+  .manager-add-form .field{min-width:min(280px,100%);margin:0;}
+  @media(max-width:700px){.manager-grid{grid-template-columns:1fr;}.manager-add-form{align-items:stretch;flex-direction:column;}}
 
   .toast{
     position:fixed;bottom:24px;left:50%;transform:translate(-50%,8px);background:var(--ink);color:#fff;padding:12px 20px;border-radius:4px;
@@ -294,20 +322,8 @@
   .evidence-meta{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;}
   .evidence-pill{font-size:13px;font-weight:600;padding:2px 8px;border-radius:2px;color:var(--text);background:var(--base-lightest);}
   .warning-list{margin:8px 0 0;padding-left:20px;color:var(--text);font-size:15px;line-height:1.6;}
-  /* Shared chat layout for applicant and staff conversations. */
-  .chat-shell{border:1px solid var(--base-lighter);border-radius:6px;overflow:hidden;background:#fff;max-width:640px;}
-  .chat-head{padding:10px 14px;border-bottom:1px solid var(--base-lighter);background:var(--base-lightest);display:flex;justify-content:space-between;align-items:center;font-size:15px;}
-  .chat-head .tag{font-size:12px;}
-  .chat-log{height:min(42vh,380px);min-height:220px;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:8px;background:#fff;}
-  .chat-message{max-width:70%;padding:7px 11px;border-radius:12px 12px 12px 3px;background:var(--base-lightest);line-height:1.4;font-size:15px;align-self:flex-start;}
-  .chat-message.mine{align-self:flex-end;border-radius:12px 12px 3px 12px;background:var(--primary);color:#fff;}
-  .chat-meta{font-size:11.5px;font-weight:600;opacity:.75;margin-bottom:2px;}
-  .chat-text{white-space:pre-wrap;word-break:break-word;}
-  .chat-compose{display:flex;gap:8px;padding:10px;border-top:1px solid var(--base-lighter);}
-  .chat-compose input{flex:1;padding:6px 10px;height:38px;font-size:15px;font-family:var(--sans);border:1px solid var(--field-border);border-radius:4px;}
-  .chat-compose .btn{padding:8px 16px;font-size:15px;}
-  .conversation-layout{display:grid;grid-template-columns:minmax(220px,280px) 1fr;gap:18px;}.conversation-list{border:1px solid var(--base-lighter);background:#fff;}.conversation-item{width:100%;text-align:left;padding:14px;border:0;border-bottom:1px solid var(--base-lighter);border-left:4px solid transparent;background:#fff;cursor:pointer;font-size:16px;}.conversation-item.active{background:var(--primary-light);border-left-color:var(--primary);}.conversation-item strong,.conversation-item span{display:block;}.conversation-item span{font-size:14px;color:var(--muted);margin-top:4px;}
-  .feedback-fab{position:fixed;right:24px;bottom:24px;z-index:15;padding:12px 20px;border:0;border-radius:4px;background:var(--primary);color:#fff;font-family:var(--sans);font-size:16px;font-weight:700;letter-spacing:0;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.25);}.feedback-fab:hover{background:var(--primary-dark);}.feedback-fab:focus-visible{outline:4px solid var(--focus);outline-offset:3px;}
+  .chat-shell{border:1px solid var(--base-lighter);border-radius:8px;overflow:hidden;background:#fff;max-width:820px;box-shadow:0 1px 4px rgba(0,0,0,.07);}.chat-head{padding:14px 18px;border-bottom:1px solid var(--base-lighter);background:var(--base-lightest);display:flex;justify-content:space-between;align-items:center;}.chat-log{height:min(52vh,520px);min-height:320px;overflow:auto;padding:16px 20px;display:flex;flex-direction:column;gap:6px;background:#fafbfc;}.chat-row{display:flex;flex-direction:column;align-self:flex-start;max-width:72%;gap:3px;}.chat-row.mine{align-self:flex-end;}.chat-message{padding:9px 13px;border-radius:8px;background:#fff;border:1px solid var(--base-lighter);line-height:1.55;white-space:pre-wrap;word-break:break-word;font-size:15px;}.chat-row.mine .chat-message{background:var(--primary);color:#fff;border-color:var(--primary);}.chat-meta{font-size:11.5px;font-weight:600;color:var(--muted);padding:0 2px;}.chat-row.mine .chat-meta{text-align:right;}.chat-compose{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--base-lighter);background:#fff;align-items:center;}.chat-compose input{flex:1;padding:8px 12px;height:38px;font-size:15px;font-family:var(--sans);border:1px solid var(--field-border);border-radius:4px;}.chat-compose input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-light);}.conversation-layout{display:grid;grid-template-columns:minmax(220px,280px) 1fr;gap:18px;}.conversation-list{border:1px solid var(--base-lighter);background:#fff;}.conversation-item{width:100%;text-align:left;padding:14px;border:0;border-bottom:1px solid var(--base-lighter);border-left:4px solid transparent;background:#fff;cursor:pointer;font-size:16px;}.conversation-item.active{background:var(--primary-light);border-left-color:var(--primary);}.conversation-item strong,.conversation-item span{display:block;}.conversation-item span{font-size:14px;color:var(--muted);margin-top:4px;}
+  .feedback-fab{position:fixed;right:24px;bottom:24px;z-index:15;padding:12px 20px;border:0;border-radius:4px;background:var(--primary);color:#fff;font-family:var(--sans);font-size:16px;font-weight:700;letter-spacing:0;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;align-items:center;gap:8px;}.feedback-fab:hover{background:var(--primary-dark);}.feedback-fab:focus-visible{outline:4px solid var(--focus);outline-offset:3px;}.fab-badge{font-size:11px;font-weight:700;background:#fff;color:var(--urgent);padding:0 5px;border-radius:9px;min-width:18px;text-align:center;line-height:17px;}
 
   .site-footer{background:var(--ink);color:#D9E8F6;font-size:14px;margin-top:40px;}
   .site-footer-inner{max-width:1100px;margin:0 auto;padding:22px 24px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;}
@@ -326,12 +342,13 @@
     .login-left{order:2;}
     .login-title{font-size:30px;}
     .form-grid{grid-template-columns:1fr;}
+    .consent-list{grid-template-columns:1fr;}
     .stat-row,.rag-query-form,.rag-import-form,.proof-grid{grid-template-columns:1fr;}
     .entry{grid-template-columns:6px 1fr;}
     .entry-case{display:none;}
     .entry .flag{grid-row:1 / span 2;}
     .entry-action{grid-column:2;padding:0 18px 16px;}
-    .conversation-layout{grid-template-columns:1fr;}.chat-message{max-width:90%;}
+    .conversation-layout{grid-template-columns:1fr;}.chat-row{max-width:90%;}.chat-compose{flex-wrap:wrap;}.chat-compose input{flex-basis:100%;}
     .feedback-fab{right:16px;bottom:16px;}
   }
 </style>
@@ -369,7 +386,7 @@
         <div class="wordmark">myGRANT<span class="dot">.</span></div>
         <p style="margin-top:18px;">One place for every rule that touches your case — read from the Federal Register, USCIS and DOL, and matched to your profile.</p>
       </div>
-      <div class="cite">Federal Register · USCIS · DOL · Visa Bulletin</div>
+      <div class="cite">Federal Register · USCIS · DOL</div>
     </div>
     <div class="login-right" id="legacy-role-login" style="display:none;">
       <h1><span class="step-num">1</span>Choose how you'd like to look around</h1>
@@ -450,21 +467,23 @@
     <nav class="site-nav" aria-label="Main">
     <div id="nav-student" class="nav-group" style="display:none;">
       <div class="nav-label">Case</div>
-      <a class="nav-link" data-view="dashboard" onclick="goto('dashboard')">Your alerts<span id="nav-unread" class="nav-badge" style="display:none;">0</span></a>
+      <a class="nav-link" data-view="dashboard" onclick="goto('dashboard')">Impact dashboard<span id="nav-unread" class="nav-badge" style="display:none;">0</span></a>
+      <button class="nav-link" data-view="applicationProgress" type="button" onclick="goto('applicationProgress')">Application tracker</button>
     </div>
 
     <div id="nav-manager" class="nav-group" style="display:none;">
       <div class="nav-label">Team</div>
       <a class="nav-link" data-view="manager" onclick="goto('manager')">Team impact</a>
       <a class="nav-link" data-view="queue" onclick="goto('queue')">Review queue</a>
-      <a class="nav-link" data-view="feedbackInbox" onclick="goto('feedbackInbox')">Feedback inbox</a>
+      <a class="nav-link" data-view="feedbackInbox" onclick="goto('feedbackInbox')">Feedback inbox<span class="nav-badge nav-feedback-badge" style="display:none;">0</span></a>
     </div>
 
     <div id="nav-admin" class="nav-group" style="display:none;">
       <div class="nav-label">System</div>
       <a class="nav-link" data-view="admin" onclick="goto('admin')">Monitored sources</a>
+      <a class="nav-link" data-view="visaBulletin" onclick="goto('visaBulletin')">Visa Bulletin</a>
       <a class="nav-link" data-view="rag" onclick="goto('rag')">RAG inspector</a>
-      <a class="nav-link" data-view="feedbackInbox" onclick="goto('feedbackInbox')">Feedback inbox</a>
+      <a class="nav-link" data-view="feedbackInbox" onclick="goto('feedbackInbox')">Feedback inbox<span class="nav-badge nav-feedback-badge" style="display:none;">0</span></a>
     </div>
 
     <div id="nav-tools" class="nav-group" style="display:none;">
@@ -480,7 +499,7 @@
 <footer class="site-footer">
   <div class="site-footer-inner">
     <div><strong>myGRANT</strong> · Immigration policy tracker</div>
-    <div>Sources: Federal Register · USCIS · DOL · Visa Bulletin</div>
+    <div>Sources: Federal Register · USCIS · DOL</div>
   </div>
 </footer>
 
@@ -489,12 +508,43 @@
 
 <div class="modal-bg" id="modal-bg">
   <div class="modal">
-    <h3>Add a source to monitor</h3>
+    <h3 id="modal-title">Add a source to monitor</h3>
     <div class="field"><label>Source name</label><input id="modal-name" placeholder="e.g. DHS Federal Register feed"></div>
+    <div class="field"><label>Source type</label><select id="modal-type">
+      <option value="FEDERAL_REGISTER">Federal Register</option>
+      <option value="USCIS">USCIS</option>
+      <option value="VISA_BULLETIN">Visa Bulletin</option>
+      <option value="NEWS">News</option>
+      <option value="RSS">RSS</option>
+    </select></div>
     <div class="field"><label>URL</label><input id="modal-url" placeholder="https://..."></div>
+    <div class="field"><label>Poll interval (seconds)</label><input id="modal-interval" type="number" min="1" value="3600"></div>
+    <label><input id="modal-enabled" type="checkbox" checked> Enabled</label>
     <div class="form-actions">
       <button class="btn ghost small" onclick="closeModal()">Cancel</button>
-      <button class="btn small" onclick="addSource()">Add source</button>
+      <button class="btn small" onclick="saveSource()">Save source</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="review-modal-bg">
+  <div class="modal">
+    <h3 id="review-editor-title">Review and publish assessment</h3>
+    <input id="review-edit-id" type="hidden">
+    <div class="field"><label for="review-edit-severity">Severity</label><select id="review-edit-severity"><option>CRITICAL</option><option>HIGH</option><option selected>MEDIUM</option><option>LOW</option><option>INFO</option></select></div>
+    <div class="field"><label for="review-edit-confidence">Confidence (0–100)</label><input id="review-edit-confidence" type="number" min="0" max="100" value="80"></div>
+    <div class="field"><label for="review-edit-summary">Summary</label><input id="review-edit-summary" maxlength="1500" required></div>
+    <div class="field"><label for="review-edit-analysis">Analysis (one point per line)</label><textarea id="review-edit-analysis" rows="3"></textarea></div>
+    <div class="field"><label for="review-edit-actions">Recommended actions (one per line)</label><textarea id="review-edit-actions" rows="3"></textarea></div>
+    <div class="field"><label for="review-edit-missing">Missing information (one point per line)</label><textarea id="review-edit-missing" rows="3"></textarea></div>
+    <div id="review-extraction-fields" hidden>
+      <p><a id="review-extraction-source" target="_blank" rel="noopener">Open official source</a></p>
+      <pre id="review-extraction-excerpt" style="max-height:260px;overflow:auto;white-space:pre-wrap"></pre>
+      <div class="field"><label for="review-edit-country-rules">Confirmed affected countries and scope (one ISO code and FULL/PARTIAL per line, e.g. AF,FULL)</label><textarea id="review-edit-country-rules" rows="5"></textarea></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn ghost small" onclick="closeQueueEditor()">Cancel</button>
+      <button class="btn small" onclick="publishEditedQueue()">Publish correction</button>
     </div>
   </div>
 </div>
@@ -552,19 +602,48 @@ let sources = [
   {name:'USCIS processing-time data', status:'ok', last:'6 hours ago'},
   {name:'DOL wage rule RSS feed', status:'broken', last:'3 days ago — layout changed'},
   {name:'News API (secondary reporting)', status:'ok', last:'12 minutes ago'},
-  {name:'Visa Bulletin', status:'ok', last:'1 day ago'},
 ];
 
-const API_BASE = location.port === '8080' ? '' : 'http://localhost:8080';
+const configuredApiOrigin = window.MYGRANT_API_ORIGIN;
+const localPreviewOrigin = location.protocol === 'http:'
+  && ['localhost', '127.0.0.1'].includes(location.hostname)
+  && location.port !== '8080'
+  ? 'http://localhost:8080'
+  : location.origin;
+const API_BASE = (configuredApiOrigin || localPreviewOrigin).replace(/\/$/, '');
+/* Links in alert emails open #notification=<id> or #view=profile. The target waits in
+   sessionStorage until the user is in the app, because WorkOS sign-in leaves this page
+   and comes back with its own hash. */
+const DEEP_LINK_KEY = 'mygrantDeepLink';
+function captureDeepLink(){
+  const params = new URLSearchParams(location.hash.replace(/^#/,''));
+  const notification = params.get('notification');
+  let link = null;
+  if (/^[1-9][0-9]{0,15}$/.test(notification || '')) link = {notification: Number(notification)};
+  else if (params.get('view') === 'profile') link = {view: 'profile'};
+  if (!link) return false;
+  sessionStorage.setItem(DEEP_LINK_KEY, JSON.stringify(link));
+  history.replaceState(null, '', location.pathname + location.search);
+  return true;
+}
+function takeDeepLink(){
+  const saved = sessionStorage.getItem(DEEP_LINK_KEY);
+  sessionStorage.removeItem(DEEP_LINK_KEY);
+  try { return saved ? JSON.parse(saved) : null; } catch (error) { return null; }
+}
 function consumeWorkosRedirect(){
   const params = new URLSearchParams(
     location.hash.replace(/^#/,'').replace(/^\?/,'')
   );
   const token = params.get('workosToken');
+  const refreshToken = params.get('workosRefreshToken');
   const error = params.get('workosError');
 
   if (token) {
     sessionStorage.setItem('mygrantToken', token);
+  }
+  if (refreshToken) {
+    sessionStorage.setItem('mygrantRefreshToken', refreshToken);
   }
 
   if (token || error) {
@@ -574,6 +653,7 @@ function consumeWorkosRedirect(){
   return error;
 }
 
+captureDeepLink();
 const workosRedirectError = consumeWorkosRedirect();
 
 const initialState = () => ({
@@ -581,10 +661,32 @@ const initialState = () => ({
   user: null,
   profile: null,
   token: sessionStorage.getItem('mygrantToken'),
+  refreshToken: sessionStorage.getItem('mygrantRefreshToken'),
   policyRecords: null,
   policyError: null,
   notifications: null,
   notificationsError: null,
+  impacts: null,
+  impactsError: null,
+  impactsLoading: false,
+  impactsArchived: false,
+  impactsPage: 0,
+  impactsTotalPages: 0,
+  impactDetail: null,
+  impactDetailLoading: false,
+  impactDetailError: null,
+  actions: null,
+  processingForecasts: null,
+  processingForecastError: null,
+  forecastSeries: {},
+  forecastAlerts: null,
+  forecastAlertsError: null,
+  actionsError: null,
+  actionsLoading: false,
+  actionsTab: 'active',
+  actionsPage: 0,
+  actionsTotalPages: 0,
+  actionUpdating: null,
   unreadCount: 0,
   view: null,
   openAlert: null,
@@ -599,6 +701,14 @@ const initialState = () => ({
   frDocNumber: '2026-14439',
   documents: null,
   documentsError: null,
+  emailPreferences: null,
+  emailPreferencesError: null,
+  testClock: null,
+  testClockDisabled: false,
+  testClockBusy: false,
+  testClockImporting: false,
+  testClockImportResult: null,
+  openNotification: null,
   deletionChallenge: null,
   deletionExpiresAt: null,
   deletionError: null,
@@ -608,12 +718,44 @@ const initialState = () => ({
   feedbackLoading: false,
   feedbackError: null,
   staffConversations: [],
-  selectedConversationId: null
+  selectedConversationId: null,
+  feedbackInboxBadge: 0,
+  feedbackUserBadge: 0,
+  inboxLastSeen: 0,
+  seenFeedbackMsgIds: [],
+  adminUsers: [],
+  adminUsersLoading: false,
+  adminUsersError: null,
+  adminSources: [],
+  adminSourcesLoading: false,
+  adminSourcesError: null,
+  editingSource: null,
+  managerDashboard: null,
+  managerDashboardLoading: false,
+  managerDashboardError: null,
+  managerMembers: [],
+  managerMembersError: null,
+  managerMembersBusy: false,
+  reviewQueue: [],
+  reviewQueueLoading: false,
+  reviewQueueError: null,
+  bulletinMonth: null,
+  bulletinHealth: null,
+  bulletinEntries: [],
+  bulletinLoading: false,
+  bulletinImporting: false,
+  bulletinError: null,
+  bulletinMessage: null,
+  bulletinPreference: 'ALL',
+  bulletinChart: 'ALL',
+  bulletinArea: 'ALL'
 });
 let state = initialState();
 let notificationStreamController = null;
 let feedbackPollTimer = null;
+let feedbackBadgeTimer = null;
 let permissionPromptedThisSession = false;
+let refreshPromise = null;
 
 /* ---------- RAG pipeline scenarios ----------
    Each one traces a real /api/v1/rag/query call end to end so you can see, at every
@@ -682,14 +824,13 @@ function enterApp(role){
   document.getElementById('nav-student').style.display = role==='student' ? 'block':'none';
   document.getElementById('nav-manager').style.display = role==='manager' ? 'block':'none';
   document.getElementById('nav-admin').style.display = role==='admin' ? 'block':'none';
-  document.getElementById('nav-tools').style.display = role!=='admin' ? 'block':'none';
   // Show the profile shortcut only to students who have completed onboarding.
   document.getElementById('profile-btn').style.display = role==='student' && state.user?.profileComplete !== false ? 'inline-flex':'none';
   document.getElementById('role-tag').textContent = role.toUpperCase()+' VIEW';
   if(state.user && state.user.profileComplete === false){
     document.querySelectorAll('.nav-group').forEach(element=>element.style.display='none');
     updateBreadcrumb('profileCompletion');
-    document.getElementById('main').innerHTML = renderProfileCompletion();
+    document.getElementById('main').innerHTML = renderProfileCompletion() + feedbackAccessButton();
     return;
   }
   const first = role==='student' ? 'dashboard' : role==='manager' ? 'manager' : 'admin';
@@ -697,21 +838,57 @@ function enterApp(role){
   loadPolicies();
   if(role==='student') loadNotifications();
   if(role==='student') connectNotificationStream();
+  startFeedbackBadgePoll(role);
+  openDeepLink();
 }
+/* Runs once the user is in the app with a complete profile; alerts and email settings
+   exist only for applicants, so other roles just drop the link. */
+function openDeepLink(){
+  const link = takeDeepLink();
+  if(!link || state.role !== 'student') return;
+  if(link.view === 'profile') goto('profile');
+  else if(link.notification) openNotification(link.notification);
+}
+async function openNotification(id){
+  goto('notificationDetail', id);
+  if((state.notifications || []).some(item => item.id === id)) return;
+  // The inbox loads only the latest page, so an older alert is fetched on its own.
+  try{
+    const response = await apiFetch(`/api/v1/notifications/${id}`);
+    state.openNotification = await parseApiResponse(response);
+    if(state.view === 'notificationDetail' && state.openAlert === id) render();
+  }catch(error){
+    showToast('That alert is not available on this account.');
+    if(state.view === 'notificationDetail' && state.openAlert === id) goto('dashboard');
+  }
+}
+window.addEventListener('hashchange', () => {
+  if(captureDeepLink() && state.role && state.user?.profileComplete !== false) openDeepLink();
+});
 function startWorkosLogin(){
   window.location.href = `${API_BASE}/api/v1/auth/workos/login`;
 }
 function renderProfileCompletion(){
-  return `<div class="page-head"><h1>Complete your profile</h1><p class="sub">Your Google account is connected. Add your visa details before using myGRANT.</p></div>
+  return `<div class="page-head"><h1>Complete your profile</h1><p class="sub">Add your visa details before using myGRANT. Your impact feed will be empty until your profile is complete.</p></div>
     <form class="form-grid" onsubmit="submitProfileCompletion(event)">
-      <div class="field"><label for="workos-visa">Visa category</label><select id="workos-visa" required><option>F-1</option><option>J-1</option><option>H-1B</option></select></div>
-      <div class="field"><label for="workos-origin">Country of origin</label><input id="workos-origin" list="workos-country-options" autocomplete="country-name" placeholder="Start typing a country"></div>
-      <div class="field"><label for="workos-citizenship">Country of citizenship</label><input id="workos-citizenship" list="workos-country-options" autocomplete="country-name" placeholder="Start typing a country"></div>
-      <div class="field"><label for="workos-level">Academic level</label><select id="workos-level"><option value="">Not specified</option><option>Undergraduate</option><option>Master's</option><option>PhD</option><option>Other</option></select></div>
-      <div class="field"><label for="workos-end-date">Program end date</label><input id="workos-end-date" type="date"></div>
-      <div class="field"><label for="workos-location">Current location</label><select id="workos-location"><option value="">Not specified</option><option value="US">US</option><option value="ABROAD">Abroad</option></select></div>
-      <div class="field"><label for="workos-travel-date">Upcoming travel date</label><input id="workos-travel-date" type="date"></div>
+      <div class="field"><label for="workos-visa">Visa category (Required)</label><select id="workos-visa" required><option>F-1</option><option>J-1</option><option>H-1B</option></select></div>
+      <div class="field"><label for="workos-origin">Country of origin (Optional)</label><input id="workos-origin" list="workos-country-options" autocomplete="country-name" placeholder="Start typing a country"></div>
+      <div class="field"><label for="workos-citizenship">Country of citizenship (Optional)</label><input id="workos-citizenship" list="workos-country-options" autocomplete="country-name" placeholder="Start typing a country"></div>
+      <div class="field"><label for="workos-level">Academic level (Optional)</label><select id="workos-level"><option value="">Not specified</option><option>Undergraduate</option><option>Master's</option><option>PhD</option><option>Other</option></select></div>
+      <div class="field"><label for="workos-end-date">Program end date (Optional)</label><input id="workos-end-date" type="date"></div>
+      <div class="field"><label for="workos-location">Current location (Optional)</label><select id="workos-location"><option value="">Not specified</option><option value="US">US</option><option value="ABROAD">Abroad</option></select></div>
+      <div class="field"><label for="workos-employment-status">Employment status (Optional)</label><input id="workos-employment-status"></div>
+      <div class="field"><label for="workos-employer">Employer (Optional)</label><input id="workos-employer"></div>
+      <div class="field"><label for="workos-visa-start">Visa start date (Optional)</label><input id="workos-visa-start" type="date"></div>
+      <div class="field"><label for="workos-visa-expiry">Visa expiry date (Optional)</label><input id="workos-visa-expiry" type="date"></div>
+      <div class="field"><label for="workos-opt-start">OPT start date (Optional)</label><input id="workos-opt-start" type="date"></div>
+      <div class="field"><label for="workos-i140-date">I-140 filing date (Optional)</label><input id="workos-i140-date" type="date"></div>
+      <div class="field"><label for="workos-travel-date">Upcoming travel date (Optional)</label><input id="workos-travel-date" type="date"></div>
+      <div class="field"><label for="workos-immigrant-category">Immigrant category (Optional)</label><input id="workos-immigrant-category" placeholder="e.g. EB-2"></div>
+      <div class="field"><label for="workos-chargeability">Chargeability area (Optional)</label><input id="workos-chargeability" placeholder="Country of chargeability"></div>
+      <div class="field"><label for="workos-priority-date">Priority date (Optional)</label><input id="workos-priority-date" type="date"></div>
       <datalist id="workos-country-options">${countryOptions()}</datalist>
+      ${onboardingConsentControls()}
       <div class="form-actions"><button class="btn" type="submit">Save profile</button></div>
       <div id="profile-error" class="auth-error" style="display:none;grid-column:1/-1;"></div>
     </form>`;
@@ -721,6 +898,7 @@ async function submitProfileCompletion(event){
   const error=document.getElementById('profile-error');
   error.style.display='none';
   try{
+    const consentedFields = selectedConsentFields();
     const response=await apiFetch('/api/v1/profiles/me',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       visaType:document.getElementById('workos-visa').value,
       countryOfOrigin:document.getElementById('workos-origin').value.trim() || null,
@@ -728,7 +906,18 @@ async function submitProfileCompletion(event){
       academicLevel:document.getElementById('workos-level').value || null,
       programEndDate:document.getElementById('workos-end-date').value || null,
       currentLocation:document.getElementById('workos-location').value || null,
-      upcomingTravelDate:document.getElementById('workos-travel-date').value || null
+      upcomingTravelDate:document.getElementById('workos-travel-date').value || null,
+      priorityDate:document.getElementById('workos-priority-date').value || null,
+      immigrantCategory:document.getElementById('workos-immigrant-category').value.trim() || null,
+      chargeabilityArea:document.getElementById('workos-chargeability').value.trim() || null,
+      clearFields: [],
+      employmentStatus: document.getElementById('workos-employment-status').value.trim() || null,
+      employer: document.getElementById('workos-employer').value.trim() || null,
+      visaStartDate: document.getElementById('workos-visa-start').value || null,
+      visaExpiryDate: document.getElementById('workos-visa-expiry').value || null,
+      optStartDate: document.getElementById('workos-opt-start').value || null,
+      i140FilingDate: document.getElementById('workos-i140-date').value || null,
+      consentedFields
     })});
     state.profile = await parseApiResponse(response);
 
@@ -746,15 +935,42 @@ async function submitProfileCompletion(event){
     error.style.display='block';
   }
 }
-function logout(){
+async function logout(){
+  if(!confirmApplicationLeave()) return;
+  const accessToken = state.token;
+  const refreshToken = state.refreshToken;
+
+  try {
+    if (accessToken && refreshToken) {
+      await fetch(`${API_BASE}/api/v1/auth/logout`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({refreshToken})
+      });
+    }
+  } finally {
+    clearLocalSession();
+  }
+}
+
+function clearLocalSession(){
+  state.policyChats={};
+  state.applicationTracker=null;
   stopFeedbackPolling();
+  if(feedbackBadgeTimer){ clearInterval(feedbackBadgeTimer); feedbackBadgeTimer=null; }
   if(notificationStreamController) notificationStreamController.abort();
   notificationStreamController = null;
-  document.getElementById('popup-stack').innerHTML='';
+  document.getElementById('popup-stack').innerHTML = '';
+
   sessionStorage.removeItem('mygrantToken');
+  sessionStorage.removeItem('mygrantRefreshToken');
+
   state = initialState();
   document.getElementById('app').classList.remove('active');
-  document.getElementById('login').style.display='flex';
+  document.getElementById('login').style.display = 'flex';
 }
 
 function showAuthMode(mode){
@@ -778,7 +994,7 @@ function roleForUser(role){ return role==='ADMIN'?'admin':role==='MANAGER'?'mana
 async function parseApiResponse(response){
   const body=await response.json().catch(()=>null);
   if(response.status===401){
-    if(state.token){ logout(); }
+    if(state.token){ clearLocalSession(); }
     throw new Error(body?.message || 'Your session is invalid or has expired. Please sign in again.');
   }
   if(!response.ok){
@@ -789,8 +1005,7 @@ async function parseApiResponse(response){
 }
 async function loadImmigrationDocuments() {
   try {
-    const response = await apiFetch('/api/v1/profiles/me/documents');
-    state.documents = await parseApiResponse(response);
+    state.documents = await fetchAllPages('/api/v1/profiles/me/documents');
     state.documentsError = null;
   } catch (error) {
     state.documents = [];
@@ -801,18 +1016,85 @@ async function loadImmigrationDocuments() {
     render();
   }
 }
-async function apiFetch(path,options={}){
-  const headers=new Headers(options.headers || {});
-  if(state.token) headers.set('Authorization',`Bearer ${state.token}`);
-  return fetch(`${API_BASE}${path}`,{...options,headers});
+async function apiFetch(path, options = {}) {
+  const headers = new Headers(options.headers || {});
+
+  if (state.token) {
+    headers.set('Authorization', `Bearer ${state.token}`);
+  }
+
+  let response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers
+  });
+
+  if (response.status !== 401 || !state.refreshToken) {
+    return response;
+  }
+
+  const refreshed = await refreshCurrentSession();
+
+  if (!refreshed) {
+    return response;
+  }
+
+  headers.set('Authorization', `Bearer ${state.token}`);
+
+  return fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers
+  });
+}
+/* List endpoints return a Spring Page; this follows every page so a view still shows the whole list. */
+async function fetchAllPages(path){
+  const items=[];
+  const separator=path.includes('?')?'&':'?';
+  for(let page=0;;page++){
+    const body=await parseApiResponse(await apiFetch(`${path}${separator}page=${page}&size=100`));
+    items.push(...body.content);
+    if(body.last || !body.content.length) return items;
+  }
+}
+async function refreshCurrentSession() {
+  if (!refreshPromise) {
+    const refreshToken = state.refreshToken;
+
+    refreshPromise = fetch(`${API_BASE}/api/v1/auth/refresh`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({refreshToken})
+    })
+      .then(async response => {
+        if (!response.ok) {
+          return false;
+        }
+
+        const tokens = await response.json();
+
+        state.token = tokens.token;
+        state.refreshToken = tokens.refreshToken;
+
+        sessionStorage.setItem('mygrantToken', state.token);
+        sessionStorage.setItem('mygrantRefreshToken', state.refreshToken);
+
+        return true;
+      })
+      .catch(() => false)
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+
+  return refreshPromise;
 }
 async function authenticate(path,payload){
   setAuthMessage(''); setAuthBusy('Connecting to Spring Boot...');
   try{
     const response=await fetch(`${API_BASE}${path}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const user=await parseApiResponse(response);
-    state.user=user; state.token=user.token; state.ragVisaType=user.visaType || 'F-1';
+    state.user=user; state.token=user.token; state.refreshToken=user.refreshToken; state.ragVisaType=user.visaType || 'F-1';
     sessionStorage.setItem('mygrantToken',user.token);
+    sessionStorage.setItem('mygrantRefreshToken',user.refreshToken);
     enterApp(roleForUser(user.role));
   }catch(error){ setAuthMessage(error instanceof TypeError?'Cannot reach Spring Boot on http://localhost:8080. Start the application first.':error.message); }
   finally{ setAuthBusy(''); }
@@ -854,8 +1136,7 @@ async function restoreSession(){
 
     enterApp(roleForUser(state.user.role));
   }catch(error){
-    sessionStorage.removeItem('mygrantToken');
-    state.token = null;
+    clearLocalSession();
     setAuthMessage(error.message);
   }finally{
     setAuthBusy('');
@@ -880,11 +1161,11 @@ async function loadProfile(){
 }
 async function loadPolicies(){
   try{
-    const response=await apiFetch('/api/v1/policies');
-    state.policyRecords=await parseApiResponse(response);
+    state.policyRecords=await fetchAllPages('/api/v1/policies');
     state.policyError=null;
   }catch(error){ state.policyError=error.message; }
-  if(state.view==='dashboard') render();
+  // The profile and admin pages list policy dates for the test clock.
+  if(['dashboard','profile','admin'].includes(state.view)) render();
 }
 /* Loads the inbox and the unread count together; the count comes from the server
    because the list is paginated and may not hold every unread notification. */
@@ -940,7 +1221,7 @@ function receiveNotification(notification){
   state.unreadCount++;
   state.notifications=[notification,...(state.notifications || []).filter(item=>item.id!==notification.id)];
   updateUnreadBadge();
-  if(state.view==='notifications') render();
+  if(state.view==='dashboard' || state.view==='notifications') render();
   if('Notification' in window && Notification.permission==='granted'){
     const title=notification.actionRequired?'ACTION REQUIRED — myGRANT alert':'New myGRANT policy alert';
     const browserNotification=new Notification(title,{body:notification.message,tag:`mygrant-${notification.id}`,
@@ -961,20 +1242,24 @@ async function requestBrowserNotifications(){
     if(permission==='granted') showToast('Browser notifications enabled.');
     else if(permission==='denied') showToast('Browser notifications are blocked. Inbox alerts remain available.');
     else showToast('You can enable browser notifications later in your browser settings.');
-    if(state.view==='notifications') render();
+    if(state.view==='dashboard' || state.view==='notifications') render();
   }catch(error){ showToast('Could not request notification permission.'); }
 }
 async function markNotificationRead(id){
   try{
     const response = await apiFetch(`/api/v1/notifications/${id}/read`,{method:'POST'});
-    await parseApiResponse(response);
+    const updated = await parseApiResponse(response);
+    if(state.openNotification?.id===id) state.openNotification = updated;
   }catch(error){ showToast(error.message); return; }
   await loadNotifications();
+  if(state.view==='notificationDetail' && state.openAlert===id) render();
 }
 async function uploadImmigrationDocument(event) {
   event.preventDefault();
 
   const documentType = document.getElementById('document-type').value;
+  const issuingAuthority = document.getElementById('document-issuer').value;
+  const policyMatchingConsent = document.getElementById('document-policy-consent').checked;
   const fileInput = document.getElementById('immigration-file');
   const file = fileInput.files[0];
 
@@ -985,6 +1270,8 @@ async function uploadImmigrationDocument(event) {
 
   const formData = new FormData();
   formData.append('documentType', documentType);
+  if (issuingAuthority) formData.append('issuingAuthority', issuingAuthority);
+  formData.append('policyMatchingConsent', String(policyMatchingConsent));
   formData.append('file', file);
 
   try {
@@ -1001,6 +1288,14 @@ async function uploadImmigrationDocument(event) {
     showToast(error.message);
   }
 }
+async function setDocumentMatchingConsent(id, consented) {
+  try {
+    await parseApiResponse(await apiFetch(`/api/v1/profiles/me/documents/${id}/policy-matching-consent`, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({consented})
+    }));
+    await loadImmigrationDocuments();
+  } catch (error) { showToast(error.message); }
+}
 
 function updateUnreadBadge(){
   const badge = document.getElementById('nav-unread');
@@ -1009,29 +1304,146 @@ function updateUnreadBadge(){
   badge.style.display = state.unreadCount > 0 ? 'inline-block' : 'none';
 }
 
+function updateInboxBadge(conversations){
+  const count = conversations.filter(c => new Date(c.updatedAt).getTime() > state.inboxLastSeen).length;
+  state.feedbackInboxBadge = count;
+  const label = count > 99 ? '99+' : String(count);
+  document.querySelectorAll('.nav-feedback-badge').forEach(b => {
+    b.textContent = label;
+    b.style.display = count > 0 ? 'inline-block' : 'none';
+  });
+}
+
+function updateUserFeedbackBadge(){
+  const unseen = state.feedbackMessages.filter(m => m.senderType !== 'APPLICANT' && !state.seenFeedbackMsgIds.includes(m.id)).length;
+  state.feedbackUserBadge = unseen;
+  const fab = document.querySelector('.feedback-fab');
+  if(!fab) return;
+  const label = unseen > 99 ? '99+' : String(unseen);
+  fab.innerHTML = unseen > 0
+    ? `Feedback<span class="fab-badge">${label}</span>`
+    : 'Feedback';
+}
+
+function markFeedbackSeen(){
+  state.seenFeedbackMsgIds = state.feedbackMessages.map(m => m.id);
+  state.feedbackUserBadge = 0;
+  updateUserFeedbackBadge();
+}
+
+function startFeedbackBadgePoll(role){
+  if(feedbackBadgeTimer) clearInterval(feedbackBadgeTimer);
+  if(role === 'student'){
+    feedbackBadgeTimer = setInterval(async () => {
+      if(!state.token || state.view === 'feedback') return;
+      if(!state.feedbackConversation) return;
+      await loadHumanMessages(false);
+    }, 10000);
+  } else {
+    feedbackBadgeTimer = setInterval(async () => {
+      if(!state.token || state.view === 'feedbackInbox') return;
+      try{
+        const convos = await fetchAllPages('/api/v1/feedback/admin/conversations');
+        updateInboxBadge(convos);
+      }catch(e){}
+    }, 10000);
+  }
+}
+
 function goto(view, param){
+  if(state.view==='applicationProgress' && view==='applicationProgress') return;
+  if(!confirmApplicationLeave()) return;
   stopFeedbackPolling();
+  if(view === 'rag' && state.role !== 'admin'){
+    showToast('The RAG inspector is available to administrators only.');
+    view = homeView();
+  }
+  if(view === 'visaBulletin' && state.role !== 'admin'){
+    showToast('The Visa Bulletin inspector is available to administrators only.');
+    view = homeView();
+  }
   if (view === 'profile') {
     loadProfile();
     loadImmigrationDocuments();
+    loadEmailPreferences();
+    loadTestClock();
+    loadPolicies();
   }
   state.view = view;
+  if(view==='applicationProgress') loadApplicationProgress();
   if(param) state.openAlert = param;
   document.querySelectorAll('.nav-link, .profile-btn').forEach(l=>l.classList.toggle('active', l.dataset.view===view));
   updateBreadcrumb(view);
   render();
   // Reload both on every visit so a policy imported since login shows up here.
-  if(view==='dashboard'){ loadPolicies(); loadNotifications(); }
+  if(view==='dashboard'){ loadPolicies(); loadNotifications(); loadImpacts(); loadActions(); loadForecasts(); loadForecastAlerts(); loadTestClock(); }
+  if(view==='manager' && state.role==='manager') loadManagerDashboard();
+  if(view==='queue' && state.role==='manager') loadReviewQueue();
+  if(view==='admin' && state.role==='admin'){ loadAdminUsers(); loadAdminSources(); loadTestClock(); loadPolicies(); }
+  if(view==='visaBulletin' && state.role==='admin'){ loadVisaBulletin(); }
   if(view==='feedback') openHumanFeedback();
-  if(view==='feedbackInbox') loadStaffConversations();
+  if(view==='feedbackInbox'){ state.inboxLastSeen=Date.now(); updateInboxBadge(state.staffConversations); loadStaffConversations(); }
   window.scrollTo(0,0);
 }
+async function loadAdminUsers(){
+  state.adminUsersLoading = true;
+  state.adminUsersError = null;
+  render();
+  try{
+    state.adminUsers = await fetchAllPages('/api/v1/admin/users');
+  }catch(error){
+    state.adminUsers = [];
+    state.adminUsersError = error.message;
+  }finally{
+    state.adminUsersLoading = false;
+    if(state.view === 'admin') render();
+  }
+}
+async function loadAdminSources(){
+  state.adminSourcesLoading = true;
+  state.adminSourcesError = null;
+  if(state.view === 'admin') render();
+  try{
+    const [sourceResponse, statusResponse] = await Promise.all([
+      apiFetch('/api/v1/admin/sources'),
+      apiFetch('/api/v1/ingestion/status')
+    ]);
+    const sourcePayload = await parseApiResponse(sourceResponse);
+    const sources = sourcePayload?.content || sourcePayload;
+    const statusPayload = await parseApiResponse(statusResponse);
+    const statuses = statusPayload?.content || statusPayload;
+    const byId = new Map((statuses || []).map(status => [status.sourceId, status]));
+    state.adminSources = (sources || []).map(source => ({...source, health: byId.get(source.id) || null}));
+  }catch(error){
+    state.adminSources = [];
+    state.adminSourcesError = error.message;
+  }finally{
+    state.adminSourcesLoading = false;
+    if(state.view === 'admin') render();
+  }
+}
+async function updateAdminUserRole(userId, role){
+  try{
+    const response = await apiFetch(`/api/v1/admin/users/${userId}/role`,{
+      method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({role})
+    });
+    await parseApiResponse(response);
+    showToast('User role updated. They must sign in again for the new permissions.');
+    await loadAdminUsers();
+  }catch(error){
+    showToast(error.message);
+    await loadAdminUsers();
+  }
+}
 const VIEW_LABELS = {
-  dashboard:'Your alerts', notifications:'Notifications', notificationDetail:'Alert detail', alertDetail:'Alert detail',
-  profile:'Your profile', manager:'Team impact', queue:'Review queue', admin:'Monitored sources',
+  dashboard:'Impact dashboard', notifications:'Notifications', notificationDetail:'Alert detail', alertDetail:'Alert detail',
+  profile:'Your profile', manager:'Team impact', queue:'Review queue', admin:'Monitored sources', visaBulletin:'Visa Bulletin',
   rag:'RAG inspector', feedback:'Get feedback', feedbackInbox:'Feedback inbox', profileCompletion:'Complete your profile'
 };
-const VIEW_PARENTS = {notificationDetail:'dashboard', alertDetail:'dashboard'};
+VIEW_LABELS.impactDetail='Impact detail';
+VIEW_LABELS.policyDetail='Policy details';
+VIEW_LABELS.applicationProgress='Application tracker';
+const VIEW_PARENTS = {notificationDetail:'dashboard', alertDetail:'dashboard', policyDetail:'dashboard', impactDetail:'dashboard'};
 function homeView(){ return state.role==='manager' ? 'manager' : state.role==='admin' ? 'admin' : 'dashboard'; }
 function updateBreadcrumb(view){
   const crumb = document.getElementById('breadcrumb');
@@ -1055,16 +1467,30 @@ function showToast(msg){
 function render(){
   const main = document.getElementById('main');
   if(state.view==='dashboard') main.innerHTML = renderLiveDashboard();
+  else if(state.view==='impactDetail') main.innerHTML = renderImpactDetail();
   else if(state.view==='notifications') main.innerHTML = renderNotifications();
   else if(state.view==='notificationDetail') main.innerHTML = renderNotificationDetail(state.openAlert);
   else if(state.view==='alertDetail') main.innerHTML = renderAlertDetail(state.openAlert);
+  else if(state.view==='applicationProgress') main.innerHTML = renderApplicationProgress();
+  else if(state.view==='policyDetail') main.innerHTML = renderPolicyDetail();
   else if(state.view==='profile') main.innerHTML = renderAccountProfile();
   else if(state.view==='manager') main.innerHTML = renderManager();
   else if(state.view==='queue') main.innerHTML = renderQueue();
   else if(state.view==='admin') main.innerHTML = renderAdmin();
+  else if(state.view==='visaBulletin') main.innerHTML = renderVisaBulletin();
   else if(state.view==='rag') main.innerHTML = renderRag();
   else if(state.view==='feedback') main.innerHTML = renderFeedback();
   else if(state.view==='feedbackInbox') main.innerHTML = renderFeedbackInbox();
+  main.insertAdjacentHTML('beforeend', feedbackAccessButton());
+}
+
+/* Available on every signed-in screen; login intentionally has no support control. */
+function feedbackAccessButton(){
+  if(!state.token || state.view==='feedback' || state.view==='feedbackInbox') return '';
+  return `<button class="feedback-fab" type="button" onclick="openFeedback()" aria-label="Contact myGRANT support">Feedback</button>`;
+}
+function openFeedback(){
+  goto(state.role==='student' ? 'feedback' : 'feedbackInbox');
 }
 
 function urgencyLabel(u){ return u==='high'?'High urgency':u==='medium'?'Medium urgency':'Low urgency'; }
@@ -1126,8 +1552,18 @@ function renderLiveDashboard(){
       </div>
     </div>`;
   }).join('');
+  const forecastAlertRows=(state.forecastAlerts || []).map(alert=>`
+    <div class="entry urgency-high"><div class="flag"></div>
+      <div class="entry-case">${escapeHtml(alert.formType)}<br>Timing warning</div>
+      <div class="entry-body"><h3>USCIS decision may miss your deadline</h3>
+        <p>${escapeHtml(alert.message)}</p>
+        <span class="tag action">${escapeHtml(formatDate(alert.deadlineDate))} deadline</span>
+      </div></div>`).join('');
 
-  const records=(state.policyRecords || []).filter(policy=>String(policy.visaType || '').includes(visaType));
+  // Under the test clock, a policy published after the simulated date has not happened yet.
+  const clockToday=state.testClock?.today;
+  const records=(state.policyRecords || []).filter(policy=>String(policy.visaType || '').includes(visaType)
+    && (!clockToday || String(policy.publicationDate) <= clockToday));
   const policyRows=records.map(policy=>`
     <div class="entry urgency-low">
       <div class="flag"></div>
@@ -1137,32 +1573,620 @@ function renderLiveDashboard(){
         <p>Published ${escapeHtml(formatDate(policy.publicationDate))}${policy.effectiveDate ? `; effective ${escapeHtml(formatDate(policy.effectiveDate))}` : ''}.</p>
         <div class="tag-row"><span class="tag">${escapeHtml(policy.status)}</span><span class="tag">${escapeHtml(policy.agency)}</span><span class="tag">${escapeHtml(policy.visaType)}</span></div>
       </div>
-      <div class="entry-action">${sourceLink(policy)}</div>
+      <div class="entry-action" style="gap:8px;"><button class="btn small" onclick="openPolicyDetail(${Number(policy.id)})">See how this impacts me</button>${sourceLink(policy)}</div>
     </div>`).join('');
 
   return `
     <div class="page-head">
-      <h1>Notifications</h1>
-      <p class="sub">Policy changes matched to your visa category${visaType ? ` (${escapeHtml(visaType)})` : ''}. Flagged items touch information you have already entered in your profile.</p>
+      <h1>Your policy impact dashboard</h1>
+      <p class="sub">Published assessments for your profile, with the most urgent first. Archive an assessment once you have handled it.</p>
+      ${clockToday && clockToday!==state.testClock.realToday ? `<span class="tag action">Test clock: today is ${escapeHtml(formatDate(clockToday))}</span>` : ''}
       ${'Notification' in window && Notification.permission==='granted' ? '<span class="tag">Browser notifications enabled</span>' : ('Notification' in window && Notification.permission==='denied' ? '<span class="tag">Browser notifications blocked</span>' : (permissionPromptedThisSession ? '<span class="tag">Permission request sent</span>' : '<button class="btn ghost small" onclick="requestBrowserNotifications()">Enable browser notifications</button>'))}
     </div>
 
+    ${renderProcessingTimeline()}
+    ${renderImpactFeed()}
+    ${renderActionChecklist()}
     <div class="block-label">Notifications${state.unreadCount ? ` &middot; ${state.unreadCount} unread` : ''}</div>
+    ${state.forecastAlertsError ? `<div class="rag-error">${escapeHtml(state.forecastAlertsError)}</div>` : ''}
+    ${forecastAlertRows}
     ${state.notificationsError ? `<div class="rag-error">${escapeHtml(state.notificationsError)}</div>` : ''}
     ${state.notifications===null
       ? (state.notificationsError ? '' : '<div class="empty">Loading notifications...</div>')
-      : notificationRows || '<div class="empty"><div class="big">Nothing yet</div>You will be notified here when a policy affecting your visa category is published.</div>'}
+      : notificationRows || (forecastAlertRows ? '' : '<div class="empty"><div class="big">Nothing yet</div>You will be notified here when a policy affecting your visa category is published.</div>')}
 
     <div class="block-label" style="margin-top:32px;">All policies for ${escapeHtml(visaType || 'your profile')}</div>
     ${state.policyError ? `<div class="rag-error">${escapeHtml(state.policyError)}</div>` : ''}
     ${state.policyRecords===null
       ? (state.policyError ? '' : '<div class="empty">Loading policies...</div>')
-      : policyRows || '<div class="empty"><div class="big">No matching policies yet</div>Import a Federal Register document from the RAG inspector.</div>'}
-    <button class="feedback-fab" type="button" onclick="goto('feedback')" aria-label="Get feedback">Feedback</button>`;
+      : policyRows || '<div class="empty"><div class="big">No matching policies yet</div>Import a Federal Register document from the RAG inspector.</div>'}`;
+}
+
+async function loadForecastAlerts(){
+  if(state.role!=='student') return;
+  const account=state.user?.email;
+  try{
+    const response=await apiFetch('/api/v1/forecast/deadline-alerts');
+    const alerts=await parseApiResponse(response);
+    if(state.user?.email!==account || state.role!=='student') return;
+    state.forecastAlerts=alerts;
+    state.forecastAlertsError=null;
+  }catch(error){
+    if(state.user?.email!==account) return;
+    state.forecastAlertsError=error.message;
+  }
+  if(state.view==='dashboard') render();
+}
+
+async function loadForecasts(){
+  if(state.role!=='student') return;
+  const account=state.user?.email;
+  state.processingForecasts=null;
+  state.processingForecastError=null;
+  if(state.view==='dashboard') render();
+  const forms=['I-765','I-539'];
+  const results=await Promise.allSettled(forms.map(form=>{
+    const selected=state.forecastSeries?.[form];
+    const params=new URLSearchParams({formType:form});
+    if(selected){ params.set('formCategory',selected.category); params.set('office',selected.office); }
+    return apiFetch(`/api/v1/forecast/processing-times?${params}`).then(parseApiResponse);
+  }));
+  if(state.user?.email!==account || state.role!=='student') return;
+  state.processingForecasts={};
+  results.forEach((result,index)=>{
+    if(result.status==='fulfilled') state.processingForecasts[forms[index]]=result.value;
+    else state.processingForecastError=result.reason.message || 'Forecast could not be loaded.';
+  });
+  if(state.view==='dashboard') render();
+}
+
+async function selectForecastSeries(form){
+  const index=Number(document.getElementById(`forecast-series-${form}`)?.value);
+  const series=state.processingForecasts?.[form]?.availableSeries?.[index];
+  if(!series) return;
+  const account=state.user?.email;
+  try{
+    const response=await apiFetch('/api/v1/forecast/processing-times/selection',{
+      method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({formType:form,formCategory:series.category,office:series.office})
+    });
+    await parseApiResponse(response);
+    if(state.user?.email!==account) return;
+    state.forecastSeries[form]=series;
+    loadForecasts();
+    loadForecastAlerts();
+  }catch(error){
+    state.processingForecastError=error.message;
+    if(state.view==='dashboard') render();
+  }
+}
+
+function renderProcessingTimeline(){
+  const results=state.processingForecasts;
+  const unavailable={
+    MISSING_FILING_DATE:'Add your filing date in your profile to see a projection.',
+    FILING_DATE_IN_FUTURE:'Your saved filing date is in the future; check it in your profile.',
+    NO_USABLE_HISTORY:'No comparable USCIS snapshots have been imported yet.',
+    INSUFFICIENT_HISTORY:'At least two dated USCIS snapshots are needed.',
+    AMBIGUOUS_SERIES:'Several USCIS categories or offices exist; this forecast needs a matching series.',
+    UNSUPPORTED_FORM:'This form is not supported by the forecast.'
+  };
+  const cards=['I-765','I-539'].map(form=>{
+    const item=results?.[form];
+    if(!item) return `<div class="empty">${results ? 'Forecast unavailable.' : 'Loading forecast…'}</div>`;
+    if(item.status!=='AVAILABLE') return `<div class="entry urgency-low"><div class="flag"></div>
+      <div class="entry-body"><h3>${escapeHtml(form)}</h3><p>${escapeHtml(unavailable[item.reason] || 'Forecast unavailable.')}</p>
+      ${item.reason==='AMBIGUOUS_SERIES' && item.availableSeries?.length ?
+        `<label for="forecast-series-${form}">Your USCIS category and office</label>
+         <select id="forecast-series-${form}">${item.availableSeries.map((series,index)=>
+          `<option value="${index}">${escapeHtml(series.category)} · ${escapeHtml(series.office)}</option>`).join('')}</select>
+         <button class="btn ghost small" onclick="selectForecastSeries('${form}')">Show this series</button>` : ''}
+      ${item.reason==='MISSING_FILING_DATE' ? '<button class="btn ghost small" onclick="goto(\'profile\')">Add filing date</button>' : ''}</div></div>`;
+    return `<div class="entry ${item.deadlineConflict?'urgency-high':'urgency-low'}"><div class="flag"></div>
+      <div class="entry-body"><h3>${escapeHtml(form)} · projected decision window</h3>
+      <p>Filed ${escapeHtml(formatDate(item.filingDate))} · estimated range ${escapeHtml(formatDate(item.rangeStartDate))} to ${escapeHtml(formatDate(item.upperBoundDecisionDate))}.</p>
+      <p>${item.medianDecisionDate ? `Published case median projection: ${escapeHtml(formatDate(item.medianDecisionDate))}.` : 'USCIS has not published a case median for these snapshots.'}</p>
+      ${item.deadlineDate ? `<p>${escapeHtml(item.deadlineType.replaceAll('_',' '))}: ${escapeHtml(formatDate(item.deadlineDate))}.</p>` : ''}
+      ${item.deadlineConflict ? `<p class="rag-error" role="alert">${escapeHtml(item.deadlineWarning)}</p>` : ''}
+      <p class="sub">Based on ${escapeHtml(item.formCategory)} at ${escapeHtml(item.office)}; snapshot dates: ${(item.sourceSnapshotDates || []).map(date=>escapeHtml(formatDate(date))).join(', ')}.</p>
+      <p class="sub">${escapeHtml(item.uncertaintyExplanation)} This is a projection from published times, not a guaranteed decision date.</p>
+      </div></div>`;
+  }).join('');
+  return `<section aria-labelledby="processing-timeline-title"><div class="block-label" id="processing-timeline-title">USCIS processing timeline</div>
+    ${state.processingForecastError ? `<div class="rag-error" role="alert">${escapeHtml(state.processingForecastError)}</div>` : ''}
+    <div class="processing-timeline">${cards}</div></section>`;
+}
+
+async function loadImpacts(){
+  state.impactsLoading=true; state.impactsError=null; state.impactsPage=0;
+  if(state.view==='dashboard') render();
+  try{
+    const archived=state.impactsArchived ? 'true' : 'false';
+    const page=await parseApiResponse(await apiFetch(`/api/v1/impacts?page=0&size=20&sort=severity,desc&archived=${archived}`));
+    state.impacts=page.content || [];
+    state.impactsTotalPages=page.totalPages || 0;
+  }catch(error){ state.impacts=[]; state.impactsError=error.message; }
+  finally{ state.impactsLoading=false; if(state.view==='dashboard') render(); }
+}
+async function loadMoreImpacts(){
+  if(state.impactsLoading || state.impactsPage+1>=state.impactsTotalPages) return;
+  state.impactsLoading=true; render();
+  try{
+    const next=state.impactsPage+1;
+    const archived=state.impactsArchived ? 'true' : 'false';
+    const page=await parseApiResponse(await apiFetch(`/api/v1/impacts?page=${next}&size=20&sort=severity,desc&archived=${archived}`));
+    state.impacts=[...(state.impacts || []),...(page.content || [])];
+    state.impactsPage=next;
+  }catch(error){state.impactsError=error.message;}
+  finally{state.impactsLoading=false; if(state.view==='dashboard')render();}
+}
+function showArchivedImpacts(archived){
+  state.impactsArchived=archived;
+  state.impacts=null;
+  loadImpacts();
+}
+function impactSeverityClass(severity){
+  return severity==='CRITICAL' || severity==='HIGH' ? 'impact-critical'
+    : severity==='MEDIUM' ? 'impact-medium' : 'impact-low';
+}
+function renderImpactFeed(){
+  const rows=(state.impacts || []).map(impact=>{
+    const critical=impact.severity==='CRITICAL';
+    const actionPreview=(impact.actionItems || []).filter(isActiveAction).slice(0,2)
+      .map(item=>`<li>${escapeHtml(item.title)}${item.urgent?' <span class="tag action">Urgent</span>':''}</li>`).join('');
+    return `<article class="entry ${impactSeverityClass(impact.severity)}" aria-label="${escapeAttribute(impact.severity)} impact">
+      <div class="flag"></div>
+      <div class="entry-case">${escapeHtml(formatTimestamp(impact.createdAt))}<br>${escapeHtml(impact.severity)}</div>
+      <div class="entry-body">
+        <div class="tag-row"><span class="tag ${critical?'action':''}">${critical?'WARNING: CRITICAL':escapeHtml(impact.severity)}</span>
+          <span class="tag confidence-${escapeAttribute(impact.confidenceLabel.toLowerCase())}">${escapeHtml(impact.confidenceLabel)} confidence</span>
+          ${impact.reviewedByHuman?'<span class="tag">Reviewed by a human</span>':''}</div>
+        <h3>${escapeHtml(impact.policyTitle)}</h3>
+        <p>${escapeHtml(impact.summary)}</p>
+        ${actionPreview?`<div><strong>${critical?'Act on these steps:':'Checklist or reminder:'}</strong><ul>${actionPreview}</ul></div>`:''}
+      </div>
+      <div class="entry-action" style="gap:8px;flex-wrap:wrap;">
+        <button class="btn small" type="button" onclick="openImpact(${Number(impact.id)})">Read details</button>
+        <button class="btn ghost small" type="button" onclick="setImpactArchived(${Number(impact.id)},${!impact.archived})">${impact.archived?'Unarchive':'Archive'}</button>
+      </div>
+    </article>`;
+  }).join('');
+  let empty='No assessments have been published yet. Open a matching policy below and select “See how this impacts me” to create one.';
+  if(state.user?.profileComplete===false) empty='Complete your profile to see how policy changes affect you.';
+  else if(state.impactsArchived) empty='You have no archived assessments.';
+  else if(state.policyRecords && !state.policyRecords.some(policy=>String(policy.visaType || '').includes(state.user?.visaType || ''))) {
+    empty='No matching policies have been imported for your visa category yet.';
+  }
+  return `<section aria-label="Your impact assessments">
+    <div class="block-label">What this means for you</div>
+    <div class="tag-row" style="margin-bottom:12px;">
+      <button class="btn ${state.impactsArchived?'ghost':''} small" type="button" onclick="showArchivedImpacts(false)">Current</button>
+      <button class="btn ${state.impactsArchived?'':'ghost'} small" type="button" onclick="showArchivedImpacts(true)">Archived</button>
+    </div>
+    ${state.impactsError?`<div class="rag-error" role="alert">${escapeHtml(state.impactsError)} <button class="btn ghost small" onclick="loadImpacts()">Try again</button></div>`:''}
+    ${state.impacts===null?'<div class="empty" role="status">Loading your assessments...</div>':rows || `<div class="empty">${empty}</div>`}
+    ${state.impactsLoading && state.impacts!==null?'<p role="status">Loading more assessments...</p>':''}
+    ${state.impactsPage+1<state.impactsTotalPages?'<button class="btn ghost small" type="button" onclick="loadMoreImpacts()">Load more</button>':''}
+  </section>`;
+}
+async function openImpact(id){
+  state.impactDetail=null; state.impactDetailError=null; state.impactDetailLoading=true;
+  goto('impactDetail'); render();
+  try{
+    state.impactDetail=await parseApiResponse(await apiFetch(`/api/v1/impacts/${id}`));
+  }catch(error){state.impactDetailError=error.message;}
+  finally{state.impactDetailLoading=false; if(state.view==='impactDetail')render();}
+}
+function renderImpactDetail(){
+  const back='<button class="back-link" type="button" onclick="goto(\'dashboard\')">&larr; Back to your impacts</button>';
+  if(state.impactDetailLoading) return back+'<p role="status">Loading assessment...</p>';
+  if(state.impactDetailError) return back+`<div class="rag-error" role="alert">${escapeHtml(state.impactDetailError)}</div>`;
+  const impact=state.impactDetail;
+  if(!impact) return back+'<div class="empty">Assessment unavailable.</div>';
+  const critical=impact.severity==='CRITICAL';
+  return `${back}<article class="detail-card ${impactSeverityClass(impact.severity)}">
+    <div class="tag-row"><span class="tag ${critical?'action':''}">${critical?'WARNING: CRITICAL':escapeHtml(impact.severity)}</span>
+      <span class="tag">${escapeHtml(impact.confidenceLabel)} confidence (${Number(impact.confidence)}%)</span>
+      ${impact.reviewedByHuman?'<span class="tag">Reviewed by a human</span>':''}</div>
+    <h1>${escapeHtml(impact.policyTitle)}</h1><p>${escapeHtml(impact.summary)}</p>
+    <p>${escapeHtml(impact.policyAgency)} · ${escapeHtml(formatTimestamp(impact.createdAt))}</p>
+    <div class="block-label">Why this affects you</div>
+    ${(impact.analysis || []).length?`<ul>${impact.analysis.map(reason=>`<li>${escapeHtml(reason)}</li>`).join('')}</ul>`:'<p>No further analysis was supplied.</p>'}
+    ${(impact.missingInformation || []).length?`<p>Missing information: ${impact.missingInformation.map(escapeHtml).join(', ')}</p>`:''}
+    <div class="block-label">${critical?'Actions to review now':'Checklist and reminders'}</div>
+    ${(impact.actionItems || []).length?impact.actionItems.map(item=>renderActionItem(item,false)).join(''):'<p>No action items were supplied.</p>'}
+    <div class="block-label">Source and citations</div>
+    ${(impact.citations || []).map(citation=>/^https:\/\//i.test(citation.url || '')
+      ? `<p><a href="${escapeAttribute(citation.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(citation.title)}</a></p>`
+      : `<p>${escapeHtml(citation.title)}</p>`).join('')}
+    <p class="rag-status">${escapeHtml(impact.disclaimer)}</p>
+    <button class="btn ghost small" type="button" onclick="setImpactArchived(${Number(impact.id)},${!impact.archived})">${impact.archived?'Unarchive':'Archive this assessment'}</button>
+  </article>`;
+}
+async function setImpactArchived(id,archived){
+  try{
+    const result=await parseApiResponse(await apiFetch(`/api/v1/impacts/${id}`,{
+      method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({archived})
+    }));
+    if(state.impactDetail?.id===id){state.impactDetail=result;render();}
+    await loadImpacts();
+    showToast(archived?'Assessment archived.':'Assessment unarchived.');
+  }catch(error){showToast(error.message);}
+}
+
+/* Action checklist (CS203-4). Kept before the beforeunload listener because impact-feed.test.cjs
+   and action-checklist.test.cjs load only the source from loadImpacts up to that listener. */
+const ACTION_TABS={active:{label:'Active',status:''},completed:{label:'Completed',status:'COMPLETED'},
+  dismissed:{label:'Dismissed',status:'DISMISSED'}};
+const ACTION_STATUS_LABELS={PENDING:'To do',IN_PROGRESS:'In progress',COMPLETED:'Completed',DISMISSED:'Dismissed'};
+const ACTION_TOASTS={PENDING:'Item reopened.',IN_PROGRESS:'Item started.',COMPLETED:'Item completed.',
+  DISMISSED:'Item dismissed.'};
+function actionsPath(page){
+  const status=ACTION_TABS[state.actionsTab]?.status;
+  return `/api/v1/actions?page=${page}&size=50${status?`&status=${status}`:''}`;
+}
+async function loadActions(){
+  state.actionsLoading=true; state.actionsError=null; state.actionsPage=0;
+  if(state.view==='dashboard') render();
+  try{
+    const page=await parseApiResponse(await apiFetch(actionsPath(0)));
+    state.actions=page.content || [];
+    state.actionsTotalPages=page.totalPages || 0;
+  }catch(error){ state.actions=[]; state.actionsError=error.message; }
+  finally{ state.actionsLoading=false; if(state.view==='dashboard') render(); }
+}
+async function loadMoreActions(){
+  if(state.actionsLoading || state.actionsPage+1>=state.actionsTotalPages) return;
+  state.actionsLoading=true; render();
+  try{
+    const next=state.actionsPage+1;
+    const page=await parseApiResponse(await apiFetch(actionsPath(next)));
+    state.actions=[...(state.actions || []),...(page.content || [])];
+    state.actionsPage=next;
+  }catch(error){state.actionsError=error.message;}
+  finally{state.actionsLoading=false; if(state.view==='dashboard')render();}
+}
+function showActionTab(tab){
+  state.actionsTab=tab;
+  state.actions=null;
+  loadActions();
+}
+function isActiveAction(item){ return item.status==='PENDING' || item.status==='IN_PROGRESS'; }
+function actionButtons(item){
+  const disabled=state.actionUpdating?' disabled':'';
+  const button=(status,label,primary)=>`<button class="btn ${primary?'':'ghost '}small" type="button"${disabled} onclick="setActionStatus(${Number(item.id)},'${status}')">${label}</button>`;
+  if(!isActiveAction(item)) return button('PENDING','Reopen',false);
+  return `${item.status==='PENDING'?button('IN_PROGRESS','Start',false):''}${button('COMPLETED','Complete',true)}${button('DISMISSED','Dismiss',false)}`;
+}
+/* One checklist row: on the dashboard with its policy, in an impact's detail without. */
+function renderActionItem(item,showPolicy){
+  const priority=String(item.priority || '');
+  const flag=priority==='HIGH'?'urgency-high':priority==='MEDIUM'?'urgency-medium':'urgency-low';
+  const closed=item.status==='COMPLETED'?`Completed ${formatTimestamp(item.completedAt)}`
+    :item.status==='DISMISSED'?`Dismissed ${formatTimestamp(item.dismissedAt)}`:'';
+  return `<div class="entry ${flag}${isActiveAction(item)?'':' read'}" aria-label="${escapeAttribute(item.title)}">
+    <div class="flag"></div>
+    <div class="entry-case">${item.deadline?`Due ${escapeHtml(formatDate(item.deadline))}`:'No deadline'}<br>${escapeHtml(ACTION_STATUS_LABELS[item.status] || item.status)}</div>
+    <div class="entry-body">
+      <div class="tag-row"><span class="tag">${escapeHtml(priority)} priority</span>
+        ${item.urgent?'<span class="tag action">Urgent</span>':''}${item.overdue?'<span class="tag action">Overdue</span>':''}</div>
+      <h3>${escapeHtml(item.title)}</h3>
+      ${item.description?`<p>${escapeHtml(item.description)}</p>`:''}
+      ${showPolicy?`<p class="rag-status">From: ${escapeHtml(item.policyTitle)}</p>`:''}
+      ${closed?`<p class="rag-status">${escapeHtml(closed)}</p>`:''}
+    </div>
+    <div class="entry-action" style="gap:8px;flex-wrap:wrap;">${actionButtons(item)}</div>
+  </div>`;
+}
+function renderActionChecklist(){
+  const tab=ACTION_TABS[state.actionsTab]?state.actionsTab:'active';
+  const tabs=Object.entries(ACTION_TABS).map(([key,{label}])=>
+    `<button class="btn ${key===tab?'':'ghost '}small" type="button" aria-pressed="${key===tab}" onclick="showActionTab('${key}')">${label}</button>`).join('');
+  const rows=(state.actions || []).map(item=>renderActionItem(item,true)).join('');
+  const empty=tab==='completed'?'You have not completed any checklist items yet.'
+    :tab==='dismissed'?'You have not dismissed any checklist items.'
+    :'Nothing to do right now. Steps from your published impact assessments appear here.';
+  return `<section aria-label="Your checklist">
+    <div class="block-label">Your checklist</div>
+    <div class="tag-row" style="margin-bottom:12px;" role="group" aria-label="Checklist status">${tabs}</div>
+    ${state.actionsError?`<div class="rag-error" role="alert">${escapeHtml(state.actionsError)} <button class="btn ghost small" type="button" onclick="loadActions()">Try again</button></div>`:''}
+    ${state.actions===null?'<div class="empty" role="status">Loading your checklist...</div>':rows || (state.actionsError?'':`<div class="empty">${empty}</div>`)}
+    ${state.actionsLoading && state.actions!==null?'<p role="status">Updating your checklist...</p>':''}
+    ${state.actionsPage+1<state.actionsTotalPages?'<button class="btn ghost small" type="button" onclick="loadMoreActions()">Load more</button>':''}
+  </section>`;
+}
+async function setActionStatus(id,status){
+  if(state.actionUpdating) return;
+  state.actionUpdating=id; render();
+  try{
+    await parseApiResponse(await apiFetch(`/api/v1/actions/${id}`,{
+      method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})
+    }));
+    showToast(ACTION_TOASTS[status] || 'Checklist updated.');
+  }catch(error){showToast(error.message);}
+  finally{
+    state.actionUpdating=null;
+    // The checklist, the impact cards and an open detail all show the item, so all are refetched.
+    await Promise.all([loadActions(),loadImpacts(),refreshImpactDetail()]);
+  }
+}
+async function refreshImpactDetail(){
+  const id=state.impactDetail?.id;
+  if(state.view!=='impactDetail' || id===undefined) return;
+  try{
+    state.impactDetail=await parseApiResponse(await apiFetch(`/api/v1/impacts/${id}`));
+    state.impactDetailError=null;
+  }catch(error){state.impactDetailError=error.message;}
+  finally{if(state.view==='impactDetail')render();}
+}
+
+window.addEventListener('beforeunload',event=>{
+  if(state.applicationTracker?.dirty){ event.preventDefault(); event.returnValue=''; }
+});
+
+const APPLICATION_STEPS=[
+  {title:'Determine your visa type',body:'Choose the category that matches your purpose of travel, such as B-1 for business, B-2 for tourism, or F-1 for academic study.',url:'https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/all-visa-categories.html',link:'Find your visa category'},
+  {title:'Complete Form DS-160',body:'Submit the online application, provide a compliant photo, and keep the barcode confirmation page for your appointment.',url:'https://ceac.state.gov/GenNIV/',link:'Open the official DS-160 form'},
+  {title:'Pay the application fee',body:'Follow the payment instructions for your category and consular post. Many non-petition visas carry a $185 application fee; other categories and additional fees differ. Keep the receipt.',url:'https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/fees/fees-visa-services.html',link:'Check current visa fees'},
+  {title:'Schedule your interview',body:'Use your embassy or consulate’s official scheduling instructions and choose a passport delivery or pickup option where available. Follow local instructions if eligible for an interview waiver.',url:'https://sg.usembassy.gov/visas/',link:'U.S. Embassy Singapore visa services'},
+  {title:'Prepare required documents',body:'Check your post’s document list: passport, DS-160 confirmation, fee receipt where required, photo if needed, and supporting evidence for your visa category. Passport validity rules have country-specific exceptions.',url:'https://travel.state.gov/content/travel/en/us-visas/tourism-visit/visitor.html',link:'Review official document guidance'},
+  {title:'Attend your visa interview',body:'Bring the required documents and follow your appointment instructions. Mark this complete after attending, or after your post confirms an interview waiver applies.',url:'https://travel.state.gov/content/travel/en/us-visas.html',link:'Official visa guidance'},
+  {title:'Receive your passport',body:'Follow the consulate’s decision and delivery instructions. Approval and return dates are not guaranteed; additional processing may be required. Mark complete once your passport is returned.',url:'https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/administrative-processing-information.html',link:'Understand processing after interview'}
+];
+
+async function loadApplicationProgress(){
+  const tracker={loading:true,saving:false,error:null,details:null,updatedAt:null,dirty:false,savedSnapshot:null};
+  state.applicationTracker=tracker;
+  const token=state.token;
+  try{
+    const saved=await parseApiResponse(await apiFetch('/api/v1/profiles/me/application-progress'));
+    tracker.details=saved.details; tracker.updatedAt=saved.updatedAt;
+    tracker.savedSnapshot=JSON.stringify(saved.details);
+  }catch(error){tracker.error=error.message;}
+  finally{tracker.loading=false;if(state.token===token && state.applicationTracker===tracker && state.view==='applicationProgress') render();}
+}
+
+function applicationProgress(steps){
+  const completed=new Set(steps);
+  return {count:completed.size,percent:Math.round(completed.size/7*100),next:APPLICATION_STEPS.findIndex((step,index)=>!completed.has(index+1))};
+}
+
+function confirmApplicationLeave(){
+  const tracker=state.applicationTracker;
+  if(!tracker?.dirty) return true;
+  if(!window.confirm('You have unsaved application changes. Leave without saving?')) return false;
+  tracker.dirty=false;
+  return true;
+}
+
+function applicationSaveStatus(tracker){
+  return tracker.saving?'Updating...':tracker.dirty?'Unsaved changes':tracker.updatedAt?`Last updated ${formatTimestamp(tracker.updatedAt)}`:'Not saved yet';
+}
+
+function renderApplicationProgress(){
+  const tracker=state.applicationTracker;
+  const heading='<div class="page-head"><h1>Application tracker</h1><p class="sub">Keep your visa application details and next steps in one place. Progress is based on your checklist updates.</p></div>';
+  if(!tracker || tracker.loading) return heading+'<p role="status">Loading your application...</p>';
+  if(!tracker.details) return heading+`<div class="rag-error" role="alert">${escapeHtml(tracker.error || 'Unable to load your application.')}</div><button class="btn" onclick="loadApplicationProgress();render()">Try again</button>`;
+  const d=tracker.details,progress=applicationProgress(d.completedSteps);
+  const field=(name,label,type='text',max=150)=>`<div class="field"><label for="application-${name}">${label}</label><input id="application-${name}" name="${name}" type="${type}" maxlength="${max}" value="${escapeAttribute(d[name] || '')}"></div>`;
+  return heading+`<p id="application-save-status" role="status" style="text-align:right;font-style:italic;margin:-16px 0 20px;">${escapeHtml(applicationSaveStatus(tracker))}</p><form id="application-tracker-form" onsubmit="saveApplicationProgress(event)" oninput="updateApplicationProgress()">
+    <fieldset style="border:0;padding:0;margin:0;min-width:0;" ${tracker.saving?'disabled':''}>
+    <section class="detail-card" aria-labelledby="application-progress-heading">
+      <div class="tag-row"><span class="tag">Your checklist</span><span class="tag">Self-reported</span></div>
+      <h2 id="application-progress-heading">${progress.count===7?'Checklist complete':'Your application, step by step'}</h2>
+      <p id="application-progress-label">${progress.count} of 7 steps complete &middot; ${progress.percent}%</p>
+      <progress id="application-progress-bar" max="7" value="${progress.count}" aria-labelledby="application-progress-label" style="width:100%;height:16px;accent-color:var(--primary);"></progress>
+      <p id="application-next-step" style="margin-top:16px;"><strong>${progress.next<0?'All steps checked. This does not confirm a visa decision.':`Next: ${escapeHtml(APPLICATION_STEPS[progress.next].title)}`}</strong></p>
+    </section>
+    <h2>Application details</h2><p>This tracker is for a consular nonimmigrant visa application using DS-160.</p>
+    <div class="form-grid">
+      <div class="field"><label for="application-visaType">Visa category</label><input id="application-visaType" name="visaType" list="application-visa-categories" required maxlength="30" value="${escapeAttribute(d.visaType)}" placeholder="e.g. F-1 or B-1/B-2"><datalist id="application-visa-categories">${['B-1','B-2','B-1/B-2','F-1','J-1','M-1','H-1B'].map(v=>`<option value="${v}"></option>`).join('')}</datalist></div>
+      ${field('interviewLocation','Embassy or consulate')}${field('ds160Confirmation','DS-160 confirmation number','text',30)}${field('interviewDate','Interview date','date')}${field('intendedTravelDate','Intended travel date','date')}
+      <div class="field"><label for="application-notes">Application notes</label><textarea id="application-notes" name="notes" rows="3" maxlength="2000">${escapeHtml(d.notes)}</textarea></div>
+    </div>
+    <h2 style="margin-top:32px;">Your application checklist</h2>
+    <p id="application-student-note" class="citation-box" ${/^(F|J|M)-/i.test(d.visaType)?'':'hidden'}>Students and exchange visitors: have your I-20 or DS-2019 and SEVIS ID ready for DS-160. Check whether an I-901 SEVIS fee applies before your interview. <a href="https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html" target="_blank" rel="noopener noreferrer">Student visa guidance</a></p>
+    <ol style="list-style:none;padding:0;">${APPLICATION_STEPS.map((step,index)=>`<li class="detail-card" style="margin-bottom:16px;"><div style="display:flex;gap:16px;align-items:flex-start;"><input type="checkbox" id="application-step-${index+1}" name="completedSteps" value="${index+1}" ${d.completedSteps.includes(index+1)?'checked':''} style="width:22px;height:22px;flex-shrink:0;margin-top:4px;accent-color:var(--primary);"><div><label for="application-step-${index+1}" style="font-weight:700;font-size:20px;cursor:pointer;">${index+1}. ${step.title}</label><p style="line-height:1.6;max-width:80ch;">${step.body}</p><a href="${step.url}" target="_blank" rel="noopener noreferrer">${step.link} &rarr;</a></div></div></li>`).join('')}</ol>
+    <div class="detail-card" style="position:sticky;bottom:0;z-index:2;background:var(--panel);border-top:1px solid var(--base-lighter);padding:10px 16px;margin-bottom:0;">
+      ${tracker.error?`<p class="rag-error" role="alert">${escapeHtml(tracker.error)}</p>`:''}
+      <button class="btn small" type="submit">${tracker.saving?'Updating...':'Update application progress'}</button>
+    </div></fieldset></form>`;
+}
+
+function readApplicationForm(form){
+  const data=new FormData(form);
+  return {visaType:data.get('visaType').trim(),interviewLocation:data.get('interviewLocation').trim(),ds160Confirmation:data.get('ds160Confirmation').trim(),interviewDate:data.get('interviewDate') || null,intendedTravelDate:data.get('intendedTravelDate') || null,notes:data.get('notes').trim(),completedSteps:data.getAll('completedSteps').map(Number)};
+}
+
+function updateApplicationProgress(){
+  const form=document.getElementById('application-tracker-form');
+  const details=readApplicationForm(form);
+  state.applicationTracker.details=details;
+  state.applicationTracker.dirty=JSON.stringify(details)!==state.applicationTracker.savedSnapshot;
+  const progress=applicationProgress(details.completedSteps);
+  document.getElementById('application-progress-bar').value=progress.count;
+  document.getElementById('application-progress-label').textContent=`${progress.count} of 7 steps complete · ${progress.percent}%`;
+  document.getElementById('application-next-step').textContent=progress.next<0?'All steps checked. This does not confirm a visa decision.':`Next: ${APPLICATION_STEPS[progress.next].title}`;
+  document.getElementById('application-student-note').hidden=!/^(F|J|M)-/i.test(details.visaType);
+  document.getElementById('application-save-status').textContent=applicationSaveStatus(state.applicationTracker);
+}
+
+async function saveApplicationProgress(event){
+  event.preventDefault();
+  const tracker=state.applicationTracker;
+  if(tracker.saving) return;
+  const details=readApplicationForm(event.target);
+  tracker.details=details; tracker.saving=true; tracker.dirty=true; tracker.error=null; render();
+  try{
+    const saved=await parseApiResponse(await apiFetch('/api/v1/profiles/me/application-progress',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(details)}));
+    tracker.details=saved.details;tracker.updatedAt=saved.updatedAt;
+    tracker.savedSnapshot=JSON.stringify(saved.details);tracker.dirty=false;
+  }catch(error){tracker.error=error.message;}
+  finally{tracker.saving=false;if(state.applicationTracker===tracker && state.view==='applicationProgress')render();}
+}
+
+async function openPolicyDetail(id){
+  const detail={id, policy:null, assessment:null, loading:true, error:null, reportText:'', reporting:false, reported:false, reportError:null};
+  state.policyChats=state.policyChats || {};
+  detail.chat=state.policyChats[id] || (state.policyChats[id]={messages:[],draft:'',sending:false,error:null,historyLoaded:false,historyLoading:false});
+  state.policyDetail=detail;
+  goto('policyDetail');
+  try{
+    detail.policy=await parseApiResponse(await apiFetch(`/api/v1/policies/${id}`));
+    if(state.policyDetail===detail && state.view==='policyDetail') render();
+    const response=await apiFetch(`/api/v1/policies/${id}/recommendation`,{method:'POST'});
+    if(response.status===404){
+      throw new Error('Personalized recommendations are not available on this server yet. Please try again after the latest backend has been deployed. You can still read the policy summary and original source.');
+    }
+    detail.assessment=await parseApiResponse(response);
+    await loadPolicyChatHistory(detail);
+  }catch(error){ detail.error=error.message; }
+  finally{ detail.loading=false; if(state.policyDetail===detail && state.view==='policyDetail') render(); }
+}
+
+function policySummary(content){
+  const text=String(content || '').replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi,'')
+    .replace(/<[^>]*>/g,' ').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&')
+    .replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'");
+  const match=text.match(/\bSUMMARY:\s*([\s\S]*?)(?=\n\s*(?:DATES|ADDRESSES|FOR FURTHER INFORMATION|SUPPLEMENTARY INFORMATION):|$)/i);
+  return match ? match[1].replace(/\[\[Page[^\]]*\]\]/g,'').replace(/\s+/g,' ').trim()
+    : 'An official summary is not available for this policy. Read the original source for the complete details.';
+}
+
+function renderPolicyRecommendation(assessment){
+  const unavailable=assessment.urgency==='UNAVAILABLE';
+  return `<section class="detail-card" aria-labelledby="policy-impact-heading">
+    <h2 id="policy-impact-heading">How this affects you</h2>
+    ${assessment.evaluation?`<p class="rag-status">${assessment.evaluation.verdict==='YES'?'AI cross-check passed':'Independent review: '+escapeHtml(assessment.evaluation.verdict)}</p>`:''}
+    <div class="tag-row"><span class="tag">${escapeHtml(formatUrgency(assessment.urgency))}</span>${assessment.requiresHumanReview?'<span class="tag">Needs human review</span>':''}</div>
+    <p style="line-height:1.7;">${escapeHtml(assessment.summary)}</p>
+    ${(assessment.reasons || []).length?`<h3>Why this matters for your profile</h3><ul>${assessment.reasons.map(reason=>`<li>${escapeHtml(reason)}</li>`).join('')}</ul>`:''}
+    ${!unavailable?`<h3>What to do next</h3><ol>${(assessment.recommendedActions || []).map(action=>`<li style="margin-bottom:12px;">${escapeHtml(action)}</li>`).join('')}</ol><p class="rag-status">Based on your saved profile and the policy source. Confirm important decisions with a qualified adviser.</p>`:''}
+    </section>`;
+}
+
+function renderPolicyDetail(){
+  const detail=state.policyDetail;
+  const back='<button class="back-link" onclick="goto(\'dashboard\')">&larr; Back to policies</button>';
+  if(!detail) return back;
+  const policy=detail.policy;
+  return `${back}
+    ${policy?`<div class="detail-card"><h1>${escapeHtml(policy.title)}</h1>
+      <div class="tag-row"><span class="tag">${escapeHtml(policy.status)}</span><span class="tag">${escapeHtml(policy.agency)}</span><span class="tag">${escapeHtml(policy.visaType)}</span></div>
+      <p>Published ${escapeHtml(formatDate(policy.publicationDate))}${policy.effectiveDate?`; effective ${escapeHtml(formatDate(policy.effectiveDate))}`:''}.</p>
+      ${policy.sourceUrl?`<a class="btn ghost small" href="${escapeAttribute(policy.sourceUrl)}" target="_blank" rel="noopener noreferrer">Read original source</a>`:''}
+      <section style="margin-top:24px;" aria-labelledby="policy-summary-heading"><h2 id="policy-summary-heading">Policy summary</h2><p style="line-height:1.75;max-width:80ch;">${escapeHtml(policySummary(policy.content))}</p><p class="rag-status">From the official source summary.</p></section></div>`:''}
+    ${detail.loading?'<p role="status">Reviewing this policy against your profile. This may take a moment...</p>':''}
+    ${detail.error?`<div class="rag-error" role="alert">${escapeHtml(detail.error)}</div><button class="btn ghost small" onclick="openPolicyDetail(${Number(detail.id)})">Try again</button>`:''}
+    ${detail.assessment?`${renderPolicyRecommendation(detail.assessment)}${renderPolicyChat(detail)}
+      <div class="detail-card"><h2>Report a recommendation</h2><p>Tell the team what seems incorrect or missing. The policy and assessment will be included.</p>
+      ${detail.reported?'<p role="status">Report sent. You can follow up in Feedback.</p><button class="btn ghost small" onclick="openFeedback()">Open feedback</button>':`
+      <form onsubmit="reportPolicyRecommendation(event)"><label for="recommendation-report">What needs correcting?</label>
+      <textarea id="recommendation-report" required maxlength="900" rows="4" style="display:block;width:100%;margin:12px 0;" oninput="state.policyDetail.reportText=this.value">${escapeHtml(detail.reportText)}</textarea>
+      ${detail.reportError?`<p class="rag-error" role="alert">${escapeHtml(detail.reportError)}</p>`:''}
+      <button class="btn" type="submit" ${detail.reporting?'disabled':''}>${detail.reporting?'Sending...':'Report recommendation'}</button></form>`}</div>`:''}`;
+}
+
+async function loadPolicyChatHistory(detail){
+  const chat=detail.chat;
+  if(chat.historyLoaded || chat.historyLoading)return;
+  chat.historyLoading=true;chat.error=null;
+  try{
+    const rows=await fetchAllPages(`/api/v1/policies/${detail.id}/questions`);
+    chat.messages=rows.flatMap(row=>[{role:'USER',message:row.question},
+      {role:'ASSISTANT',message:row.response.answer,...row.response}]);
+    chat.historyLoaded=true;
+  }catch(error){chat.error='Could not load saved conversation. '+error.message;}
+  finally{chat.historyLoading=false;}
+}
+
+async function retryPolicyChatHistory(){
+  const detail=state.policyDetail;
+  await loadPolicyChatHistory(detail);
+  if(state.policyDetail===detail && state.view==='policyDetail')render();
+}
+
+function renderPolicyChat(detail){
+  const chat=detail.chat;
+  return `<section class="detail-card" aria-labelledby="policy-chat-heading">
+    <h2 id="policy-chat-heading">Questions about this change?</h2>
+    <p>Ask about this policy, your recommendation, or your next steps.</p>
+    <div class="chat-shell" style="max-width:100%;">
+      <div class="chat-head"><strong>Policy assistant</strong><span class="tag">AI-generated</span></div>
+      <div class="chat-log" id="policy-chat-log" role="log" aria-label="Policy questions and answers" aria-live="polite" style="min-height:180px;height:auto;max-height:480px;">
+        ${chat.historyLoading?'<p role="status">Loading saved conversation...</p>':''}
+        ${chat.messages.length?chat.messages.map(message=>`<div class="chat-row ${message.role==='USER'?'mine':''}">
+          <span class="chat-meta">${message.role==='USER'?'You':'Policy assistant'}</span>
+          <div class="chat-message">${escapeHtml(message.message)}</div>
+          ${message.confidence?`<span class="chat-meta">${escapeHtml(message.confidence)} evidence confidence</span>`:''}
+          ${(message.citations || []).map((citation,index)=>/^https?:\/\//i.test(citation.sourceUrl || '')?`<a href="${escapeAttribute(citation.sourceUrl)}" target="_blank" rel="noopener noreferrer" style="font-size:14px;">[${index+1}] ${escapeHtml(citation.title)}</a>`:'').join('')}
+          ${message.evaluation?`<span class="chat-meta">${message.evaluation.verdict==='YES'?'AI cross-check passed':'Answer withheld: independent review '+escapeHtml(message.evaluation.verdict.toLowerCase())}</span>`:''}
+          ${message.role==='ASSISTANT'?`${!message.citations && message.sourceUrl && /^https?:\/\//i.test(message.sourceUrl)?`<a href="${escapeAttribute(message.sourceUrl)}" target="_blank" rel="noopener noreferrer" style="font-size:14px;">[1] ${escapeHtml(message.sourceTitle || 'Policy source')}</a>`:''}${message.requiresReview?'<span class="tag">Confirm with a qualified adviser</span>':''}`:''}
+        </div>`).join(''):'<p class="rag-status">What would you like to understand about this policy?</p>'}
+        ${chat.sending?'<p role="status">Checking the policy source and independently reviewing the answer...</p>':''}
+      </div>
+      ${!chat.messages.length?`<div style="display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px;">${['Why does this affect me?','What should I do next?','When does this change take effect?'].map(question=>`<button class="btn ghost small" type="button" onclick="setPolicyChatQuestion('${question}')" ${chat.sending?'disabled':''}>${question}</button>`).join('')}</div>`:''}
+      ${chat.error?`<p class="rag-error" role="alert" style="margin:12px;">${escapeHtml(chat.error)}</p>`:''}
+      ${!chat.historyLoaded && chat.error?'<button class="btn ghost small" type="button" onclick="retryPolicyChatHistory()">Reload conversation</button>':''}
+      <form class="chat-compose" onsubmit="sendPolicyQuestion(event)" style="align-items:flex-end;flex-wrap:wrap;">
+        <label for="policy-chat-question" style="width:100%;">Your question</label>
+        <textarea id="policy-chat-question" required maxlength="2000" rows="2" placeholder="Ask a follow-up question..." style="flex:1;min-width:180px;padding:10px;font:inherit;" oninput="state.policyDetail.chat.draft=this.value" ${chat.sending?'disabled':''}>${escapeHtml(chat.draft)}</textarea>
+        <button class="btn small" type="submit" ${chat.sending || chat.historyLoading || !chat.historyLoaded?'disabled':''}>${chat.sending?'Answering...':'Send question'}</button>
+      </form>
+    </div>
+    <p class="rag-status">Answers use this policy's source and your saved profile. They may be incomplete. This is informational guidance, not legal advice.</p>
+    <button class="btn ghost small" type="button" onclick="openFeedback()">Ask the support team</button>
+  </section>`;
+}
+
+function setPolicyChatQuestion(question){
+  const chat=state.policyDetail?.chat;
+  if(!chat || chat.sending) return;
+  chat.draft=question;
+  const input=document.getElementById('policy-chat-question');
+  if(input){input.value=question;input.focus();}
+}
+
+async function sendPolicyQuestion(event){
+  event.preventDefault();
+  const detail=state.policyDetail,chat=detail?.chat;
+  if(!chat || chat.sending || chat.historyLoading || !chat.historyLoaded || !chat.draft.trim()) return;
+  const question=chat.draft.trim();
+  chat.sending=true;chat.error=null;chat.messages.push({role:'USER',message:question});chat.draft='';render();
+  try{
+    const answer=await parseApiResponse(await apiFetch(`/api/v1/policies/${detail.id}/questions`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,history:[]})}));
+    chat.messages.push({role:'ASSISTANT',message:answer.answer,...answer});
+  }catch(error){
+    chat.messages.pop();chat.draft=question;chat.error=error.message;
+  }finally{
+    chat.sending=false;
+    if(state.policyDetail?.chat===chat && state.view==='policyDetail'){
+      render();
+      const log=document.getElementById('policy-chat-log');if(log)log.scrollTop=log.scrollHeight;
+      document.getElementById('policy-chat-question')?.focus();
+    }
+  }
+}
+
+async function reportPolicyRecommendation(event){
+  event.preventDefault();
+  const detail=state.policyDetail;
+  if(!detail || detail.reporting || detail.reported || !detail.reportText.trim()) return;
+  detail.reporting=true; detail.reportError=null; render();
+  const assessment=detail.assessment;
+  const context=JSON.stringify({urgency:assessment.urgency,summary:assessment.summary,actions:assessment.recommendedActions,provider:assessment.provider,model:assessment.model});
+  const message=`Recommendation report | Policy ${detail.id} (${detail.policy.externalId})\n${detail.policy.title.slice(0,180)}\nUser report: ${detail.reportText.trim().slice(0,900)}\nAssessment: ${context.slice(0,650)}`;
+  try{
+    await parseApiResponse(await apiFetch('/api/v1/feedback/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:message.slice(0,2000)})}));
+    detail.reported=true;
+  }catch(error){ detail.reportError=error.message; }
+  finally{ detail.reporting=false; if(state.policyDetail===detail && state.view==='policyDetail') render(); }
 }
 
 function renderNotificationDetail(id){
-  const notification=(state.notifications || []).find(item=>item.id===id);
+  const notification=(state.notifications || []).find(item=>item.id===id)
+    || (state.openNotification?.id===id ? state.openNotification : null);
   if(!notification) return '<button class="back-link" onclick="goto(\'notifications\')">&larr; Back to notifications</button><div class="empty">Loading this alert…</div>';
   return `<button class="back-link" onclick="goto('notifications')">&larr; Back to notifications</button>
     <div class="entry ${notification.actionRequired?'urgency-high':'urgency-low'}"><div class="flag"></div>
@@ -1253,7 +2277,7 @@ function renderProfileForm(){
   return `
     <form class="form-grid" onsubmit="saveProfile(event)">
       <div class="field">
-        <label for="profile-visa-type">Visa category</label>
+        <label for="profile-visa-type">Visa category (Required)</label>
         <select id="profile-visa-type" required>
           <option value="F-1" ${profile.visaType === 'F-1' ? 'selected' : ''}>F-1</option>
           <option value="J-1" ${profile.visaType === 'J-1' ? 'selected' : ''}>J-1</option>
@@ -1313,9 +2337,35 @@ function renderProfileForm(){
       </div>
 
       <div class="field">
+        <label for="profile-i765-date">I-765 filing date (OPT)</label>
+        <input id="profile-i765-date" type="date" value="${escapeAttribute(profile.i765FilingDate || '')}">
+      </div>
+
+      <div class="field">
+        <label for="profile-i539-date">I-539 filing date (extension of stay)</label>
+        <input id="profile-i539-date" type="date" value="${escapeAttribute(profile.i539FilingDate || '')}">
+      </div>
+
+      <div class="field">
         <label for="profile-priority-date">Priority date</label>
         <input id="profile-priority-date" type="date" value="${escapeAttribute(profile.priorityDate || '')}">
       </div>
+
+      <div class="field">
+        <label for="profile-immigrant-category">Immigrant category</label>
+        <input id="profile-immigrant-category" placeholder="e.g. EB-2" value="${escapeAttribute(profile.immigrantCategory || '')}">
+      </div>
+
+      <div class="field">
+        <label for="profile-chargeability">Chargeability area</label>
+        <input id="profile-chargeability" placeholder="Country of chargeability" value="${escapeAttribute(profile.chargeabilityArea || '')}">
+      </div>
+
+      <div class="field"><label for="profile-academic-level">Academic level (Optional)</label><input id="profile-academic-level" value="${escapeAttribute(profile.academicLevel || '')}"></div>
+      <div class="field"><label for="profile-program-end">Program end date (Optional)</label><input id="profile-program-end" type="date" value="${escapeAttribute(profile.programEndDate || '')}"></div>
+      <div class="field"><label for="profile-upcoming-travel">Upcoming travel date (Optional)</label><input id="profile-upcoming-travel" type="date" value="${escapeAttribute(profile.upcomingTravelDate || '')}"></div>
+
+      ${profileConsentControls(profile)}
 
       <div class="form-actions">
         <button class="btn" type="submit">Save profile</button>
@@ -1332,14 +2382,23 @@ async function saveProfile(event){
     visaType: value('profile-visa-type'),
     countryOfOrigin: value('profile-origin') || null,
     countryOfCitizenship: value('profile-citizenship') || null,
-    currentLocation: value('profile-location') || null,
+    currentLocation: value('profile-location'),
     employmentStatus: value('profile-employment-status') || null,
     employer: value('profile-employer') || null,
     visaStartDate: value('profile-visa-start') || null,
     visaExpiryDate: value('profile-visa-expiry') || null,
     optStartDate: value('profile-opt-start') || null,
     i140FilingDate: value('profile-i140-date') || null,
-    priorityDate: value('profile-priority-date') || null
+    i765FilingDate: value('profile-i765-date') || null,
+    i539FilingDate: value('profile-i539-date') || null,
+    priorityDate: value('profile-priority-date') || null,
+    academicLevel: value('profile-academic-level') || null,
+    programEndDate: value('profile-program-end') || null,
+    upcomingTravelDate: value('profile-upcoming-travel') || null,
+    immigrantCategory: value('profile-immigrant-category') || null,
+    chargeabilityArea: value('profile-chargeability') || null,
+    clearFields: [],
+    consentedFields: selectedConsentFields()
   };
 
   try{
@@ -1354,6 +2413,111 @@ async function saveProfile(event){
     state.ragVisaType = state.profile.visaType || 'F-1';
 
     showToast(`Profile saved (version ${state.profile.version}).`);
+    render();
+  }catch(error){
+    showToast(error.message);
+  }
+}
+
+function selectedConsentFields(){
+  return [...document.querySelectorAll('input[data-consent-field]:checked')]
+    .map(input => input.dataset.consentField);
+}
+
+const consentFieldLabels = {
+  VISA_TYPE: 'Visa category',
+  COUNTRY_OF_ORIGIN: 'Country of origin',
+  COUNTRY_OF_CITIZENSHIP: 'Country of citizenship',
+  CURRENT_LOCATION: 'Current location',
+  EMPLOYMENT_STATUS: 'Employment status',
+  EMPLOYER: 'Employer',
+  VISA_START_DATE: 'Visa start date',
+  VISA_EXPIRY_DATE: 'Visa expiry date',
+  OPT_START_DATE: 'OPT start date',
+  I140_FILING_DATE: 'I-140 filing date',
+  PRIORITY_DATE: 'Priority date',
+  ACADEMIC_LEVEL: 'Academic level',
+  PROGRAM_END_DATE: 'Program end date',
+  UPCOMING_TRAVEL_DATE: 'Upcoming travel date',
+  IMMIGRANT_CATEGORY: 'Immigrant category',
+  CHARGEABILITY_AREA: 'Chargeability area'
+};
+
+function consentControl(field, purpose, required, checked){
+  const label = consentFieldLabels[field] || field;
+  return `<label class="consent-card">
+    <input type="checkbox" data-consent-field="${field}" ${checked ? 'checked' : ''} ${required ? 'required' : ''}>
+    <span><span class="consent-card__name">${escapeHtml(label)} <span class="consent-card__meta">${required ? 'Required' : 'Optional'}</span></span>
+    <span class="consent-card__purpose">${escapeHtml(purpose)}</span></span>
+  </label>`;
+}
+
+function onboardingConsentControls(){
+  return `<section class="consent-panel">
+    <h2>How we use your information</h2>
+    <p class="sub">Visa category is required. Every other field is optional. We use only fields you enter and consent to use.</p>
+    <div class="consent-list">
+    ${consentControl('VISA_TYPE', 'Used to identify immigration rules that may apply to your current status.', true, false)}
+    ${consentControl('COUNTRY_OF_ORIGIN', 'Used only where a policy depends on country of birth or origin.', false, false)}
+    ${consentControl('COUNTRY_OF_CITIZENSHIP', 'Used only where a policy depends on nationality or citizenship.', false, false)}
+    ${consentControl('ACADEMIC_LEVEL', 'Used to assess education-level rules and student eligibility.', false, false)}
+    ${consentControl('PROGRAM_END_DATE', 'Used to identify program-completion deadlines.', false, false)}
+    ${consentControl('CURRENT_LOCATION', 'Used to identify rules affected by whether you are in the United States.', false, false)}
+    ${consentControl('UPCOMING_TRAVEL_DATE', 'Used to assess travel-related immigration changes.', false, false)}
+    ${consentControl('IMMIGRANT_CATEGORY', 'Used to assess employment-based immigrant-visa rules.', false, false)}
+    ${consentControl('CHARGEABILITY_AREA', 'Used to assess Visa Bulletin chargeability rules.', false, false)}
+    ${consentControl('PRIORITY_DATE', 'Used to assess Visa Bulletin and immigrant-visa changes.', false, false)}
+    ${consentControl('EMPLOYMENT_STATUS', 'Used to assess employment-related immigration changes.', false, false)}
+    ${consentControl('EMPLOYER', 'Used to assess employer-specific immigration implications.', false, false)}
+    ${consentControl('VISA_START_DATE', 'Used to assess dates and time spent in a visa category.', false, false)}
+    ${consentControl('VISA_EXPIRY_DATE', 'Used to identify approaching visa-expiry deadlines.', false, false)}
+    ${consentControl('OPT_START_DATE', 'Used to assess OPT and STEM OPT timing.', false, false)}
+    ${consentControl('I140_FILING_DATE', 'Used to assess employment-based immigrant-petition timing.', false, false)}
+    </div>
+    </section>`;
+}
+
+function profileConsentControls(profile){
+  const consents = profile.consents || {};
+  const fields = [
+    ['VISA_TYPE', 'visaType', 'Used to identify immigration rules that may apply to your current status.', true],
+    ['COUNTRY_OF_ORIGIN', 'countryOfOrigin', 'Used only where a policy depends on country of birth or origin.', false],
+    ['COUNTRY_OF_CITIZENSHIP', 'countryOfCitizenship', 'Used only where a policy depends on nationality or citizenship.', false],
+    ['CURRENT_LOCATION', 'currentLocation', 'Used to identify rules affected by whether you are in the United States.', false],
+    ['EMPLOYMENT_STATUS', 'employmentStatus', 'Used to assess employment-related immigration changes.', false],
+    ['EMPLOYER', 'employer', 'Used to assess employer-specific immigration implications.', false],
+    ['VISA_START_DATE', 'visaStartDate', 'Used to assess dates and time spent in a visa category.', false],
+    ['VISA_EXPIRY_DATE', 'visaExpiryDate', 'Used to identify approaching visa-expiry deadlines.', false],
+    ['OPT_START_DATE', 'optStartDate', 'Used to assess OPT and STEM OPT timing.', false],
+    ['I140_FILING_DATE', 'i140FilingDate', 'Used to assess employment-based immigrant-petition timing.', false],
+    ['I765_FILING_DATE', 'i765FilingDate', 'Used to project I-765 processing time.', false],
+    ['I539_FILING_DATE', 'i539FilingDate', 'Used to project I-539 processing time.', false],
+    ['PRIORITY_DATE', 'priorityDate', 'Used to assess Visa Bulletin and immigrant-visa changes.', false],
+    ['ACADEMIC_LEVEL', 'academicLevel', 'Used to assess education-level rules and student eligibility.', false],
+    ['PROGRAM_END_DATE', 'programEndDate', 'Used to identify program-completion deadlines.', false],
+    ['UPCOMING_TRAVEL_DATE', 'upcomingTravelDate', 'Used to assess travel-related immigration changes.', false],
+    ['IMMIGRANT_CATEGORY', 'immigrantCategory', 'Used to assess employment-based immigrant-visa rules.', false],
+    ['CHARGEABILITY_AREA', 'chargeabilityArea', 'Used to assess Visa Bulletin chargeability rules.', false]
+  ];
+  return `<section class="consent-panel">
+    <h2>Consent and removal</h2>
+    <p class="sub">Only populated fields with your consent are included in future assessments. Remove a saved optional field to withdraw it.</p>
+    <div class="consent-list">
+    ${fields.map(([name, key, purpose, required]) => `<div class="consent-entry">${consentControl(name, purpose, required, Boolean(consents[name]))}
+      ${!required && profile[key] ? `<button class="btn ghost small consent-card__remove" type="button" onclick="withdrawProfileField('${name}')">Remove</button>` : ''}</div>`).join('')}
+    </div>
+  </section>`;
+}
+
+async function withdrawProfileField(field){
+  try{
+    const response = await apiFetch('/api/v1/profiles/me', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({clearFields: [field], consentedFields: []})
+    });
+    state.profile = await parseApiResponse(response);
+    showToast('Information removed. It will not be used in future assessments.');
     render();
   }catch(error){
     showToast(error.message);
@@ -1454,11 +2618,166 @@ function finishDeletedAccount(){
   document.getElementById('popup-stack').innerHTML = '';
 
   sessionStorage.removeItem('mygrantToken');
+  sessionStorage.removeItem('mygrantRefreshToken');
   state = initialState();
 
   document.getElementById('app').classList.remove('active');
   document.getElementById('login').style.display = 'flex';
   setAuthMessage('Your account has been permanently deleted.');
+}
+
+async function loadEmailPreferences(){
+  try{
+    const response = await apiFetch('/api/v1/profiles/me/email-preferences');
+    state.emailPreferences = await parseApiResponse(response);
+    state.emailPreferencesError = null;
+  }catch(error){ state.emailPreferencesError = error.message; }
+  if(state.view === 'profile') render();
+}
+async function saveEmailPreferences(event){
+  event.preventDefault();
+  try{
+    const response = await apiFetch('/api/v1/profiles/me/email-preferences',{
+      method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+        criticalDelivery:document.getElementById('email-critical').value,
+        otherDelivery:document.getElementById('email-other').value
+      })
+    });
+    state.emailPreferences = await parseApiResponse(response);
+    state.emailPreferencesError = null;
+    showToast('Email settings saved.');
+  }catch(error){ showToast(error.message); }
+  if(state.view === 'profile') render();
+}
+const EMAIL_INELIGIBLE_MESSAGES = {
+  EMAIL_NOT_VERIFIED:'We only email verified addresses, and this one is not verified yet. Sign out and use “Continue with Google” with this address once to verify it. Your choices below are saved either way.',
+  NO_EMAIL_ADDRESS:'This account has no email address, so no alert emails can be sent.',
+  ACCOUNT_INACTIVE:'This account is inactive, so no alert emails are sent.'
+};
+function renderEmailPreferences(){
+  const prefs = state.emailPreferences;
+  const heading = `<div class="page-head" style="margin-top:36px;" id="email-alerts">
+      <h2>Email alerts</h2>
+      <p class="sub">Critical alerts are the ones that ask you to act or are rated high urgency; everything else is for information. Alerts always appear in the app as well.</p>
+    </div>`;
+  if(state.emailPreferencesError && !prefs) return `${heading}<div class="rag-error">${escapeHtml(state.emailPreferencesError)}</div>`;
+  if(!prefs) return `${heading}<p class="sub">Loading email settings...</p>`;
+  const options = current => [['IMMEDIATE','Email me right away'],['DIGEST','Include in my daily digest'],['OFF','Do not email me']]
+    .map(([value,label]) => `<option value="${value}" ${value===current?'selected':''}>${label}</option>`).join('');
+  const notice = prefs.canReceiveEmail
+    ? `<p class="sub" style="margin-bottom:16px;">Emails go to ${escapeHtml(prefs.email || '')}.</p>`
+    : `<div class="rag-error">${escapeHtml(EMAIL_INELIGIBLE_MESSAGES[prefs.ineligibleReason] || 'Alert emails cannot be sent to this account.')}</div>`;
+  return `${heading}${notice}
+    <form class="form-grid" onsubmit="saveEmailPreferences(event)">
+      <div class="field"><label for="email-critical">Critical alerts</label><select id="email-critical">${options(prefs.criticalDelivery)}</select></div>
+      <div class="field"><label for="email-other">Other alerts</label><select id="email-other">${options(prefs.otherDelivery)}</select></div>
+      <div class="form-actions"><button class="btn" type="submit">Save email settings</button></div>
+    </form>`;
+}
+
+/* TEMPORARY test clock: moves the app's "today" so a policy counts as published and its
+   alert arrives. Admins move every applicant; applicants move only themselves. The server
+   answers 404 when the clock is switched off, and the panel then stays hidden. */
+async function loadTestClock(){
+  try{
+    const response = await apiFetch('/api/v1/test-clock/me');
+    if(response.status === 404){ state.testClockDisabled = true; state.testClock = null; }
+    else state.testClock = await parseApiResponse(response);
+  }catch(error){ state.testClock = null; }
+  if(['dashboard','profile','admin'].includes(state.view)) render();
+}
+function setTestClock(scope, date){
+  if(!date){ showToast('Choose a date first.'); return; }
+  // Only the admin's own form offers the import; the per-policy jump buttons never import.
+  const importRecentPolicies = scope==='global' && !!document.getElementById('test-clock-import')?.checked;
+  state.testClockImporting = importRecentPolicies;
+  changeTestClock(scope, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date, importRecentPolicies})});
+}
+function resetTestClock(scope){ changeTestClock(scope, {method:'DELETE'}); }
+async function changeTestClock(scope, options){
+  state.testClockBusy = true;
+  render();
+  try{
+    const response = await apiFetch(scope==='global' ? '/api/v1/admin/test-clock' : '/api/v1/test-clock/me', options);
+    const result = await parseApiResponse(response);
+    state.testClock = result;
+    const inboxes = scope==='global' ? ` across ${result.inboxesSynced} applicant inbox${result.inboxesSynced===1?'':'es'}` : '';
+    state.testClockImportResult = state.testClockImporting ? result : null;
+    showToast(`Today is now ${formatDate(result.today)}: ${result.notificationsAdded} alert(s) added, ${result.notificationsRemoved} withdrawn${inboxes}.`);
+    // New alerts also arrive on the live stream, but withdrawn ones only leave on a reload.
+    // Moving the date also changes which checklist items are urgent or overdue.
+    if(state.role==='student'){ loadNotifications(); loadActions(); loadImpacts(); }
+    if(state.testClockImporting) loadPolicies();
+  }catch(error){ showToast(error.message); }
+  finally{ state.testClockBusy = false; state.testClockImporting = false; render(); }
+}
+function renderTestClockImportResult(){
+  const result = state.testClockImportResult;
+  if(!result) return '';
+  const failures = (result.importFailures || []).map(failure => `<li>${escapeHtml(failure)}</li>`).join('');
+  return `<div class="detail-card" style="margin-top:12px;">
+    <p style="margin:0;">Federal Register import up to ${escapeHtml(formatDate(result.today))}: found ${result.policiesFound},
+      imported ${result.policiesImported}, skipped ${result.policiesSkipped} (already imported or not about F-1, J-1 or H-1B)${failures ? `, failed ${result.importFailures.length}` : ''}.</p>
+    ${failures ? `<ul style="margin:8px 0 0;">${failures}</ul><p class="sub" style="margin:6px 0 0;">Details are in the server log.</p>` : ''}
+  </div>`;
+}
+function shiftIsoDate(isoDate, days){
+  const date = new Date(`${isoDate}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+function renderTestClock(scope){
+  if(state.testClockDisabled) return '';
+  const global = scope==='global';
+  const heading = `<div class="page-head" style="margin-top:36px;">
+      <h2>Test clock <span class="tag">Temporary</span></h2>
+      <p class="sub">${global
+        ? 'Sets the date every applicant\'s alerts are matched against, replacing dates they set themselves. Moving it forward alerts each applicant about policies published by then for their visa category; moving it back withdraws alerts for policies published after it.'
+        : 'For testing only, and only your account is affected. Moving the date forward alerts you about policies published by then for your visa category; moving it back withdraws alerts for policies published after it.'}</p>
+    </div>`;
+  const clock = state.testClock;
+  if(!clock) return `${heading}<p class="sub">Loading test clock...</p>`;
+
+  const busy = state.testClockBusy ? 'disabled' : '';
+  const setBy = clock.personalDate ? 'set by you' : clock.globalDate ? 'set by an admin for all applicants' : 'the real date';
+  const visaType = state.user?.visaType || '';
+  // Only official policies raise alerts, so only their dates are worth jumping to.
+  const policyRows = (state.policyRecords || [])
+    .filter(policy => policy.sourceType === 'PRIMARY' && (global || String(policy.visaType || '').includes(visaType)))
+    .sort((a, b) => String(b.publicationDate).localeCompare(String(a.publicationDate)))
+    .map(policy => {
+      const published = String(policy.publicationDate) <= clock.today;
+      return `<tr>
+        <td style="font-family:var(--mono);font-size:12px;white-space:nowrap;">${escapeHtml(policy.publicationDate)}</td>
+        <td>${escapeHtml(policy.title)}</td>
+        <td>${escapeHtml(policy.visaType)}</td>
+        <td>${published ? 'Published' : 'Not yet'}</td>
+        <td style="white-space:nowrap;">
+          <button class="btn ghost small" ${busy} onclick="setTestClock('${scope}','${shiftIsoDate(policy.publicationDate, -1)}')">Day before</button>
+          <button class="btn ghost small" ${busy} onclick="setTestClock('${scope}','${escapeAttribute(policy.publicationDate)}')">Publish day</button>
+        </td>
+      </tr>`;
+    }).join('');
+
+  return `${heading}
+    <p style="margin-bottom:16px;">Today in the app: <strong>${escapeHtml(formatDate(clock.today))}</strong> (${setBy}${clock.today!==clock.realToday ? `; real date ${escapeHtml(formatDate(clock.realToday))}` : ''}).</p>
+    <form class="form-grid" onsubmit="event.preventDefault();setTestClock('${scope}', document.getElementById('test-clock-${scope}').value)">
+      <div class="field"><label for="test-clock-${scope}">Pretend today is</label><input id="test-clock-${scope}" type="date" value="${escapeAttribute(clock.today)}"></div>
+      ${global ? `<div class="field" style="grid-column:1/-1;"><label style="display:flex;gap:8px;align-items:center;font-weight:normal;">
+        <input id="test-clock-import" type="checkbox" checked style="width:auto;">
+        Also import Federal Register policies on F-1, J-1 or H-1B published in the 30 days up to this date (up to 20 documents; can take a minute)
+      </label></div>` : ''}
+      <div class="form-actions">
+        <button class="btn" type="submit" ${busy}>Set date</button>
+        <button class="btn ghost" type="button" ${busy} onclick="resetTestClock('${scope}')">Back to the real date</button>
+      </div>
+    </form>
+    ${state.testClockBusy && state.testClockImporting ? '<p class="rag-status" style="margin-top:12px;">Searching the Federal Register and importing policies. This can take a minute...</p>' : ''}
+    ${renderTestClockImportResult()}
+    <p class="sub" style="margin-top:18px;">To watch an alert arrive, set the clock to the day before a policy, then to its publish day.</p>
+    ${policyRows
+      ? `<table><tr><th>Published</th><th>Policy</th><th>Visa types</th><th>Status</th><th></th></tr>${policyRows}</table>`
+      : `<p class="sub">No official policies${global ? '' : ` for ${escapeHtml(visaType || 'your visa category')}`} have been imported yet.</p>`}`;
 }
 
 function renderAccountProfile(){
@@ -1472,6 +2791,10 @@ function renderAccountProfile(){
 
     ${renderProfileForm()}
 
+    ${renderEmailPreferences()}
+
+    ${renderTestClock('personal')}
+
     <div class="page-head" style="margin-top:36px;">
       <h2>Immigration documents</h2>
       <p class="sub">Upload a PDF, JPG, JPEG, or PNG file up to 10 MB.</p>
@@ -1482,6 +2805,7 @@ function renderAccountProfile(){
         <label for="document-type">Document type</label>
         <select id="document-type" required>
           <option value="PASSPORT">Passport</option>
+          <option value="TRAVEL_DOCUMENT">Travel document</option>
           <option value="VISA_STAMP">Visa stamp</option>
           <option value="I20">Form I-20</option>
           <option value="DS2019">Form DS-2019</option>
@@ -1492,6 +2816,19 @@ function renderAccountProfile(){
           <option value="PERM">PERM</option>
           <option value="OTHER">Other</option>
         </select>
+      </div>
+
+      <div class="field">
+        <label for="document-issuer">Issuer for policy matching (optional)</label>
+        <select id="document-issuer">
+          <option value="">Do not use this document for policy matching</option>
+          <option value="PALESTINIAN_AUTHORITY">Palestinian Authority</option>
+        </select>
+        <small>Only supported for passport or travel document uploads.</small>
+      </div>
+
+      <div class="field">
+        <label><input id="document-policy-consent" type="checkbox"> I consent to using this document’s issuer to match applicable entry restriction policies.</label>
       </div>
 
       <div class="field">
@@ -1529,6 +2866,7 @@ function renderAccountProfile(){
                 <span class="tag">${escapeHtml(document.documentType)}</span>
                 <span class="tag">${Math.round(document.sizeBytes / 1024)} KB</span>
               </div>
+              ${document.policyMatchingConsent ? `<button class="btn btn-secondary" onclick="setDocumentMatchingConsent(${document.id}, false)">Withdraw policy-matching consent</button>` : ''}
             </div>
           </div>
         `).join('')
@@ -1538,85 +2876,422 @@ function renderAccountProfile(){
   `;
 }
 
+async function loadManagerDashboard(){
+  state.managerDashboardLoading = true;
+  state.managerDashboardError = null;
+  state.managerMembersError = null;
+  render();
+  const [dashboardResult, membersResult] = await Promise.allSettled([
+    apiFetch('/api/v1/manager/dashboard').then(parseApiResponse),
+    apiFetch('/api/v1/manager/members').then(parseApiResponse)
+  ]);
+  if(dashboardResult.status==='fulfilled') state.managerDashboard = dashboardResult.value;
+  else { state.managerDashboard = null; state.managerDashboardError = dashboardResult.reason.message; }
+  if(membersResult.status==='fulfilled') state.managerMembers = membersResult.value || [];
+  else { state.managerMembers = []; state.managerMembersError = membersResult.reason.message; }
+  state.managerDashboardLoading = false;
+  if(state.view==='manager') render();
+}
+
+async function loadReviewQueue(){
+  state.reviewQueueLoading = true;
+  state.reviewQueueError = null;
+  render();
+  try{
+    state.reviewQueue = await parseApiResponse(await apiFetch('/api/v1/review/impacts'));
+  }catch(error){
+    state.reviewQueue = [];
+    state.reviewQueueError = error.message;
+  }finally{
+    state.reviewQueueLoading = false;
+    if(state.view==='queue') render();
+  }
+}
+
 function renderManager(){
+  const dashboard = state.managerDashboard;
+  const visaRows = Object.entries(dashboard?.usersByVisaType || {}).map(([visaType,count])=>
+    `<tr><th scope="row">${escapeHtml(visaType)}</th><td>${count}</td></tr>`).join('');
+  const severityRows = Object.entries(dashboard?.openImpactsBySeverity || {}).map(([severity,count])=>
+    `<tr><th scope="row">${escapeHtml(severity)}</th><td>${count}</td></tr>`).join('');
+  const memberRows = (state.managerMembers || []).map(member=>`
+    <tr><th scope="row">${escapeHtml(member.fullName || 'Applicant')}</th>
+      <td>${escapeHtml(member.email || '')}</td><td>${escapeHtml(member.visaType || 'Unknown')}</td>
+      <td><button class="btn ghost small" type="button" onclick="removeManagerMember(${member.id})">Remove</button></td></tr>
+  `).join('');
+  const pending = dashboard?.pendingReports || [];
+  const pendingRows = pending.map(report=>`
+    <tr><th scope="row">${escapeHtml(report.policyTitle || 'Policy report')}</th>
+      <td>${escapeHtml(report.draftSummary || '')}</td><td>${escapeHtml(formatTimestamp(report.createdAt))}</td>
+      <td><button class="btn ghost small" type="button" onclick="goto('queue')">Review</button></td></tr>
+  `).join('');
   return `
-    <div class="page-head">
-      <h1>Team impact</h1>
-      <p class="sub">Same rules, aggregated across your sponsored employees.</p>
-    </div>
-    <div class="stat-row">
-      <div class="stat-box"><div class="num">34</div><div class="lbl">Employees affected by wage-weighted H-1B selection</div></div>
-      <div class="stat-box"><div class="num">12</div><div class="lbl">Pending filings hit by the $100,000 petition fee</div></div>
-      <div class="stat-box"><div class="num">6</div><div class="lbl">Employees who now need Form I-539</div></div>
-    </div>
-    <div class="block-label">By policy</div>
-    <table>
-      <tr><th>Policy</th><th>Status</th><th>Employees touched</th><th></th></tr>
-      <tr><td>Wage-weighted H-1B selection</td><td>${policies.p2.status}</td><td>34</td><td><button class="btn ghost small" onclick="goto('queue')">Details</button></td></tr>
-      <tr><td>Prevailing wage floor</td><td>${policies.p3.status}</td><td>19 (estimate)</td><td><button class="btn ghost small" onclick="goto('queue')">Details</button></td></tr>
-      <tr><td>Entry restriction expansion</td><td>${policies.p4.status}</td><td>3</td><td><button class="btn ghost small" onclick="goto('queue')">Details</button></td></tr>
-    </table>
+    <div class="page-head"><h1>Team impact</h1>
+      <p class="sub">Policy assessments for applicants linked to your manager account.</p></div>
+    ${state.managerDashboardLoading ? '<p role="status">Loading team dashboard…</p>' : ''}
+    ${state.managerDashboardError ? `<div class="empty" role="alert">${escapeHtml(state.managerDashboardError)}</div>` : ''}
+    ${dashboard ? `
+      <div class="stat-row">
+        <div class="stat-box"><div class="num">${dashboard.linkedUserCount}</div><div class="lbl">Linked applicants</div></div>
+        <div class="stat-box"><div class="num">${Object.values(dashboard.openImpactsBySeverity || {}).reduce((sum,count)=>sum+count,0)}</div><div class="lbl">Open impact assessments</div></div>
+        <div class="stat-box"><div class="num">${pending.length}</div><div class="lbl">Pending reports</div></div>
+      </div>
+      <div class="manager-grid">
+        <section><div class="block-label">Linked applicants by visa type</div>
+          ${visaRows ? `<table><thead><tr><th scope="col">Visa type</th><th scope="col">Applicants</th></tr></thead><tbody>${visaRows}</tbody></table>` : '<p class="empty">No linked applicants yet.</p>'}
+        </section>
+        <section><div class="block-label">Open impacts by severity</div>
+          ${severityRows ? `<table><thead><tr><th scope="col">Severity</th><th scope="col">Assessments</th></tr></thead><tbody>${severityRows}</tbody></table>` : '<p class="empty">No open impact assessments.</p>'}
+        </section>
+      </div>
+      <div class="block-label" style="margin-top:28px;">Pending reports</div>
+      ${pendingRows ? `<table><thead><tr><th scope="col">Policy</th><th scope="col">Draft summary</th><th scope="col">Created</th><th scope="col">Action</th></tr></thead><tbody>${pendingRows}</tbody></table>
+        <p><button class="btn ghost small" type="button" onclick="goto('queue')">Open review queue (${pending.length})</button></p>`
+        : '<p class="empty">No pending reports for your linked applicants.</p>'}
+    ` : ''}
+    <section style="margin-top:32px;">
+      <div class="page-head"><h2>Managed applicants</h2><p class="sub">Add an applicant using their user ID, or remove an existing link.</p></div>
+      <form class="manager-add-form" onsubmit="addManagerMember(event)">
+        <div class="field"><label for="manager-member-id">Applicant user ID</label><input id="manager-member-id" inputmode="numeric" pattern="[1-9][0-9]*" required></div>
+        <button class="btn small" type="submit" ${state.managerMembersBusy ? 'disabled' : ''}>Add applicant</button>
+      </form>
+      ${state.managerMembersError ? `<p role="alert">${escapeHtml(state.managerMembersError)}</p>` : ''}
+      ${memberRows ? `<table><thead><tr><th scope="col">Applicant</th><th scope="col">Email</th><th scope="col">Visa type</th><th scope="col">Action</th></tr></thead><tbody>${memberRows}</tbody></table>` : '<p class="empty">No applicants are linked to your account.</p>'}
+    </section>
   `;
+}
+
+async function addManagerMember(event){
+  event.preventDefault();
+  const input = document.getElementById('manager-member-id');
+  const userId = input?.value.trim();
+  if(!userId || !/^[1-9][0-9]*$/.test(userId)) return;
+  state.managerMembersBusy = true;
+  render();
+  try{
+    await parseApiResponse(await apiFetch(`/api/v1/manager/members/${userId}`,{method:'POST'}));
+    showToast('Applicant linked to your team.');
+    await loadManagerDashboard();
+  }catch(error){
+    state.managerMembersError = error.message;
+    showToast(error.message);
+  }finally{
+    state.managerMembersBusy = false;
+    if(state.view==='manager') render();
+  }
+}
+
+async function removeManagerMember(userId){
+  if(!confirm('Remove this applicant from your team?')) return;
+  state.managerMembersBusy = true;
+  try{
+    await parseApiResponse(await apiFetch(`/api/v1/manager/members/${userId}`,{method:'DELETE'}));
+    showToast('Applicant removed from your team.');
+    await loadManagerDashboard();
+  }catch(error){
+    state.managerMembersError = error.message;
+    showToast(error.message);
+  }finally{
+    state.managerMembersBusy = false;
+    if(state.view==='manager') render();
+  }
 }
 
 function renderQueue(){
-  if(queueItems.length===0){
-    return `
-      <div class="page-head"><h1>Review queue</h1><p class="sub">Cases the system wasn't confident enough to publish on its own.</p></div>
-      <div class="empty"><div class="big">Queue is clear</div>Nothing is waiting on a human read right now.</div>`;
-  }
-  const rows = queueItems.map(q=>`
-    <div class="entry urgency-medium">
-      <div class="flag"></div>
-      <div class="entry-case">${q.case}</div>
-      <div class="entry-body">
-        <h3>${q.title}</h3>
-        <p>${q.detail}</p>
-        <div class="tag-row"><span class="tag">${q.flag}</span></div>
-      </div>
-      <div class="entry-action" style="flex-direction:column;gap:8px;">
-        <button class="btn small" onclick="resolveQueue('${q.id}','approve')">Approve</button>
-        <button class="btn ghost small" onclick="resolveQueue('${q.id}','edit')">Edit &amp; publish</button>
-      </div>
-    </div>`).join('');
-  return `
-    <div class="page-head"><h1>Review queue</h1><p class="sub">Cases the system wasn't confident enough to publish on its own.</p></div>
-    ${rows}
-  `;
+  const title = '<div class="page-head"><h1>Review queue</h1><p class="sub">Pending assessments for applicants linked to your manager account.</p></div>';
+  if(state.reviewQueueLoading) return `${title}<p role="status">Loading review queue…</p>`;
+  if(state.reviewQueueError) return `${title}<div class="empty" role="alert">${escapeHtml(state.reviewQueueError)}</div>`;
+  if(!state.reviewQueue.length) return `${title}<div class="empty"><div class="big">Queue is clear</div>No reports are waiting for review for your linked applicants.</div>`;
+  const rows = state.reviewQueue.map(report=>`
+    <tr><th scope="row">${escapeHtml(report.policyTitle || 'Policy report')}</th>
+      <td>${escapeHtml(report.draftSummary || '')}</td><td>${report.userId}</td>
+      <td><button class="btn small" type="button" onclick="openQueueEditor(${report.id})">Review</button></td></tr>
+  `).join('');
+  return `${title}<table><thead><tr><th scope="col">Policy</th><th scope="col">Draft summary</th><th scope="col">Applicant ID</th><th scope="col">Action</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
-function resolveQueue(id, action){
-  queueItems = queueItems.filter(q=>q.id!==id);
-  showToast(action==='approve' ? 'Approved and published to the user.' : 'Saved your edit and published.');
-  goto('queue');
+
+function openQueueEditor(id){
+  const item = state.reviewQueue.find(report=>Number(report.id)===Number(id));
+  if(!item) return;
+  document.getElementById('review-edit-id').value = item.id;
+  document.getElementById('review-edit-severity').value = 'MEDIUM';
+  document.getElementById('review-edit-confidence').value = 80;
+  document.getElementById('review-edit-summary').value = item.draftSummary || '';
+  document.getElementById('review-edit-analysis').value = '';
+  document.getElementById('review-edit-actions').value = '';
+  document.getElementById('review-edit-missing').value = '';
+  const extractionReview = item.reviewType === 'Policy extractor';
+  document.getElementById('review-editor-title').textContent = extractionReview
+    ? 'Review policy extraction' : 'Review and publish assessment';
+  document.getElementById('review-extraction-fields').hidden = !extractionReview;
+  document.getElementById('review-extraction-source').href = item.sourceUrl || '#';
+  document.getElementById('review-extraction-excerpt').textContent = item.sourceExcerpt || '';
+  document.getElementById('review-edit-country-rules').value = '';
+  document.getElementById('review-modal-bg').classList.add('show');
+}
+function closeQueueEditor(){ document.getElementById('review-modal-bg').classList.remove('show'); }
+async function publishEditedQueue(){
+  const id = document.getElementById('review-edit-id').value;
+  const lines = fieldId=>document.getElementById(fieldId).value.split('\n').map(value=>value.trim()).filter(Boolean);
+  const correction = {
+    severity:document.getElementById('review-edit-severity').value,
+    confidence:Number(document.getElementById('review-edit-confidence').value),
+    summary:document.getElementById('review-edit-summary').value.trim(),
+    analysis:lines('review-edit-analysis'),
+    actionItems:lines('review-edit-actions'),
+    missingInformation:lines('review-edit-missing'),
+    countryRestrictions:document.getElementById('review-extraction-fields').hidden ? null
+      : lines('review-edit-country-rules').map(line=>{
+        const [countryCode, scope] = line.split(',').map(value=>value.trim());
+        return {countryCode, scope};
+      })
+  };
+  if(!correction.summary || !Number.isInteger(correction.confidence) || correction.confidence<0 || correction.confidence>100){
+    showToast('Enter a summary and a confidence from 0 to 100.'); return;
+  }
+  try{
+    await parseApiResponse(await apiFetch(`/api/v1/review/impacts/${id}`,{
+      method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(correction)
+    }));
+    closeQueueEditor();
+    showToast(correction.countryRestrictions ? 'Policy extraction correction saved and matching resumed.' : 'Corrected assessment published.');
+    await loadReviewQueue();
+    if(state.view==='manager') await loadManagerDashboard();
+  }catch(error){ showToast(error.message); }
+}
+
+function bulletinCurrentMonth(){
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+}
+function bulletinOfficialUrl(month){
+  const [year, number] = month.split('-').map(Number);
+  const names = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+  const fiscalYear = number >= 10 ? year + 1 : year;
+  return `https://travel.state.gov/content/travel/en/legal/visa-law0/visa-bulletin/${fiscalYear}/visa-bulletin-for-${names[number-1]}-${year}.html`;
+}
+async function loadVisaBulletin(){
+  if(state.role !== 'admin') return;
+  state.bulletinLoading = true;
+  state.bulletinError = null;
+  if(state.view === 'visaBulletin') render();
+  try{
+    const healthResponse = await apiFetch('/api/v1/ingestion/visa-bulletin/health');
+    state.bulletinHealth = await parseApiResponse(healthResponse);
+    if(!state.bulletinMonth){
+      state.bulletinMonth = state.bulletinHealth?.publicationMonth || bulletinCurrentMonth();
+    }
+    state.bulletinEntries = await fetchAllPages(`/api/v1/ingestion/visa-bulletin/entries/${state.bulletinMonth}`);
+  }catch(error){
+    state.bulletinEntries = [];
+    state.bulletinError = error.message;
+  }finally{
+    state.bulletinLoading = false;
+    if(state.view === 'visaBulletin') render();
+  }
+}
+function selectBulletinMonth(month){
+  state.bulletinMonth = month;
+  state.bulletinPreference = 'ALL';
+  state.bulletinChart = 'ALL';
+  state.bulletinArea = 'ALL';
+  if(month) loadVisaBulletin();
+}
+function setBulletinFilter(name, value){
+  state[name] = value;
+  render();
+}
+async function importVisaBulletin(saved){
+  if(state.role !== 'admin' || state.bulletinImporting) return;
+  const month = document.getElementById('bulletin-month')?.value;
+  if(!saved && !month){ state.bulletinMessage = 'Choose a publication month first.'; render(); return; }
+  let html;
+  if(saved){
+    const file = document.getElementById('bulletin-file')?.files?.[0];
+    if(!file){ state.bulletinMessage = 'Choose a saved official HTML page first.'; render(); return; }
+    html = await file.text();
+  }
+  state.bulletinImporting = true;
+  state.bulletinMessage = null;
+  render();
+  try{
+    const path = saved ? '/api/v1/ingestion/visa-bulletin/saved'
+      : `/api/v1/ingestion/visa-bulletin/${month}`;
+    const response = await apiFetch(path,{
+      method:'POST',
+      ...(saved ? {headers:{'Content-Type':'text/html'},body:html} : {})
+    });
+    const result = await parseApiResponse(response);
+    state.bulletinMonth = result.publicationMonth;
+    state.bulletinMessage = `Imported ${result.entriesProcessed} entries for ${result.publicationMonth}.`;
+  }catch(error){
+    state.bulletinMessage = `Import failed: ${error.message}`;
+  }finally{
+    state.bulletinImporting = false;
+    await loadVisaBulletin();
+  }
+}
+function bulletinCutoff(entry){
+  if(entry.cutoffKind === 'CURRENT') return 'Current (C)';
+  if(entry.cutoffKind === 'UNAVAILABLE') return 'Unavailable (U)';
+  return formatDate(entry.cutoffDate);
+}
+function renderVisaBulletin(){
+  const health = state.bulletinHealth;
+  const month = state.bulletinMonth || bulletinCurrentMonth();
+  const all = state.bulletinEntries || [];
+  const areas = [...new Set(all.map(entry=>entry.chargeabilityArea))].sort();
+  const visible = all.filter(entry=>
+    (state.bulletinPreference === 'ALL' || entry.preferenceType === state.bulletinPreference) &&
+    (state.bulletinChart === 'ALL' || entry.chartType === state.bulletinChart) &&
+    (state.bulletinArea === 'ALL' || entry.chargeabilityArea === state.bulletinArea));
+  const rows = visible.map(entry=>`<tr>
+    <td>${escapeHtml(entry.preferenceType === 'FAMILY' ? 'Family' : 'Employment')}</td>
+    <td>${escapeHtml(entry.chartType === 'FINAL_ACTION' ? 'Final action' : 'Dates for filing')}</td>
+    <td>${escapeHtml(entry.category)}</td>
+    <td>${escapeHtml(entry.chargeabilityArea)}</td>
+    <td>${escapeHtml(bulletinCutoff(entry))}</td>
+  </tr>`).join('');
+  const rawError = health?.errorMessage || '';
+  const healthError = rawError.includes('403 Forbidden')
+    ? 'The official website refused the automated download (HTTP 403). Save the official HTML page and import it below.'
+    : rawError.slice(0,240);
+  return `
+    <div class="page-head"><h1>Visa Bulletin</h1>
+      <p class="sub">Admin inspection of imported monthly cutoff charts. These values are not shown to applicants.</p></div>
+    <div class="stat-row">
+      <div class="stat-box"><div class="lbl">Import health</div><div class="num" style="font-size:25px;">${escapeHtml(health?.status || 'Loading')}</div></div>
+      <div class="stat-box"><div class="lbl">Last successful import</div><div style="margin-top:10px;">${health?.lastSuccessAt ? escapeHtml(formatTimestamp(health.lastSuccessAt)) : 'None yet'}</div></div>
+      <div class="stat-box"><div class="lbl">Stored rows for ${escapeHtml(month)}</div><div class="num">${all.length}</div></div>
+    </div>
+    ${healthError ? `<div class="rag-error">${escapeHtml(healthError)}</div>` : ''}
+    ${state.bulletinError ? `<div class="rag-error">${escapeHtml(state.bulletinError)}</div>` : ''}
+    ${state.bulletinMessage ? `<p role="status">${escapeHtml(state.bulletinMessage)}</p>` : ''}
+    <div class="bulletin-controls">
+      <div class="field"><label for="bulletin-month">Publication month</label>
+        <input id="bulletin-month" type="month" value="${escapeAttribute(month)}" onchange="selectBulletinMonth(this.value)" ${state.bulletinLoading || state.bulletinImporting ? 'disabled' : ''}></div>
+      <button class="btn ghost small" type="button" onclick="loadVisaBulletin()" ${state.bulletinLoading || state.bulletinImporting ? 'disabled' : ''}>Refresh</button>
+      <button class="btn small" type="button" onclick="importVisaBulletin(false)" ${state.bulletinLoading || state.bulletinImporting ? 'disabled' : ''}>Fetch official page</button>
+      <a class="btn ghost small" href="${escapeAttribute(bulletinOfficialUrl(month))}" target="_blank" rel="noopener noreferrer">Open official page</a>
+    </div>
+    <div class="bulletin-controls">
+      <div class="field"><label for="bulletin-file">Saved official HTML page</label>
+        <input id="bulletin-file" type="file" accept=".html,.htm,text/html" ${state.bulletinImporting ? 'disabled' : ''}></div>
+      <button class="btn ghost small" type="button" onclick="importVisaBulletin(true)" ${state.bulletinLoading || state.bulletinImporting ? 'disabled' : ''}>Import saved HTML</button>
+      <span>The saved page's publication month is detected automatically.</span>
+    </div>
+    ${state.bulletinImporting || state.bulletinLoading ? '<p class="rag-status">Loading bulletin data...</p>' : ''}
+    ${health?.sourceUrl ? `<p>Reference page for last imported month: <a href="${escapeAttribute(health.sourceUrl)}" target="_blank" rel="noopener noreferrer">Official Visa Bulletin</a> (${escapeHtml(health.publicationMonth || '')})</p>` : ''}
+    <div class="page-head" style="margin-top:32px;"><h2>Saved cutoff entries</h2>
+      <p class="sub">${visible.length} of ${all.length} entries for ${escapeHtml(month)}. Current and unavailable values stay explicit.</p></div>
+    <div class="bulletin-controls">
+      <div class="field"><label for="bulletin-preference">Preference</label><select id="bulletin-preference" onchange="setBulletinFilter('bulletinPreference',this.value)">
+        <option value="ALL">All</option><option value="FAMILY" ${state.bulletinPreference==='FAMILY'?'selected':''}>Family</option><option value="EMPLOYMENT" ${state.bulletinPreference==='EMPLOYMENT'?'selected':''}>Employment</option></select></div>
+      <div class="field"><label for="bulletin-chart">Chart</label><select id="bulletin-chart" onchange="setBulletinFilter('bulletinChart',this.value)">
+        <option value="ALL">All</option><option value="FINAL_ACTION" ${state.bulletinChart==='FINAL_ACTION'?'selected':''}>Final action</option><option value="DATES_FOR_FILING" ${state.bulletinChart==='DATES_FOR_FILING'?'selected':''}>Dates for filing</option></select></div>
+      <div class="field"><label for="bulletin-area">Chargeability area</label><select id="bulletin-area" onchange="setBulletinFilter('bulletinArea',this.value)">
+        <option value="ALL">All</option>${areas.map(area=>`<option value="${escapeAttribute(area)}" ${state.bulletinArea===area?'selected':''}>${escapeHtml(area)}</option>`).join('')}</select></div>
+    </div>
+    <div class="bulletin-table-wrap"><table>
+      <thead><tr><th>Preference</th><th>Chart</th><th>Category</th><th>Chargeability</th><th>Cutoff</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="5">${state.bulletinLoading ? 'Loading...' : 'No entries for this month and filter.'}</td></tr>`}</tbody>
+    </table></div>
+  `;
 }
 
 function renderAdmin(){
-  const rows = sources.map((s,i)=>`
+  const rows = state.adminSources.map(source=>{
+    const health = source.health;
+    const failed = (health?.failureCount || 0) > 0 || health?.lastError;
+    const status = !health?.lastRunAt ? 'Not synced' : failed ? 'Needs attention' : 'Healthy';
+    const statusClass = !health?.lastRunAt || failed ? 'warn' : '';
+    return `<tr>
+      <td><strong>${escapeHtml(source.name)}</strong><br><span class="tag">${escapeHtml(source.type)}</span></td>
+      <td><span class="status-dot ${statusClass}">${escapeHtml(status)}</span><br><small>${source.enabled?'Enabled':'Disabled'}</small></td>
+      <td style="font-family:var(--mono);font-size:12px;color:var(--muted);">${health?.lastRunAt ? escapeHtml(formatTimestamp(health.lastRunAt)) : 'Never'}</td>
+      <td>${health?.documentsFetched ?? 0}</td>
+      <td>${health?.chunksVectorised ?? 0}</td>
+      <td>${health?.failureCount ?? 0}</td>
+      <td><button class="btn ghost small" onclick="openSourceModal(${source.id})">Edit</button>
+        <button class="btn ghost small" onclick="toggleSource(${source.id},${!source.enabled})">${source.enabled?'Disable':'Enable'}</button>
+        <button class="btn small" onclick="syncSource(${source.id})" ${!source.enabled?'disabled':''}>Sync now</button></td>
+    </tr>${health?.lastError ? `<tr><td colspan="7"><div class="rag-error">${escapeHtml(health.lastError)}</div></td></tr>` : ''}`;
+  }).join('');
+  const userRows = state.adminUsers.map(user=>`
     <tr>
-      <td>${s.name}</td>
-      <td><span class="status-dot ${s.status==='broken'?'warn':''}">${s.status==='broken'?'Needs attention':'Healthy'}</span></td>
-      <td style="font-family:var(--mono);font-size:12px;color:var(--muted);">${s.last}</td>
-      <td><button class="btn ghost small" onclick="toggleSource(${i})">${s.status==='disabled'?'Enable':'Disable'}</button></td>
+      <td>${escapeHtml(user.userName || 'Unnamed user')}</td>
+      <td>${escapeHtml(user.userEmail || '')}</td>
+      <td><select onchange="updateAdminUserRole(${user.userId}, this.value)">
+        ${['APPLICANT','MANAGER','ADMIN'].map(role=>`<option value="${role}" ${user.role===role?'selected':''}>${role}</option>`).join('')}
+      </select></td>
     </tr>`).join('');
+  const usersContent = state.adminUsersLoading
+    ? '<p class="rag-status">Loading users...</p>'
+    : state.adminUsersError
+      ? `<div class="rag-error">${escapeHtml(state.adminUsersError)}</div>`
+      : `<table><tr><th>Name</th><th>Email</th><th>Role</th></tr>${userRows || '<tr><td colspan="3">No users found.</td></tr>'}</table>`;
+  const sourceContent = state.adminSourcesLoading
+    ? '<p class="rag-status">Loading monitored sources...</p>'
+    : state.adminSourcesError
+      ? `<div class="rag-error">${escapeHtml(state.adminSourcesError)}</div>`
+      : `<table style="margin-bottom:18px;"><tr><th>Source</th><th>Status</th><th>Last run</th><th>Docs</th><th>Chunks</th><th>Failures</th><th>Actions</th></tr>${rows || '<tr><td colspan="7">No monitored sources yet.</td></tr>'}</table>`;
   return `
     <div class="page-head">
       <h1>Monitored sources</h1>
       <p class="sub">Where myGRANT pulls policy changes from.</p>
     </div>
-    <table style="margin-bottom:18px;">
-      <tr><th>Source</th><th>Status</th><th>Last synced</th><th></th></tr>
-      ${rows}
-    </table>
-    <button class="btn ghost small" onclick="openModal()">Add a source</button>
+    ${sourceContent}
+    <button class="btn ghost small" onclick="openSourceModal()">Add a source</button>
+    <button class="btn small" onclick="syncAllSources()" ${state.adminSources.length?'':'disabled'}>Sync all enabled</button>
+    <div class="page-head" style="margin-top:42px;"><h2>User access</h2><p class="sub">Assign applicant, manager, or administrator access.</p></div>
+    ${usersContent}
+    ${renderTestClock('global')}
   `;
 }
-function toggleSource(i){
-  sources[i].status = sources[i].status==='disabled' ? 'ok' : 'disabled';
-  showToast(sources[i].status==='disabled' ? 'Source disabled.' : 'Source enabled.');
-  render();
+async function toggleSource(id, enabled){
+  try{
+    const response = await apiFetch(`/api/v1/admin/sources/${id}/enabled`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})});
+    await parseApiResponse(response);
+    showToast(enabled ? 'Source enabled.' : 'Source disabled; its history is retained.');
+    await loadAdminSources();
+  }catch(error){ showToast(error.message); }
 }
-function openModal(){ document.getElementById('modal-bg').classList.add('show'); }
-function closeModal(){ document.getElementById('modal-bg').classList.remove('show'); }
+function openSourceModal(id){
+  state.editingSource = id ? state.adminSources.find(source => source.id === id) : null;
+  document.getElementById('modal-title').textContent = state.editingSource ? 'Edit monitored source' : 'Add a source to monitor';
+  document.getElementById('modal-name').value = state.editingSource?.name || '';
+  document.getElementById('modal-type').value = state.editingSource?.type || 'FEDERAL_REGISTER';
+  document.getElementById('modal-url').value = state.editingSource?.url || '';
+  document.getElementById('modal-interval').value = state.editingSource?.pollIntervalSeconds || 3600;
+  document.getElementById('modal-enabled').checked = state.editingSource ? state.editingSource.enabled : true;
+  document.getElementById('modal-bg').classList.add('show');
+}
+function closeModal(){ state.editingSource = null; document.getElementById('modal-bg').classList.remove('show'); }
+async function saveSource(){
+  const payload = {name:document.getElementById('modal-name').value.trim(),type:document.getElementById('modal-type').value,url:document.getElementById('modal-url').value.trim(),pollIntervalSeconds:Number(document.getElementById('modal-interval').value),enabled:document.getElementById('modal-enabled').checked};
+  if(!payload.name || !payload.url || !payload.pollIntervalSeconds){ showToast('Complete the source fields first.'); return; }
+  try{
+    const path = state.editingSource ? `/api/v1/admin/sources/${state.editingSource.id}` : '/api/v1/admin/sources';
+    const response = await apiFetch(path,{method:state.editingSource?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    await parseApiResponse(response);
+    const wasEditing = Boolean(state.editingSource);
+    closeModal();
+    showToast(wasEditing ? 'Source updated.' : 'Source added.');
+    await loadAdminSources();
+  }catch(error){ showToast(error.message); }
+}
+async function syncSource(id){ await runSourceSync({sourceId:id}); }
+async function syncAllSources(){ await runSourceSync({}); }
+async function runSourceSync(payload){
+  try{
+    const response = await apiFetch('/api/v1/ingestion/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const result = await parseApiResponse(response);
+    const results = Array.isArray(result) ? result : [result];
+    const failed = results.filter(item => !item.succeeded).length;
+    showToast(failed ? `${failed} source sync(s) need attention.` : 'Source sync completed.');
+    await loadAdminSources();
+  }catch(error){ showToast(error.message); }
+}
 function renderRag(){
   const s = ragScenarios[state.ragActive];
   const tabs = Object.keys(ragScenarios).map(k=>`
@@ -1713,13 +3388,13 @@ function renderRag(){
   const warnings = result && result.warnings.length
     ? `<ul class="warning-list">${result.warnings.map(w=>`<li>${escapeHtml(w)}</li>`).join('')}</ul>` : '';
   const ingestSummary = ingest ? `<div class="ingest-result">
-    Imported ${escapeHtml(ingest.documentNumber)} from Federal Register. Detected ${escapeHtml((ingest.detectedVisaTypes || []).join(', ') || 'no supported visa type')}; ${escapeHtml(ingest.ingestion?.alreadyIndexed ? 'existing vector chunks reused' : `${ingest.ingestion?.chunksIndexed ?? 0} vector chunk(s) indexed`)}.
+    Imported ${escapeHtml(ingest.documentNumber)} from Federal Register. Detected ${escapeHtml((ingest.detectedVisaTypes || []).join(', ') || 'no supported visa type')}; ${escapeHtml(ingest.ingestion?.alreadyIndexed ? 'existing vector chunks reused; repeat imports do not create new alerts' : `${ingest.ingestion?.chunksIndexed ?? 0} vector chunk(s) indexed`)}.
   </div>` : '';
 
   return `
     <div class="page-head">
       <h1>RAG inspector</h1>
-      <p class="sub">Import a Federal Register document, then ask the live Spring Boot RAG pipeline. Answers are retrieved from pgvector and generated by Ollama.</p>
+      <p class="sub">Import a Federal Register document, then ask the live Spring Boot RAG pipeline. Answers are retrieved from pgvector and generated by OpenAI.</p>
     </div>
     ${renderProofGrid(ingest, result, evidenceItems)}
     <form class="rag-import-form" onsubmit="submitFederalRegisterImport(event)">
@@ -1731,12 +3406,12 @@ function renderRag(){
     ${ingest ? renderProfileImpact(ingest.impactAssessment) + renderFederalRegisterSource(ingest) : ''}
     <form class="rag-query-form" onsubmit="submitRagQuery(event)">
       <div class="field"><label for="rag-question">Ask about an indexed policy</label><input id="rag-question" maxlength="2000" required placeholder="How does the new fixed admission period affect an F-1 student?" value="${escapeAttribute(state.ragQuestion)}"></div>
-      <div class="field"><label for="rag-visa-type">Visa category</label><select id="rag-visa-type"><option ${state.ragVisaType==='F-1'?'selected':''}>F-1</option><option ${state.ragVisaType==='J-1'?'selected':''}>J-1</option><option ${state.ragVisaType==='H-1B'?'selected':''}>H-1B</option></select></div>
+      <div class="field"><label for="rag-visa-type">Visa category from your profile</label><input id="rag-visa-type" readonly value="${escapeAttribute(state.profile?.visaType || state.user?.visaType || '')}"><small>Retrieval uses your saved profile, which you can update in Your profile.</small></div>
       <button class="btn" type="submit" ${state.ragLoading?'disabled':''}>${state.ragLoading?'Searching...':'Ask myGRANT'}</button>
     </form>
     ${state.ragLoading?'<p class="rag-status">Embedding the question, searching pgvector, and generating a grounded answer...</p>':''}
     ${state.ragError?`<div class="rag-error"><strong>Query failed.</strong><br>${escapeHtml(state.ragError)}</div>`:''}
-    ${!result && !state.ragLoading && !state.ragError?'<div class="empty"><div class="big">Ask a real policy question</div>The response comes from PostgreSQL + pgvector and Ollama, not from this HTML file.</div>':''}
+    ${!result && !state.ragLoading && !state.ragError?'<div class="empty"><div class="big">Ask a real policy question</div>The response comes from PostgreSQL + pgvector and OpenAI, not from this HTML file.</div>':''}
     ${result?`<div class="step"><div class="step-title"><span class="step-num">1</span>Query + profile filter</div><p style="font-size:14.5px;margin:0 0 10px;">"${escapeHtml(state.ragQuestion)}"</p><div class="filter-line">Filtered to visaType = ${escapeHtml(state.ragVisaType)}</div></div>
     <div class="step"><div class="step-title"><span class="step-num">2</span>Retrieved chunks</div>${evidence || '<div class="empty">No evidence passed the similarity threshold.</div>'}</div>
     <div class="step"><div class="step-title"><span class="step-num">3</span>Grounded answer</div><div class="answer-box">${escapeHtml(result.answer).replace(/\n/g,'<br>')}</div></div>
@@ -1781,7 +3456,12 @@ function renderProfileImpact(impact){
   if(!impact) return '';
   const reasons = (impact.reasons || []).map(item=>`<li>${escapeHtml(item)}</li>`).join('');
   const actions = (impact.recommendedActions || []).map(item=>`<li>${escapeHtml(item)}</li>`).join('');
+  const missing = (impact.missingInformation || []).map(item=>`<li>${escapeHtml(item)}</li>`).join('');
   const ready = impact.urgency !== 'UNAVAILABLE';
+  const independentlyChecked = impact.evaluation?.verdict === 'YES';
+  const unverifiedNotice = ready && !independentlyChecked
+    ? `<div class="rag-status">This assessment was not independently double-checked. Please verify the official source or <button class="btn ghost small" type="button" onclick="openFeedback()">contact myGRANT support</button>.</div>`
+    : '';
   return `<div class="source-card">
     <div class="proof-kicker">PROFILE-SPECIFIC LLM ASSESSMENT</div>
     <div class="evidence-meta">
@@ -1794,7 +3474,9 @@ function renderProfileImpact(impact){
     <p style="font-size:14.5px;line-height:1.65;margin:12px 0;">${escapeHtml(impact.summary)}</p>
     ${impact.evaluation?`<p class="rag-status">Independent review: ${escapeHtml(impact.evaluation.reason)} (${escapeHtml(impact.attempts)} attempt(s))</p>`:''}
     ${reasons?`<div class="block-label">Why this urgency was assigned</div><ul class="warning-list">${reasons}</ul>`:''}
+    ${missing?`<div class="block-label">Information needed for a more confident assessment</div><p class="rag-status">Please provide the following rather than relying on an inference:</p><ul class="warning-list">${missing}</ul>`:''}
     ${actions?`<div class="block-label">Recommended next steps</div><ul class="warning-list">${actions}</ul>`:''}
+    ${unverifiedNotice}
     ${ready?'<p class="rag-status">Automated triage based on a policy excerpt; judge approval is not a guarantee. Not legal advice.</p>':''}
   </div>`;
 }
@@ -1822,6 +3504,10 @@ function renderFederalRegisterSource(ingest){
 }
 async function submitFederalRegisterImport(event){
   event.preventDefault();
+  if(state.role !== 'admin'){
+    showToast('Only administrators can import policy sources.');
+    return;
+  }
   const documentNumber = document.getElementById('fr-doc-number').value.trim();
   if(!documentNumber) return;
   Object.assign(state,{frDocNumber:documentNumber,ingestLoading:true,ingestResult:null,ingestError:null});
@@ -1843,7 +3529,7 @@ async function submitFederalRegisterImport(event){
 async function submitRagQuery(event){
   event.preventDefault();
   const question = document.getElementById('rag-question').value.trim();
-  const visaType = document.getElementById('rag-visa-type').value;
+  const visaType = state.profile?.visaType || state.user?.visaType || '';
   if(!question) return;
   Object.assign(state,{ragQuestion:question,ragVisaType:visaType,ragLoading:true,ragResult:null,ragError:null});
   render();
@@ -1882,10 +3568,9 @@ function stopFeedbackPolling(){
 
 function feedbackMessagesHtml(messages, mineType){
   if(!messages.length) return '<div class="empty"><div class="big">No messages yet</div>Send the first message when you are ready.</div>';
-  // Escape message text and align the signed-in participant's messages on the right.
-  return messages.map(message=>`<div class="chat-message ${message.senderType===mineType?'mine':''}">
+  return messages.map(message=>`<div class="chat-row ${message.senderType===mineType?'mine':''}">
     <div class="chat-meta">${escapeHtml(message.senderName || message.senderType)} · ${escapeHtml(formatTimestamp(message.createdAt))}</div>
-    <div class="chat-text">${escapeHtml(message.message)}</div>
+    <div class="chat-message">${escapeHtml(message.message)}</div>
   </div>`).join('');
 }
 
@@ -1916,13 +3601,17 @@ async function openHumanFeedback(){
 
 async function loadHumanMessages(forceRender){
   try{
-    const response=await apiFetch('/api/v1/feedback/messages');
-    const messages=await parseApiResponse(response);
+    const messages=await fetchAllPages('/api/v1/feedback/messages');
     const changed=messages.map(item=>item.id).join(',')!==state.feedbackMessages.map(item=>item.id).join(',');
     state.feedbackMessages=messages;
-    if(state.view==='feedback' && (forceRender || changed)){
-      render();
-      requestAnimationFrame(()=>{const log=document.getElementById('feedback-chat-log');if(log)log.scrollTop=log.scrollHeight;});
+    if(state.view==='feedback'){
+      markFeedbackSeen();
+      if(forceRender || changed){
+        render();
+        requestAnimationFrame(()=>{const log=document.getElementById('feedback-chat-log');if(log)log.scrollTop=log.scrollHeight;});
+      }
+    } else {
+      updateUserFeedbackBadge();
     }
   }catch(error){ state.feedbackError=error.message; if(forceRender) render(); }
 }
@@ -1953,8 +3642,7 @@ function renderFeedbackInbox(){
 
 async function loadStaffConversations(){
   try{
-    const response=await apiFetch('/api/v1/feedback/admin/conversations');
-    state.staffConversations=await parseApiResponse(response);
+    state.staffConversations=await fetchAllPages('/api/v1/feedback/admin/conversations');
     if(!state.selectedConversationId && state.staffConversations.length) state.selectedConversationId=state.staffConversations[0].id;
     if(state.view==='feedbackInbox') render();
     if(state.selectedConversationId) await loadStaffMessages(true);
@@ -1963,8 +3651,8 @@ async function loadStaffConversations(){
 }
 
 async function loadStaffConversationsOnce(){
-  const response=await apiFetch('/api/v1/feedback/admin/conversations');
-  state.staffConversations=await parseApiResponse(response);
+  state.staffConversations=await fetchAllPages('/api/v1/feedback/admin/conversations');
+  if(state.view!=='feedbackInbox') updateInboxBadge(state.staffConversations);
 }
 
 async function selectStaffConversation(id){
@@ -1975,8 +3663,7 @@ async function selectStaffConversation(id){
 async function loadStaffMessages(forceRender){
   if(!state.selectedConversationId) return;
   try{
-    const response=await apiFetch(`/api/v1/feedback/admin/conversations/${state.selectedConversationId}/messages`);
-    const messages=await parseApiResponse(response);
+    const messages=await fetchAllPages(`/api/v1/feedback/admin/conversations/${state.selectedConversationId}/messages`);
     const changed=messages.map(item=>item.id).join(',')!==state.feedbackMessages.map(item=>item.id).join(',');
     state.feedbackMessages=messages;
     if(state.view==='feedbackInbox' && (forceRender || changed)) render();
@@ -1994,14 +3681,6 @@ async function sendStaffFeedback(event){
   }catch(error){ state.feedbackError=error.message; render(); }
 }
 
-function addSource(){
-  const name = document.getElementById('modal-name').value.trim();
-  if(!name){ showToast('Give the source a name first.'); return; }
-  sources.push({name, status:'ok', last:'just now'});
-  closeModal();
-  showToast('Source added.');
-  render();
-}
 restoreSession();
 if(workosRedirectError) setAuthMessage(workosRedirectError);
 </script>

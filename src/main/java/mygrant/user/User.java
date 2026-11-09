@@ -186,6 +186,10 @@ public class User {
         return active;
     }
 
+    public void setActive(boolean active) {
+        this.active = active;
+    }
+
     public Instant getDeletedAt() {
         return deletedAt;
     }

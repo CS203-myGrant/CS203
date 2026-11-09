@@ -1,0 +1,8 @@
+# Loaded on top of src/main/resources/application.yaml for every test, including IDE runs.
+# Scheduled email jobs never run in tests; tests call the email services directly. Nor does the
+# startup rule backfill, which would link documents other tests create; PolicyRuleBackfillTest runs it.
+mygrant:
+  email:
+    jobs-enabled: false
+  rules:
+    backfill-on-startup: false

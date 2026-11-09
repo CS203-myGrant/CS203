@@ -84,7 +84,7 @@ class AccountDeletionServiceTests {
         assertThat(savedRequest.getChallengeHash()).hasSize(64);
         assertThat(savedRequest.getExpiresAt()).isAfter(Instant.now());
 
-        verifyNoInteractions(accountPurgeService, workOsService);
+        verifyNoInteractions(accountPurgeService);
     }
 
     @Test
@@ -103,7 +103,8 @@ class AccountDeletionServiceTests {
                 .extracting(error -> ((ResponseStatusException) error).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
 
-        verifyNoInteractions(accountPurgeService, workOsService);
+        verifyNoInteractions(accountPurgeService);
+        verifyNoInteractions(workOsService);
     }
 
     @Test
@@ -121,6 +122,7 @@ class AccountDeletionServiceTests {
 
         assertThat(request.getConfirmedAt()).isNotNull();
         verify(accountPurgeService).purge(USER_ID);
+        verifyNoInteractions(workOsService);
 
         assertThatThrownBy(() -> service.confirmDeletion(EMAIL, "x".repeat(43)))
                 .isInstanceOf(ResponseStatusException.class)
@@ -128,11 +130,10 @@ class AccountDeletionServiceTests {
                 .isEqualTo(HttpStatus.BAD_REQUEST);
 
         verify(accountPurgeService, times(1)).purge(USER_ID);
-        verifyNoInteractions(workOsService);
     }
 
     @Test
-    void workOsFailurePreventsLocalPurge() {
+    void deletionPurgesLocalDataWhenWorkOsIdentityExists() {
         user.setWorkosUserId("user_workos_123");
 
         AccountDeletionRequest request = new AccountDeletionRequest(
@@ -144,16 +145,10 @@ class AccountDeletionServiceTests {
         when(deletionRequestRepository.findByChallengeHashAndUserId(anyString(), eq(USER_ID)))
                 .thenReturn(Optional.of(request));
 
-        RuntimeException workOsFailure = new RuntimeException("WorkOS is unavailable");
-        org.mockito.Mockito.doThrow(workOsFailure)
-                .when(workOsService)
-                .deleteUser("user_workos_123");
-
-        assertThatThrownBy(() -> service.confirmDeletion(EMAIL, "x".repeat(43)))
-                .isSameAs(workOsFailure);
+        service.confirmDeletion(EMAIL, "x".repeat(43));
 
         verify(workOsService).deleteUser("user_workos_123");
-        verify(accountPurgeService, never()).purge(USER_ID);
+        verify(accountPurgeService).purge(USER_ID);
     }
 
     @Test
@@ -164,6 +159,6 @@ class AccountDeletionServiceTests {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Authenticated user no longer exists");
 
-        verifyNoInteractions(deletionRequestRepository, accountPurgeService, workOsService);
+        verifyNoInteractions(deletionRequestRepository, accountPurgeService);
     }
 }

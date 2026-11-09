@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import jakarta.persistence.Column;
@@ -50,6 +51,18 @@ public class Notification {
     @Column(name = "affected_fields")
     private String affectedFields;
 
+    /** Set by profile impact assessment (HIGH, MEDIUM, ...); null until that runs per recipient. */
+    @Column(name = "impact_severity", length = 20, insertable = false, updatable = false)
+    private String impactSeverity;
+
+    /**
+     * The alert email carrying this notification, claimed by a conditional update so it is
+     * emailed at most once. Read-only here: the entity is saved with full-row updates, so a
+     * writable mapping would let markRead overwrite a claim made after the row was loaded.
+     */
+    @Column(name = "email_delivery_id", insertable = false, updatable = false)
+    private UUID emailDeliveryId;
+
     protected Notification() {
     }
 
@@ -71,7 +84,9 @@ public class Notification {
     public Instant getCreatedAt() { return createdAt; }
     public Instant getReadAt() { return readAt; }
     public boolean isActionRequired() { return actionRequired; }
-    public int getProfileVersion() { return profileVersion; }   
+    public int getProfileVersion() { return profileVersion; }
+    public String getImpactSeverity() { return impactSeverity; }
+    public UUID getEmailDeliveryId() { return emailDeliveryId; }
 
     public List<ProfileField> getAffectedFields() {
         if (affectedFields == null || affectedFields.isBlank()) {

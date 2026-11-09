@@ -6,13 +6,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
 
 import mygrant.common.Confidence;
+import mygrant.ai.OpenAiGenerationService;
+import mygrant.impact.ImpactJudgeService;
+import mygrant.impact.JudgeEvaluation;
 import mygrant.rag.dto.CitationResponse;
 import mygrant.rag.dto.RagQueryRequest;
 import mygrant.rag.dto.RagQueryResponse;
@@ -26,14 +28,20 @@ public class RagService {
     private static final String DISCLAIMER = "This is informational guidance and not legal advice.";
 
     private final VectorStore vectorStore;
-    private final ChatClient chatClient;
+    private final OpenAiGenerationService generator;
     private final EvidenceRanker evidenceRanker;
+    private final ImpactJudgeService judge;
+    private final ProfilePolicyRetrieval profiles;
+    private final mygrant.policies.PolicyQuestionHistory history;
 
-    public RagService(VectorStore vectorStore, ChatClient.Builder chatClientBuilder,
-            EvidenceRanker evidenceRanker) {
+    public RagService(VectorStore vectorStore, OpenAiGenerationService generator,
+            EvidenceRanker evidenceRanker, ImpactJudgeService judge, ProfilePolicyRetrieval profiles,
+            mygrant.policies.PolicyQuestionHistory history) {
         this.vectorStore = vectorStore;
-        this.chatClient = chatClientBuilder.build();
+        this.generator = generator;
         this.evidenceRanker = evidenceRanker;
+        this.judge = judge;
+        this.profiles=profiles;this.history=history;
     }
 
     /** Answers from retrieved evidence or returns an insufficient-evidence response. */
@@ -47,13 +55,26 @@ public class RagService {
                 .build();
 
         List<Document> evidence = evidenceRanker.rank(vectorStore.similaritySearch(searchRequest));
+        return answer(request.question(),visaType,evidence);
+    }
+
+    public RagQueryResponse queryForUser(String email,String question){
+        var profile=profiles.profile(email);
+        var evidence=evidenceRanker.rank(profiles.search(profile,question,null));
+        var response=answer(question,profile.getVisaType(),evidence);
+        history.record(email,null,question,response);
+        return response;
+    }
+
+    private RagQueryResponse answer(String question,String visaType,List<Document> evidence){
         if (evidence.isEmpty()) {
             return insufficientEvidence();
         }
 
         Assessment assessment = assess(evidence);
-        String answer = chatClient.prompt()
-                .system("""
+        String context = "User visa type: " + visaType + "\nEvidence:\n" + formatEvidence(evidence)
+                + "\nQuestion: " + question;
+        String answer = generator.generate("""
                         You are myGRANT, an immigration policy information system.
                         Answer only from the supplied evidence.
                         Never invent dates, requirements, exceptions, or legal outcomes.
@@ -61,29 +82,26 @@ public class RagService {
                         If the evidence is incomplete or conflicting, explicitly say so.
                         Refer to evidence using its bracketed number, such as [1].
                         Do not describe the response as legal advice.
-                        """)
-                .user("""
-                        User visa type: %s
-
-                        Evidence:
-                        %s
-
-                        Question: %s
-                        """.formatted(visaType, formatEvidence(evidence), request.question()))
-                .call()
-                .content();
+                        """, context);
 
         List<CitationResponse> citations = createCitations(evidence);
+        JudgeEvaluation evaluation = judge.evaluateAnswer(context, answer, citations);
+        if (evaluation.verdict() != JudgeEvaluation.Verdict.YES) {
+            return new RagQueryResponse("An independently verified answer is not available. Please try again or contact the support team.",
+                    Confidence.LOW, true, citations, createRetrievedEvidence(evidence, citations),
+                    List.of("Independent review: " + evaluation.verdict(), DISCLAIMER), evaluation);
+        }
         return new RagQueryResponse(answer, assessment.confidence(), assessment.requiresReview(),
-                citations, createRetrievedEvidence(evidence, citations), assessment.warnings());
+                citations, createRetrievedEvidence(evidence, citations), assessment.warnings(), evaluation);
     }
 
     private String formatEvidence(List<Document> evidence) {
         StringBuilder context = new StringBuilder();
+        Map<String,Integer> numbers=new LinkedHashMap<>();
         for (int index = 0; index < evidence.size(); index++) {
             Document document = evidence.get(index);
             context.append("[%d] %s | %s | %s%n%s%n%n".formatted(
-                    index + 1,
+                    numbers.computeIfAbsent(metadata(document,"externalId"),key->numbers.size()+1),
                     metadata(document, "title"),
                     metadata(document, "status"),
                     metadata(document, "sourceUrl"),
@@ -167,7 +185,7 @@ public class RagService {
                 true,
                 List.of(),
                 List.of(),
-                List.of("Human review is required.", DISCLAIMER));
+                List.of("Human review is required.", DISCLAIMER), null);
     }
 
     private String evidenceSnippet(String text) {
