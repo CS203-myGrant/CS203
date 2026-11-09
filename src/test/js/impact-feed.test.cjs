@@ -33,10 +33,10 @@ test('loads current published feed in severity order and shows critical warning 
   assert.match(calls[0],/sort=severity,desc&archived=false/);
   const rendered=view.renderImpactFeed();
   assert.ok(rendered.indexOf('WARNING: CRITICAL')<rendered.indexOf('Reminder'));
-  assert.match(rendered,/Read details/);
-  assert.match(rendered,/Check the official source/);
+  assert.match(rendered,/View details and checklist/);
+  assert.doesNotMatch(rendered,/Check the official source/);
 });
-test('archives through PATCH and refetches the active list',async()=>{
+test('archives through PATCH and switches to the archived list',async()=>{
   const calls=[];
   const view=page(async(path,options)=>{
     calls.push([path,options]);
@@ -47,7 +47,7 @@ test('archives through PATCH and refetches the active list',async()=>{
   assert.equal(calls[0][0],'/api/v1/impacts/2');
   assert.equal(calls[0][1].method,'PATCH');
   assert.equal(JSON.parse(calls[0][1].body).archived,true);
-  assert.match(calls[1][0],/archived=false/);
+  assert.match(calls[1][0],/archived=true/);
 });
 test('detail shows human correction, citation, disclaimer and escaped text',()=>{
   const view=page(async()=>({}));

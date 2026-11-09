@@ -40,6 +40,7 @@ test('loads active items by default with visible deadline and urgency plus expan
   assert.match(rendered,/<summary>More details<\/summary>/);
   assert.match(rendered,/Renew your I-20 before it expires and keep a copy/);
   assert.match(rendered,/aria-label="Complete task"/);
+  assert.match(rendered,/toggleActionComplete\(1,'PENDING'\)/);
   assert.match(rendered,/>Dismiss</);
   assert.doesNotMatch(rendered,/HIGH priority|>Start<|>Complete</);
 });
@@ -109,17 +110,15 @@ test('a failed status change is reported and the views are still refetched',asyn
   assert.equal(view.state.actionUpdating,null);
 });
 
-test('impact card previews at most two active items',()=>{
+test('impact cards keep checklist items inside the detail view',()=>{
   const view=page(async()=>({}));
   view.state.impacts=[{id:4,severity:'HIGH',summary:'Act soon',policyTitle:'Policy 4',confidence:85,
     confidenceLabel:'HIGH',createdAt:'2026-10-30T00:00:00Z',archived:false,reviewedByHuman:false,
     actionItems:[item(1,{status:'COMPLETED',title:'Finished step'}),item(2,{title:'First open step',urgent:true}),
       item(3,{status:'IN_PROGRESS',title:'Second open step'}),item(4,{title:'Third open step'})]}];
   const rendered=view.renderImpactFeed();
-  assert.doesNotMatch(rendered,/Finished step/);
-  assert.match(rendered,/First open step <span class="tag action">Urgent<\/span>/);
-  assert.match(rendered,/Second open step/);
-  assert.doesNotMatch(rendered,/Third open step/);
+  assert.doesNotMatch(rendered,/Finished step|First open step|Second open step|Third open step/);
+  assert.match(rendered,/View details and checklist/);
 });
 
 test('impact detail keeps the task completion and dismiss controls available',()=>{
