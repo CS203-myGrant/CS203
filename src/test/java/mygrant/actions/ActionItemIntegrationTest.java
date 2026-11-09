@@ -108,7 +108,7 @@ class ActionItemIntegrationTest {
     }
 
     @Test
-    void heldDraftsAndAssessmentsWithoutActionsGetNoItems() throws Exception {
+    void unverifiedPublishedDraftsReceiveItemsWhileBlankAssessmentsDoNot() throws Exception {
         User owner = account(UserRole.APPLICANT);
         recommendations.getOrGenerate(owner.getEmail(), policy(null),
                 () -> rejected(List.of("Draft step that must stay hidden")));
@@ -118,10 +118,11 @@ class ActionItemIntegrationTest {
         long none = publish(owner, policy(null), "HIGH", List.of());
         long blank = publish(owner, policy(null), "LOW", List.of("   ", "\t\n"));
 
-        assertThat(rows(held)).isEmpty();
+        assertThat(rows(held)).extracting(Row::title, Row::priority).containsExactly(
+                org.assertj.core.groups.Tuple.tuple("Draft step that must stay hidden", "MEDIUM"));
         assertThat(rows(none)).isEmpty();
         assertThat(rows(blank)).isEmpty();
-        assertThat(list(owner, "").path("totalElements").asLong()).isZero();
+        assertThat(list(owner, "").path("totalElements").asLong()).isEqualTo(1);
     }
 
     @Test
@@ -377,7 +378,7 @@ class ActionItemIntegrationTest {
         recommendations.getOrGenerate(owner.getEmail(), policy(null), () -> rejected(List.of("Draft step")));
         long assessment = jdbc.queryForObject("SELECT id FROM policy_recommendations WHERE user_id = ?",
                 Long.class, owner.getId());
-        assertThat(rows(assessment)).isEmpty();
+        assertThat(rows(assessment)).extracting(Row::title).containsExactly("Draft step");
 
         mvc.perform(patch("/api/v1/review/impacts/" + assessment).header("Authorization", token(manager))
                         .contentType(MediaType.APPLICATION_JSON).content("""

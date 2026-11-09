@@ -98,7 +98,9 @@ public class OutputPublicationService {
         boolean human = humanReviewed(output.reviewId());
         if (human) return new Result(output.id(), evaluation, status(output.reviewId()), true, output.reviewId());
         boolean passed = evaluation.verdict() == JudgeEvaluation.Verdict.YES;
-        String state = passed ? "PUBLISHED" : "PENDING_REVIEW";
+        // A successful assessment remains visible if its judge cannot verify it.
+        // Policy Q&A responses remain fail-closed.
+        String state = "ASSESSMENT".equals(output.type()) || passed ? "PUBLISHED" : "PENDING_REVIEW";
         Long reviewId = output.reviewId();
         if ("ASSESSMENT".equals(output.type())) {
             if (reviewId == null) throw new IllegalStateException("Assessment is not attached to its review state");
@@ -112,7 +114,7 @@ public class OutputPublicationService {
                         version = version + 1, updated_at = CURRENT_TIMESTAMP
                     WHERE id = ? AND reviewed_by_human = FALSE
                     """, json(assessed), state, reviewId);
-            if (passed) actions.syncForAssessment(reviewId);
+            actions.syncForAssessment(reviewId);
         } else {
             if (!passed && reviewId == null) {
                 // Reuse CS203-6/42 review ownership, status, revision and correction

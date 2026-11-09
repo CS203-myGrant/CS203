@@ -62,7 +62,7 @@ class PolicyRecommendationStoreTest {
     }
 
     @Test
-    void publishingGeneratesTheChecklistButAHeldDraftDoesNot() {
+    void publishingGeneratesTheChecklistForVerifiedAndUnverifiedCandidates() {
         store().getOrGenerate("user", policy, () -> result);
         verify(actions).syncForAssessment(31L);
 
@@ -70,7 +70,7 @@ class PolicyRecommendationStoreTest {
                 List.of(), true, "OpenAI", "model", new JudgeEvaluation(JudgeEvaluation.Verdict.NO, "Unsupported", "judge"), 1);
         profile.setVisaType("J-1");
         store().getOrGenerate("user", policy, () -> rejected);
-        verify(actions, times(1)).syncForAssessment(anyLong());
+        verify(actions, times(2)).syncForAssessment(anyLong());
     }
 
     @Test
@@ -107,13 +107,13 @@ class PolicyRecommendationStoreTest {
     }
 
     @Test
-    void legacyUnverifiedCacheEntryIsNeitherReturnedNorUsedAsChatContext() throws Exception {
+    void publishedUnverifiedCacheEntryIsReturnedAndUsedAsChatContext() throws Exception {
         store().getOrGenerate("user",policy,()->result);
         savedJson=mapper.writeValueAsString(new ProfileImpactAssessment(ImpactUrgency.LOW,90,"Unchecked old result",
                 List.of(),List.of(),List.of(),true,"OpenAI","model",null,1));
-        assertTrue(store().findCurrent("user",policy).isEmpty());
+        assertTrue(store().findCurrent("user",policy).isPresent());
         boolean[] regenerated={false};
-        assertEquals(result,store().getOrGenerate("user",policy,()->{regenerated[0]=true;return result;}));
-        assertTrue(regenerated[0]);
+        assertEquals("Unchecked old result",store().getOrGenerate("user",policy,()->{regenerated[0]=true;return result;}).summary());
+        assertFalse(regenerated[0]);
     }
 }
