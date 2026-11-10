@@ -43,6 +43,16 @@ public class PolicyRecommendationStore {
     @Transactional
     public ProfileImpactAssessment getOrGenerate(String email, PolicyDocument policy,
             Supplier<ProfileImpactAssessment> generate) {
+        return getOrGenerate(email, policy, generate, false);
+    }
+
+    /**
+     * Returns the current assessment or explicitly re-runs it when the applicant requests a
+     * fresh assessment. Human-reviewed corrections remain authoritative and are never replaced.
+     */
+    @Transactional
+    public ProfileImpactAssessment getOrGenerate(String email, PolicyDocument policy,
+            Supplier<ProfileImpactAssessment> generate, boolean refresh) {
         var user = users.findByEmail(email).orElseThrow(() -> new IllegalStateException("User not found"));
         var profile = profiles.findById(user.getId()).orElseGet(() -> UserProfile.empty(user.getId()));
         String hash = fingerprint(profile, policy);
@@ -65,7 +75,7 @@ public class PolicyRecommendationStore {
                 WHERE user_id = ? AND policy_id = ? AND input_hash = ?
                   AND publication_status = 'PUBLISHED'
                 """, String.class, user.getId(), policy.getId(), hash);
-        if (!saved.isEmpty()) {
+        if (!refresh && !saved.isEmpty()) {
             try {
                 var assessment = mapper.readValue(saved.getFirst(), ProfileImpactAssessment.class);
                 return assessment;

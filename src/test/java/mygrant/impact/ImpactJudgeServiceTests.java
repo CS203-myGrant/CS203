@@ -33,6 +33,9 @@ class ImpactJudgeServiceTests {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("not inherently contradictory")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("\"output_config\"")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("\"effort\":\"low\"")))
+                // Claude's structured outputs reject numeric constraints with HTTP 400.
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("\"minimum\""))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("\"maximum\""))))
                 .andRespond(withSuccess(response, MediaType.APPLICATION_JSON));
 
         ImpactJudgeService judge = new ImpactJudgeService(builder, mapper, "key", "claude-haiku-5-5", "https://claude.test");
@@ -41,6 +44,18 @@ class ImpactJudgeServiceTests {
         assertThat(result.verdict()).isEqualTo(JudgeEvaluation.Verdict.YES);
         assertThat(result.reason()).contains("Evidence supports");
         server.verify();
+    }
+
+    @Test
+    void removesOnlyUnsupportedKeywordsFromNestedSchemas() {
+        Map<String, Object> schema = Map.of("type", "object", "additionalProperties", false,
+                "properties", Map.of("confidence", Map.of("type", "integer", "minimum", 0, "maximum", 100),
+                        "steps", Map.of("type", "array", "items", Map.of("type", "string", "maxLength", 80))));
+
+        assertThat(ImpactJudgeService.claudeSchema(schema)).isEqualTo(Map.of("type", "object",
+                "additionalProperties", false,
+                "properties", Map.of("confidence", Map.of("type", "integer"),
+                        "steps", Map.of("type", "array", "items", Map.of("type", "string")))));
     }
 
     @Test

@@ -646,6 +646,8 @@ const initialState = () => ({
   impactsTotalPages: 0,
   archivedPolicyIds: new Set(),
   impactDetail: null,
+  impactChat: null,
+  impactRecommendationReport: null,
   impactDetailLoading: false,
   impactDetailError: null,
   actions: null,
@@ -1702,10 +1704,15 @@ function renderImpactFeed(){
   </section>`;
 }
 async function openImpact(id){
-  state.impactDetail=null; state.impactDetailError=null; state.impactDetailLoading=true;
+  state.impactDetail=null; state.impactChat=null; state.impactRecommendationReport={text:'',sending:false,sent:false,error:null}; state.impactDetailError=null; state.impactDetailLoading=true;
   goto('impactDetail'); render();
   try{
     state.impactDetail=await parseApiResponse(await apiFetch(`/api/v1/impacts/${id}`));
+    state.policyChats=state.policyChats || {};
+    const policyId=state.impactDetail.policyId;
+    state.impactChat={id:policyId,chat:state.policyChats[policyId]
+      || (state.policyChats[policyId]={messages:[],draft:'',sending:false,error:null,historyLoaded:false,historyLoading:false})};
+    await loadPolicyChatHistory(state.impactChat);
   }catch(error){state.impactDetailError=error.message;}
   finally{state.impactDetailLoading=false; if(state.view==='impactDetail')render();}
 }
@@ -1720,7 +1727,11 @@ function renderImpactDetail(){
     <div class="tag-row"><span class="tag ${critical?'action':''}">${critical?'WARNING: CRITICAL':escapeHtml(impact.severity)}</span>
       <span class="tag">${escapeHtml(impact.confidenceLabel)} confidence (${Number(impact.confidence)}%)</span>
       ${impact.reviewedByHuman?'<span class="tag">Reviewed by a human</span>':''}</div>
-    <h1>${escapeHtml(impact.policyTitle)}</h1><p>${escapeHtml(impact.summary)}</p>
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+      <h1 style="margin:0;">${escapeHtml(impact.policyTitle)}</h1>
+      <button class="btn ghost small" type="button" onclick="openPolicyDetail(${Number(impact.policyId)},true)" title="Run a new assessment using your current profile">Assess again</button>
+    </div>
+    <p>${escapeHtml(impact.summary)}</p>
     <p>${escapeHtml(impact.policyAgency)} · ${escapeHtml(formatTimestamp(impact.createdAt))}</p>
     <div class="block-label">Why this affects you</div>
     ${(impact.analysis || []).length?`<ul>${impact.analysis.map(reason=>`<li>${escapeHtml(reason)}</li>`).join('')}</ul>`:'<p>No further analysis was supplied.</p>'}
@@ -1732,8 +1743,87 @@ function renderImpactDetail(){
       ? `<p><a href="${escapeAttribute(citation.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(citation.title)}</a></p>`
       : `<p>${escapeHtml(citation.title)}</p>`).join('')}
     <p class="rag-status">${escapeHtml(impact.disclaimer)}</p>
-    <button class="btn ghost small" type="button" onclick="setImpactArchived(${Number(impact.id)},${!impact.archived})">${impact.archived?'Unarchive':'Archive this assessment'}</button>
+    ${renderImpactPolicyChat()}
+    ${renderImpactRecommendationReport(impact)}
+    <div class="tag-row" style="margin-top:20px;">
+      <button class="btn ghost small" type="button" onclick="openFeedback()">Contact support</button>
+      <button class="btn ghost small" type="button" onclick="setImpactArchived(${Number(impact.id)},${!impact.archived})">${impact.archived?'Unarchive':'Archive this assessment'}</button>
+    </div>
   </article>`;
+}
+
+function renderImpactPolicyChat(){
+  const detail=state.impactChat;
+  if(!detail) return '<section class="detail-card"><h2>Questions about this change?</h2><p role="status">Loading policy assistant...</p></section>';
+  const chat=detail.chat;
+  return `<section class="detail-card" aria-labelledby="impact-policy-chat-heading">
+    <h2 id="impact-policy-chat-heading">Questions about this change?</h2>
+    <p>Ask about this policy, your recommendation, or your next steps.</p>
+    <div class="chat-shell" style="max-width:100%;">
+      <div class="chat-head"><strong>Policy assistant</strong><span class="tag">AI-generated</span></div>
+      <div class="chat-log" id="impact-policy-chat-log" role="log" aria-live="polite" style="min-height:180px;height:auto;max-height:480px;">
+        ${chat.historyLoading?'<p role="status">Loading saved conversation...</p>':''}
+        ${chat.messages.length?chat.messages.map(message=>`<div class="chat-row ${message.role==='USER'?'mine':''}"><span class="chat-meta">${message.role==='USER'?'You':'Policy assistant'}</span><div class="chat-message">${escapeHtml(message.message)}</div>${message.confidence?`<span class="chat-meta">${escapeHtml(message.confidence)} evidence confidence</span>`:''}${(message.citations || []).map((citation,index)=>/^https?:\/\//i.test(citation.sourceUrl || '')?`<a href="${escapeAttribute(citation.sourceUrl)}" target="_blank" rel="noopener noreferrer" style="font-size:14px;">[${index+1}] ${escapeHtml(citation.title)}</a>`:'').join('')}${message.role==='ASSISTANT'&&message.requiresReview?'<span class="tag">Confirm with a qualified adviser</span>':''}</div>`).join(''):'<p class="rag-status">What would you like to understand about this policy?</p>'}
+        ${chat.sending?'<p role="status">Checking the policy source and independently reviewing the answer...</p>':''}
+      </div>
+      ${!chat.messages.length?`<div style="display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px;">${['Why does this affect me?','What should I do next?','When does this change take effect?'].map(question=>`<button class="btn ghost small" type="button" onclick="setImpactPolicyChatQuestion('${question}')" ${chat.sending?'disabled':''}>${question}</button>`).join('')}</div>`:''}
+      ${chat.error?`<p class="rag-error" role="alert" style="margin:12px;">${escapeHtml(chat.error)}</p>`:''}
+      <form class="chat-compose" onsubmit="sendImpactPolicyQuestion(event)" style="align-items:flex-end;flex-wrap:wrap;"><label for="impact-policy-chat-question" style="width:100%;">Your question</label><textarea id="impact-policy-chat-question" required maxlength="2000" rows="2" placeholder="Ask a follow-up question..." style="flex:1;min-width:180px;padding:10px;font:inherit;" oninput="state.impactChat.chat.draft=this.value" ${chat.sending?'disabled':''}>${escapeHtml(chat.draft)}</textarea><button class="btn small" type="submit" ${chat.sending || chat.historyLoading || !chat.historyLoaded?'disabled':''}>${chat.sending?'Answering...':'Send question'}</button></form>
+    </div>
+    <p class="rag-status">Answers use this policy's source and your saved profile. They may be incomplete. This is informational guidance, not legal advice.</p>
+    <button class="btn ghost small" type="button" onclick="openFeedback()">Ask the support team</button>
+  </section>`;
+}
+
+function setImpactPolicyChatQuestion(question){
+  const chat=state.impactChat?.chat;
+  if(!chat || chat.sending) return;
+  chat.draft=question;
+  const input=document.getElementById('impact-policy-chat-question');
+  if(input){input.value=question;input.focus();}
+}
+
+function renderImpactRecommendationReport(impact){
+  const report=state.impactRecommendationReport;
+  if(!report) return '';
+  return `<section class="detail-card" aria-labelledby="impact-recommendation-report-heading">
+    <h2 id="impact-recommendation-report-heading">Report a recommendation</h2>
+    <p>Tell the myGRANT team what seems incorrect or missing. Your feedback is linked to this policy assessment.</p>
+    ${report.sent?'<p role="status">Report sent. The team can follow up through Feedback.</p><button class="btn ghost small" type="button" onclick="openFeedback()">Open feedback</button>':`<form onsubmit="reportImpactRecommendation(event)"><label for="impact-recommendation-report">What needs correcting?</label><textarea id="impact-recommendation-report" required maxlength="900" rows="4" style="display:block;width:100%;margin:12px 0;" oninput="state.impactRecommendationReport.text=this.value">${escapeHtml(report.text)}</textarea>${report.error?`<p class="rag-error" role="alert">${escapeHtml(report.error)}</p>`:''}<button class="btn small" type="submit" ${report.sending?'disabled':''}>${report.sending?'Sending…':'Send report'}</button></form>`}
+  </section>`;
+}
+
+async function reportImpactRecommendation(event){
+  event.preventDefault();
+  const report=state.impactRecommendationReport,impact=state.impactDetail;
+  if(!report || !impact || report.sending || report.sent || !report.text.trim()) return;
+  report.sending=true;report.error=null;render();
+  const message=`Recommendation report | Policy ${impact.policyId}\n${impact.policyTitle}\nUser report: ${report.text.trim().slice(0,900)}\nAssessment: ${JSON.stringify({urgency:impact.urgency,summary:impact.summary,actions:(impact.actionItems || []).map(item=>item.text || item.title)}).slice(0,650)}`;
+  try{
+    await parseApiResponse(await apiFetch('/api/v1/feedback/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:message.slice(0,2000)})}));
+    report.sent=true;
+  }catch(error){report.error=error.message;}
+  finally{report.sending=false;if(state.view==='impactDetail')render();}
+}
+
+async function sendImpactPolicyQuestion(event){
+  event.preventDefault();
+  const detail=state.impactChat,chat=detail?.chat;
+  if(!chat || chat.sending || chat.historyLoading || !chat.historyLoaded || !chat.draft.trim()) return;
+  const question=chat.draft.trim();
+  chat.sending=true;chat.error=null;chat.messages.push({role:'USER',message:question});chat.draft='';render();
+  try{
+    const answer=await parseApiResponse(await apiFetch(`/api/v1/policies/${detail.id}/questions`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,history:[]})}));
+    chat.messages.push({role:'ASSISTANT',message:answer.answer,...answer});
+  }catch(error){chat.messages.pop();chat.draft=question;chat.error=error.message;}
+  finally{
+    chat.sending=false;
+    if(state.impactChat===detail && state.view==='impactDetail'){
+      render();
+      const log=document.getElementById('impact-policy-chat-log');if(log)log.scrollTop=log.scrollHeight;
+      document.getElementById('impact-policy-chat-question')?.focus();
+    }
+  }
 }
 async function setImpactArchived(id,archived){
   try{
@@ -1994,7 +2084,7 @@ async function saveApplicationProgress(event){
   finally{tracker.saving=false;if(state.applicationTracker===tracker && state.view==='applicationProgress')render();}
 }
 
-async function openPolicyDetail(id){
+async function openPolicyDetail(id,refresh=false){
   const detail={id, policy:null, assessment:null, loading:true, error:null, reportText:'', reporting:false, reported:false, reportError:null};
   state.policyChats=state.policyChats || {};
   detail.chat=state.policyChats[id] || (state.policyChats[id]={messages:[],draft:'',sending:false,error:null,historyLoaded:false,historyLoading:false});
@@ -2003,7 +2093,7 @@ async function openPolicyDetail(id){
   try{
     detail.policy=await parseApiResponse(await apiFetch(`/api/v1/policies/${id}`));
     if(state.policyDetail===detail && state.view==='policyDetail') render();
-    const response=await apiFetch(`/api/v1/policies/${id}/recommendation`,{method:'POST'});
+    const response=await apiFetch(`/api/v1/policies/${id}/recommendation${refresh?'?refresh=true':''}`,{method:'POST'});
     if(response.status===404){
       throw new Error('Personalized recommendations are not available on this server yet. Please try again after the latest backend has been deployed. You can still read the policy summary and original source.');
     }
@@ -2011,6 +2101,11 @@ async function openPolicyDetail(id){
     await loadPolicyChatHistory(detail);
   }catch(error){ detail.error=error.message; }
   finally{ detail.loading=false; if(state.policyDetail===detail && state.view==='policyDetail') render(); }
+}
+
+async function openRecommendationReport(id){
+  await openPolicyDetail(id);
+  requestAnimationFrame(()=>document.getElementById('recommendation-report')?.focus());
 }
 
 function policySummary(content){
