@@ -54,3 +54,23 @@ test('missing endpoint retains policy with readable error',async()=>{
   assert.match(context.state.policyDetail.error,/latest backend has been deployed/);
   assert.equal(context.state.policyDetail.assessment,null);
 });
+test('unavailable processing is separate from severity and hides next-step advice',()=>{
+  const context=setup(async()=>({}));
+  context.escapeHtml=value=>String(value ?? '');
+  context.formatUrgency=value=>value || 'Unavailable';
+  const rendered=context.renderPolicyRecommendation({status:'UNAVAILABLE',urgency:null,
+    summary:'Try again later',requiresHumanReview:true,recommendedActions:['Check source']});
+  assert.match(rendered,/Try again later/);
+  assert.doesNotMatch(rendered,/What to do next|Not independently verified/);
+});
+test('completed HIGH impact retains the canonical label and next steps',()=>{
+  const context=setup(async()=>({}));
+  context.escapeHtml=value=>String(value ?? '');
+  context.formatUrgency=value=>value || 'Unavailable';
+  const rendered=context.renderPolicyRecommendation({status:'COMPLETED',urgency:'HIGH',
+    summary:'Check your travel date',requiresHumanReview:false,recommendedActions:['Check source'],
+    evaluation:{verdict:'YES'}});
+  assert.match(rendered,/HIGH/);
+  assert.match(rendered,/What to do next/);
+  assert.doesNotMatch(rendered,/CRITICAL|WARNING|INFORMATIONAL|NO_IMPACT/);
+});

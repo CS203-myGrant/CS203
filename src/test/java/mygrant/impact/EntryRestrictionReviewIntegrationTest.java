@@ -38,7 +38,9 @@ import mygrant.user.UserRole;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
-class EntryRestrictionReviewIntegrationTest {
+@org.springframework.test.annotation.DirtiesContext(
+        classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
+class EntryRestrictionReviewIntegrationTest extends mygrant.support.PgvectorIntegrationTestBase {
     @Autowired MockMvc mvc;
     @Autowired JwtService jwt;
     @Autowired JdbcTemplate jdbc;
@@ -70,7 +72,7 @@ class EntryRestrictionReviewIntegrationTest {
                 .andExpect(jsonPath("$[0].sourceUrl").value(policy.getSourceUrl()))
                 .andExpect(jsonPath("$[0].sourceExcerpt").value(org.hamcrest.Matchers.containsString("lawful permanent residents")));
 
-        String correction = mapper.writeValueAsString(new ImpactReviewController.Correction("INFO", 100,
+        String correction = mapper.writeValueAsString(new ImpactReviewController.Correction("NOT_APPLICABLE", 100,
                 "Confirmed full entry restriction for Afghanistan.", List.of("Reviewed source sections 4 and 6."),
                 List.of(), List.of(), List.of(new ImpactReviewController.CountryRuleCorrection("AF", RestrictionScope.FULL))));
         mvc.perform(patch("/api/v1/review/impacts/" + reviewId).header("Authorization", token(admin))

@@ -554,7 +554,7 @@
   <div class="modal">
     <h3 id="review-editor-title">Review and publish assessment</h3>
     <input id="review-edit-id" type="hidden">
-    <div class="field"><label for="review-edit-severity">Severity</label><select id="review-edit-severity"><option>CRITICAL</option><option>HIGH</option><option selected>MEDIUM</option><option>LOW</option><option>INFO</option></select></div>
+    <div class="field"><label for="review-edit-severity">Severity</label><select id="review-edit-severity"><option>HIGH</option><option selected>MEDIUM</option><option>LOW</option><option>NOT_APPLICABLE</option></select></div>
     <div class="field"><label for="review-edit-confidence">Confidence (0–100)</label><input id="review-edit-confidence" type="number" min="0" max="100" value="80"></div>
     <div class="field"><label for="review-edit-summary">Summary</label><input id="review-edit-summary" maxlength="1500" required></div>
     <div class="field"><label for="review-edit-analysis">Analysis (one point per line)</label><textarea id="review-edit-analysis" rows="3"></textarea></div>
@@ -1485,7 +1485,7 @@ function renderLiveDashboard(){
     : records.filter(policy=>!archivedPolicyIds.has(policy.id));
   const policyRows=visibleRecords.map(policy=>{
     const impact=impactsByPolicy.get(policy.id);
-    const critical=impact?.severity==='CRITICAL';
+    const critical=impact?.severity==='HIGH';
     return `
     <div class="entry ${impact?`impact-entry ${impactSeverityClass(impact.severity)}`:'urgency-low'}">
       <div class="flag"></div>
@@ -1494,7 +1494,7 @@ function renderLiveDashboard(){
         <h3>${escapeHtml(policy.title)}</h3>
         <p>Published ${escapeHtml(formatDate(policy.publicationDate))}${policy.effectiveDate ? `; effective ${escapeHtml(formatDate(policy.effectiveDate))}` : ''}.</p>
         ${impact?`<p><strong>What this means for you:</strong> ${escapeHtml(impact.summary)}</p>`:''}
-        <div class="tag-row"><span class="tag">${escapeHtml(policy.status)}</span><span class="tag">${escapeHtml(policy.agency)}</span><span class="tag">${escapeHtml(policy.visaType)}</span>${impact?`<span class="tag ${critical?'action':''}">${critical?'WARNING: CRITICAL':escapeHtml(impact.severity)}</span><span class="tag confidence-${escapeAttribute(impact.confidenceLabel.toLowerCase())}">${escapeHtml(impact.confidenceLabel)} confidence</span>`:''}</div>
+        <div class="tag-row"><span class="tag">${escapeHtml(policy.status)}</span><span class="tag">${escapeHtml(policy.agency)}</span><span class="tag">${escapeHtml(policy.visaType)}</span>${impact?`<span class="tag ${critical?'action':''}">${critical?'HIGH':escapeHtml(impact.severity)}</span><span class="tag confidence-${escapeAttribute(impact.confidenceLabel.toLowerCase())}">${escapeHtml(impact.confidenceLabel)} confidence</span>`:''}</div>
       </div>
       <div class="entry-action" style="gap:8px;${impact?'':'flex-wrap:wrap;'}">${impact?`<button class="btn small" type="button" onclick="openImpact(${Number(impact.id)})">View details and checklist</button><button class="btn ghost small" type="button" onclick="setImpactArchived(${Number(impact.id)},${!impact.archived})">${impact.archived?'Unarchive':'Archive'}</button>`:`<button class="btn small" onclick="openPolicyDetail(${Number(policy.id)})">See how this impacts me</button>`}${sourceLink(policy)}</div>
     </div>`;
@@ -1661,19 +1661,19 @@ function showArchivedImpacts(archived){
   loadImpacts();
 }
 function impactSeverityClass(severity){
-  return severity==='CRITICAL' || severity==='HIGH' ? 'impact-critical'
+  return severity==='HIGH' ? 'impact-critical'
     : severity==='MEDIUM' ? 'impact-medium' : 'impact-low';
 }
 function renderImpactFeed(){
   const rows=(state.impacts || []).map(impact=>{
-    const critical=impact.severity==='CRITICAL';
+    const critical=impact.severity==='HIGH';
     return `<article class="entry impact-entry ${impactSeverityClass(impact.severity)}" aria-label="${escapeAttribute(impact.severity)} impact">
       <div class="flag"></div>
       <div class="entry-case">${escapeHtml(formatTimestamp(impact.createdAt))}<br>${escapeHtml(impact.severity)}</div>
       <div class="entry-body">
         <h3>${escapeHtml(impact.policyTitle)}</h3>
         <p>${escapeHtml(impact.summary)}</p>
-        <div class="tag-row"><span class="tag ${critical?'action':''}">${critical?'WARNING: CRITICAL':escapeHtml(impact.severity)}</span>
+        <div class="tag-row"><span class="tag ${critical?'action':''}">${critical?'HIGH':escapeHtml(impact.severity)}</span>
           <span class="tag confidence-${escapeAttribute(impact.confidenceLabel.toLowerCase())}">${escapeHtml(impact.confidenceLabel)} confidence</span>
           ${impact.reviewedByHuman?'<span class="tag">Reviewed by a human</span>':''}</div>
       </div>
@@ -1715,9 +1715,9 @@ function renderImpactDetail(){
   if(state.impactDetailError) return back+`<div class="rag-error" role="alert">${escapeHtml(state.impactDetailError)}</div>`;
   const impact=state.impactDetail;
   if(!impact) return back+'<div class="empty">Assessment unavailable.</div>';
-  const critical=impact.severity==='CRITICAL';
+  const critical=impact.severity==='HIGH';
   return `${back}<article class="detail-card ${impactSeverityClass(impact.severity)}">
-    <div class="tag-row"><span class="tag ${critical?'action':''}">${critical?'WARNING: CRITICAL':escapeHtml(impact.severity)}</span>
+    <div class="tag-row"><span class="tag ${critical?'action':''}">${critical?'HIGH':escapeHtml(impact.severity)}</span>
       <span class="tag">${escapeHtml(impact.confidenceLabel)} confidence (${Number(impact.confidence)}%)</span>
       ${impact.reviewedByHuman?'<span class="tag">Reviewed by a human</span>':''}</div>
     <h1>${escapeHtml(impact.policyTitle)}</h1><p>${escapeHtml(impact.summary)}</p>
@@ -2023,7 +2023,7 @@ function policySummary(content){
 }
 
 function renderPolicyRecommendation(assessment){
-  const unavailable=assessment.urgency==='UNAVAILABLE';
+  const unavailable=assessment.status==='UNAVAILABLE';
   const independentlyChecked=assessment.evaluation?.verdict==='YES';
   const unverifiedNotice=!unavailable && !independentlyChecked
     ? `<p class="rag-status">This assessment was not independently verified. Check the official source or <button class="btn ghost small" type="button" onclick="openFeedback()">contact myGRANT support</button>.</p>`
@@ -3375,7 +3375,7 @@ function renderProofGrid(ingest, result, evidenceItems){
       <div class="proof-kicker">STEP 3 &middot; PROFILE IMPACT</div>
       <h3>${impact ? escapeHtml(formatUrgency(impact.urgency)) : (ingest ? 'Assessment queued' : 'Waiting for import')}</h3>
       <p>${impact ? escapeHtml(impact.summary) : (ingest ? 'Assessments run in the background for matching profiles after a new import.' : 'Import a policy to assess its impact on matching profiles.')}</p>
-      <span class="live-pill ${impact && impact.urgency!=='UNAVAILABLE'?'pass':''}">${impact ? (impact.urgency==='UNAVAILABLE' ? 'Human review required' : `${escapeHtml(impact.confidence)}% model-reported confidence`) : (ingest ? 'Background processing' : 'Waiting')}</span>
+      <span class="live-pill ${impact && impact.status!=='UNAVAILABLE'?'pass':''}">${impact ? (impact.status==='UNAVAILABLE' ? 'Human review required' : `${escapeHtml(impact.confidence)}% model-reported confidence`) : (ingest ? 'Background processing' : 'Waiting')}</span>
     </div>
     <div class="proof-card">
       <div class="proof-kicker">STEP 4 &middot; RAG ANSWER</div>
@@ -3393,7 +3393,7 @@ function renderProfileImpact(impact){
   const reasons = (impact.reasons || []).map(item=>`<li>${escapeHtml(item)}</li>`).join('');
   const actions = (impact.recommendedActions || []).map(item=>`<li>${escapeHtml(item)}</li>`).join('');
   const missing = (impact.missingInformation || []).map(item=>`<li>${escapeHtml(item)}</li>`).join('');
-  const ready = impact.urgency !== 'UNAVAILABLE';
+  const ready = impact.status !== 'UNAVAILABLE';
   const independentlyChecked = impact.evaluation?.verdict === 'YES';
   const unverifiedNotice = ready && !independentlyChecked
     ? `<div class="rag-status">This assessment was not independently double-checked. Please verify the official source or <button class="btn ghost small" type="button" onclick="openFeedback()">contact myGRANT support</button>.</div>`

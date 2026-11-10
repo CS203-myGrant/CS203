@@ -992,11 +992,11 @@ as `PENDING_REVIEW` and is not returned by the applicant feed or detail APIs;
 temporary AI failures are not saved. Managers and admins can correct and publish
 held assessments with `/api/v1/review/impacts`. Corrections retain previous
 versions and show a **Reviewed by a human** marker. `HIGH` assessment urgency is
-shown as `CRITICAL` severity so the dashboard presents it as a warning.
+shown as `HIGH` severity so the dashboard presents it as a warning.
 
 `GET /api/v1/impacts` returns the signed-in user's published assessments, 20 per
 page by default, sorted by severity then date. Use `sort=date,desc` or
-`sort=severity,asc`, `severity=CRITICAL`, and `archived=true` for archived items.
+`sort=severity,asc`, `severity=HIGH`, and `archived=true` for archived items.
 `GET /api/v1/impacts/{id}` shows the analysis, source citation, action items and
 disclaimer. `PATCH /api/v1/impacts/{id}` with `{"archived":true}` archives the
 record; use `false` to unarchive it. A missing, pending, or another user's id
@@ -1040,7 +1040,7 @@ curl -s -H "Authorization: Bearer $MANAGER_TOKEN" \
   'http://localhost:8080/api/v1/review/impacts'
 curl -s -X PATCH -H "Authorization: Bearer $MANAGER_TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"severity":"CRITICAL","confidence":85,"summary":"Corrected impact summary", "analysis":["Why the source applies"],"actionItems":["Check the official source"],"missingInformation":[]}' \
+  -d '{"severity":"HIGH","confidence":85,"summary":"Corrected impact summary", "analysis":["Why the source applies"],"actionItems":["Check the official source"],"missingInformation":[]}' \
   'http://localhost:8080/api/v1/review/impacts/IMPACT_ID'
 ```
 
@@ -1073,8 +1073,8 @@ How items are made:
 - The title is the action text with spaces trimmed from both ends. Text longer
   than 120 characters is cut to 117 characters and an ellipsis, and the full text
   becomes the description.
-- The priority follows the assessment's severity: `CRITICAL` and `HIGH` give
-  `HIGH`, `MEDIUM` gives `MEDIUM`, and `LOW` and `INFO` give `LOW`.
+- The priority follows the assessment's severity: `HIGH` gives `HIGH`, `MEDIUM` gives `MEDIUM`, and `LOW` and
+  `NOT_APPLICABLE` give `LOW`.
 - The deadline is the policy's effective date when the item is made. A policy
   without one gives an item without a deadline.
 - Each item has a key: the SHA-256 of its text, ignoring case and runs of spaces,
@@ -2110,3 +2110,10 @@ the embedding model requires the same 1024 dimensions, or a matching change to
 AI output evaluation (CS203-88): see [judge configuration, versioning, and limitations](docs/ai-output-evaluation.md).
 
 Admin quality dashboard (CS203-88): see [metrics API, date boundaries, denominators, and limitations](docs/admin-quality-metrics.md).
+
+## Canonical impact severity
+
+Assessment code, prompts, storage and APIs use `HIGH / MEDIUM / LOW / NOT_APPLICABLE`.
+See [definitions, availability and migration](docs/impact-severity.md) and
+[aligned story descriptions](docs/impact-severity-stories.md). `UNAVAILABLE` is a
+processing status with null urgency, not a severity.

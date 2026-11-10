@@ -68,8 +68,8 @@ public class ManagerDashboardService {
                   AND """ + ImpactVisibility.VISIBLE + """
                   AND r.archived_at IS NULL
                 GROUP BY r.severity
-                ORDER BY CASE r.severity WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2
-                         WHEN 'MEDIUM' THEN 3 WHEN 'LOW' THEN 4 ELSE 5 END
+                ORDER BY CASE r.severity WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2
+                         WHEN 'LOW' THEN 3 ELSE 4 END
                 """, params);
 
         return new ManagerDashboardResponse(linked == null ? 0 : linked, visaCounts, severityCounts,

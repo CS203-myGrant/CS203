@@ -23,7 +23,9 @@ import mygrant.user.UserRole;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
-class ManagerMembershipIntegrationTest {
+@org.springframework.test.annotation.DirtiesContext(
+        classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
+class ManagerMembershipIntegrationTest extends mygrant.support.PgvectorIntegrationTestBase {
     @Autowired MockMvc mvc;
     @Autowired JwtService jwt;
     @Autowired UserRepository users;

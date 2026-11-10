@@ -83,9 +83,6 @@ public class ImpactAssessment {
         if (confidence != null && (confidence < 0 || confidence > 100)) {
             throw new IllegalArgumentException("Confidence must be between 0 and 100");
         }
-        if (urgency == ImpactUrgency.UNAVAILABLE) {
-            throw new IllegalArgumentException("UNAVAILABLE is a processing status, not an urgency");
-        }
         if (status == AssessmentStatus.COMPLETED && (urgency == null || confidence == null || summary == null)) {
             throw new IllegalArgumentException("Completed assessments require urgency, confidence and summary");
         }

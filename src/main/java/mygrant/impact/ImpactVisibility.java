@@ -7,7 +7,8 @@ package mygrant.impact;
 public final class ImpactVisibility {
 
     /** A SQL condition on {@code policy_recommendations} aliased {@code r}. */
-    public static final String VISIBLE = "(r.output_type = 'ASSESSMENT' AND r.publication_status = 'PUBLISHED')";
+    public static final String VISIBLE = "(r.output_type = 'ASSESSMENT' AND r.publication_status = 'PUBLISHED' "
+            + "AND coalesce(r.assessment_json::jsonb ->> 'status', 'COMPLETED') = 'COMPLETED')";
 
     private ImpactVisibility() {
     }

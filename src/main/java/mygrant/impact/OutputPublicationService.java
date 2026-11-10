@@ -125,7 +125,7 @@ public class OutputPublicationService {
                 reviewId = jdbc.queryForObject("""
                         INSERT INTO policy_recommendations
                             (user_id, policy_id, input_hash, assessment_json, publication_status, severity, output_type)
-                        VALUES (?, ?, ?, ?, 'PENDING_REVIEW', 'INFO', 'ANSWER')
+                        VALUES (?, ?, ?, ?, 'PENDING_REVIEW', 'LOW', 'ANSWER')
                         ON CONFLICT (user_id, policy_id, input_hash) DO UPDATE
                             SET input_hash = EXCLUDED.input_hash
                         RETURNING id

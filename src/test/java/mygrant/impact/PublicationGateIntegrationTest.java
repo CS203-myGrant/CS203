@@ -28,7 +28,9 @@ import org.springframework.web.client.RestClient;
 
 @SpringBootTest
 @Transactional
-class PublicationGateIntegrationTest {
+@org.springframework.test.annotation.DirtiesContext(
+        classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
+class PublicationGateIntegrationTest extends mygrant.support.PgvectorIntegrationTestBase {
     @Autowired EvaluationStore evaluations;
     @Autowired OutputPublicationService publication;
     @Autowired PolicyRecommendationStore recommendations;
@@ -79,7 +81,7 @@ class PublicationGateIntegrationTest {
 
     UUID assessment(String verdict) throws Exception {
         var evaluation = evaluator(verdict).evaluate("Original evidence and profile", candidate());
-        var withheld = new ProfileImpactAssessment(ImpactUrgency.UNAVAILABLE, 0, "Unavailable notice",
+        var withheld = new ProfileImpactAssessment(null, 0, "Unavailable notice",
                 List.of(), List.of(), List.of(), true, "OpenAI", "test", evaluation, 1);
         var response = recommendations.getOrGenerate(owner.getEmail(), policy, () -> withheld);
         assertThat(response.summary()).isEqualTo("Raw draft");
@@ -175,7 +177,7 @@ class PublicationGateIntegrationTest {
         assertThat(publication.evaluate(id).reviewId()).isEqualTo(first.reviewId());
         assertThat(review.pending(admin.getEmail())).hasSize(1);
         review.publishCorrection(first.reviewId(), admin.getEmail(), new ImpactReviewController.Correction(
-                "INFO", 90, "Corrected answer [1]", List.of(), List.of(), List.of()));
+                "NOT_APPLICABLE", 90, "Corrected answer [1]", List.of(), List.of(), List.of()));
         assertThat(publication.evaluate(id).reviewedByHuman()).isTrue();
         var saved = history.context(owner.getEmail(), policy.getId());
         assertThat(saved.getLast().message()).isEqualTo("Corrected answer [1]");
@@ -220,7 +222,7 @@ class PublicationGateIntegrationTest {
         users.saveAndFlush(admin);
         jdbc.update("INSERT INTO manager_user_memberships(manager_id,user_id) VALUES (?,?)", admin.getId(),owner.getId());
         review.publishCorrection(approved.reviewId(),admin.getEmail(),new ImpactReviewController.Correction(
-                "INFO",90,"Human confirms the answer [1]",List.of(),List.of(),List.of()));
+                "NOT_APPLICABLE",90,"Human confirms the answer [1]",List.of(),List.of(),List.of()));
         var today=LocalDate.now(java.time.ZoneOffset.UTC);
         var report=qualityMetrics.metrics(today,today);
         assertThat(report.managerReviewedOutputs()).isEqualTo(1);

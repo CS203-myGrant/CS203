@@ -53,7 +53,9 @@ public class ImpactReviewController {
         return service.publishCorrection(id, principal.getName(), correction);
     }
 
-    public record Correction(@NotBlank String severity, @Min(0) @Max(100) int confidence,
+    public record Correction(@NotBlank
+            @jakarta.validation.constraints.Pattern(regexp = "HIGH|MEDIUM|LOW|NOT_APPLICABLE")
+            @io.swagger.v3.oas.annotations.media.Schema(implementation = ImpactUrgency.class) String severity, @Min(0) @Max(100) int confidence,
             @NotBlank @Size(max = 1500) String summary,
             @NotNull List<@NotBlank String> analysis,
             @NotNull List<@NotBlank String> actionItems,

@@ -85,7 +85,8 @@ class ProfileImpactAssessmentServiceTests {
                 .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS).body("sensitive provider details"));
         ProfileImpactAssessment result = harness.service.assess("student@example.com", document(),
                 "DHS", "policy content", classification());
-        assertThat(result.urgency()).isEqualTo(ImpactUrgency.UNAVAILABLE);
+        assertThat(result.status()).isEqualTo(AssessmentStatus.UNAVAILABLE);
+        assertThat(result.urgency()).isNull();
         assertThat(result.summary()).contains("temporarily unavailable").doesNotContain("sensitive");
         assertThat(result.requiresHumanReview()).isTrue();
         harness.server.verify();
@@ -155,6 +156,40 @@ class ProfileImpactAssessmentServiceTests {
         assertThat(result.summary()).isEqualTo("Generated despite judge failure");
         assertThat(result.requiresHumanReview()).isTrue();
         assertThat(result.evaluation().verdict()).isEqualTo(JudgeEvaluation.Verdict.UNAVAILABLE);
+        harness.server.verify();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(ImpactUrgency.class)
+    void parsesEveryCanonicalModelSeverity(ImpactUrgency urgency) throws Exception {
+        Harness harness = harness();
+        String candidate = harness.candidateJson("Canonical result").replace("HIGH", urgency.name());
+        String response = new ObjectMapper().writeValueAsString(
+                Map.of("choices", List.of(Map.of("message", Map.of("content", candidate)))));
+        harness.server.expect(requestTo("https://api.openai.test/chat/completions"))
+                .andRespond(withSuccess(response, MediaType.APPLICATION_JSON));
+        when(harness.judge.evaluate(anyString(), any())).thenReturn(
+                new JudgeEvaluation(JudgeEvaluation.Verdict.YES, "Supported", "test-judge"));
+        var result = harness.service.assess("student@example.com", document(), "DHS", "policy content", classification());
+        assertThat(result.urgency()).isEqualTo(urgency);
+        assertThat(result.status()).isEqualTo(AssessmentStatus.COMPLETED);
+        harness.server.verify();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "CRITICAL", "WARNING", "INFORMATIONAL", "NO_IMPACT", "INFO", "UNAVAILABLE", "URGENT"})
+    void rejectsUnsupportedModelSeverityInsteadOfPersistingIt(String unsupported) throws Exception {
+        Harness harness = harness();
+        String candidate = harness.candidateJson("Invalid severity").replace("HIGH", unsupported);
+        String response = new ObjectMapper().writeValueAsString(
+                Map.of("choices", List.of(Map.of("message", Map.of("content", candidate)))));
+        harness.server.expect(requestTo("https://api.openai.test/chat/completions"))
+                .andRespond(withSuccess(response, MediaType.APPLICATION_JSON));
+        var result = harness.service.assess("student@example.com", document(), "DHS", "policy content", classification());
+        assertThat(result.status()).isEqualTo(AssessmentStatus.UNAVAILABLE);
+        assertThat(result.urgency()).isNull();
+        org.mockito.Mockito.verifyNoInteractions(harness.judge);
         harness.server.verify();
     }
 
@@ -228,7 +263,8 @@ class ProfileImpactAssessmentServiceTests {
         ProfileImpactAssessment result = service.assess("student@example.com", document(),
                 "DHS", "policy content", classification());
 
-        assertThat(result.urgency()).isEqualTo(ImpactUrgency.UNAVAILABLE);
+        assertThat(result.status()).isEqualTo(AssessmentStatus.UNAVAILABLE);
+        assertThat(result.urgency()).isNull();
         assertThat(result.summary()).contains("temporarily unavailable");
     }
 

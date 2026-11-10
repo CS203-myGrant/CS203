@@ -34,11 +34,13 @@ public class ImpactController {
 
     @GetMapping
     @Operation(summary = "List only your published impact assessments",
-            description = "Defaults to current assessments and CRITICAL-first ordering. Sort by severity or date.")
+            description = "Defaults to current assessments and HIGH-first ordering. Sort by severity or date.")
     @ApiResponse(responseCode = "200", description = "A page of published assessments")
     @ApiResponse(responseCode = "400", description = "Invalid filter, sort or page size")
     public Page<ImpactFeedService.ImpactView> list(Principal principal,
             @ParameterObject @PageableDefault(size = 20) Pageable pageable,
+            @io.swagger.v3.oas.annotations.Parameter(schema =
+                    @io.swagger.v3.oas.annotations.media.Schema(implementation = ImpactUrgency.class))
             @RequestParam(required = false) String severity,
             @RequestParam(defaultValue = "false") boolean archived) {
         return service.list(principal.getName(), pageable, severity, archived);

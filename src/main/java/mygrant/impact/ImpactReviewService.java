@@ -105,14 +105,13 @@ public class ImpactReviewService {
         if ("Policy extractor".equals(provider)) {
             return approveExtractionReview(id, reviewerId, versions.getFirst(), correction);
         }
-        String severity = correction.severity().toUpperCase(java.util.Locale.ROOT);
-        ImpactUrgency urgency = switch (severity) {
-            case "CRITICAL", "HIGH" -> ImpactUrgency.HIGH;
-            case "MEDIUM" -> ImpactUrgency.MEDIUM;
-            case "LOW" -> ImpactUrgency.LOW;
-            case "INFO" -> ImpactUrgency.NOT_APPLICABLE;
-            default -> throw new IllegalArgumentException("Unknown impact severity");
-        };
+        String severity = correction.severity().trim().toUpperCase(java.util.Locale.ROOT);
+        final ImpactUrgency urgency;
+        try {
+            urgency = ImpactUrgency.valueOf(severity);
+        } catch (IllegalArgumentException invalid) {
+            throw new IllegalArgumentException("Unknown impact severity", invalid);
+        }
         var corrected = new ProfileImpactAssessment(urgency, correction.confidence(),
                 correction.summary().trim(), List.copyOf(correction.analysis()),
                 List.copyOf(correction.actionItems()), List.copyOf(correction.missingInformation()),

@@ -150,7 +150,7 @@ public class ProfileImpactAssessmentService {
             throws Exception {
         RawAssessment raw = objectMapper.readValue(json, RawAssessment.class);
         ImpactUrgency urgency = ImpactUrgency.valueOf(raw.urgency());
-        if (urgency == ImpactUrgency.UNAVAILABLE || raw.summary() == null || raw.summary().isBlank()) {
+        if (raw.summary() == null || raw.summary().isBlank()) {
             throw new IllegalArgumentException("Invalid generator output");
         }
         return new ProfileImpactAssessment(urgency,
@@ -298,7 +298,7 @@ public class ProfileImpactAssessmentService {
         return Map.of(
                 "type", "object",
                 "properties", Map.of(
-                        "urgency", Map.of("type", "string", "enum", List.of("HIGH", "MEDIUM", "LOW", "NOT_APPLICABLE")),
+                        "urgency", Map.of("type", "string", "enum", ImpactUrgency.labels()),
                         "confidence", Map.of("type", "integer", "minimum", 0, "maximum", 100),
                         "summary", Map.of("type", "string"),
                         "reasons", Map.of("type", "array", "items", Map.of("type", "string")),
@@ -315,7 +315,7 @@ public class ProfileImpactAssessmentService {
     }
 
     private ProfileImpactAssessment unavailable(String summary, JudgeEvaluation evaluation, int attempts) {
-        return new ProfileImpactAssessment(ImpactUrgency.UNAVAILABLE, 0, summary,
+        return new ProfileImpactAssessment(null, 0, summary,
                 List.of(), List.of("Consult the official source and a qualified adviser."), List.of(), true,
                 "OpenAI", model, evaluation, attempts);
     }

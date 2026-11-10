@@ -8,9 +8,9 @@ public enum ActionPriority {
 
     static ActionPriority fromSeverity(String severity) {
         return switch (severity) {
-            case "CRITICAL", "HIGH" -> HIGH;
+            case "HIGH" -> HIGH;
             case "MEDIUM" -> MEDIUM;
-            case "LOW", "INFO" -> LOW;
+            case "LOW", "NOT_APPLICABLE" -> LOW;
             default -> throw new IllegalStateException("Unknown impact severity " + severity);
         };
     }

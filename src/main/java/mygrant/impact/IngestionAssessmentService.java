@@ -79,7 +79,7 @@ public class IngestionAssessmentService {
             // Includes provider adapters that throw instead of returning the existing UNAVAILABLE result.
             result = generator.unavailable("Urgency assessment is temporarily unavailable.");
         }
-        boolean unavailable = result.urgency() == ImpactUrgency.UNAVAILABLE;
+        boolean unavailable = result.status() == AssessmentStatus.UNAVAILABLE;
         boolean requiresReview = result.requiresHumanReview()
                 || (!unavailable && result.confidence() < properties.reviewConfidenceThreshold());
         ImpactAssessment saved = new ImpactAssessment(profile.getUserId(), policyId, profile.getVersion(),

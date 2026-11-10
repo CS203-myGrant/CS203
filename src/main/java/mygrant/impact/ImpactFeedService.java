@@ -114,7 +114,6 @@ public class ImpactFeedService {
             case MEDIUM -> 3;
             case LOW -> 2;
             case NOT_APPLICABLE -> 1;
-            case UNAVAILABLE -> 0;
         };
     }
 
@@ -208,7 +207,7 @@ public class ImpactFeedService {
         boolean ascending = pageable.getSort().stream().findFirst()
                 .map(org.springframework.data.domain.Sort.Order::isAscending).orElse(false);
         String direction = ascending ? "ASC" : "DESC";
-        String severityRank = "CASE r.severity WHEN 'CRITICAL' THEN 5 WHEN 'HIGH' THEN 4 "
+        String severityRank = "CASE r.severity WHEN 'HIGH' THEN 4 "
                 + "WHEN 'MEDIUM' THEN 3 WHEN 'LOW' THEN 2 ELSE 1 END";
         return switch (property) {
             case "severity" -> severityRank + " " + direction + ", r.generated_at DESC, r.id DESC";
@@ -219,7 +218,7 @@ public class ImpactFeedService {
 
     private String parseSeverity(String severity) {
         String normalized = severity.trim().toUpperCase(java.util.Locale.ROOT);
-        if (!List.of("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO").contains(normalized)) {
+        if (!ImpactUrgency.labels().contains(normalized)) {
             throw new IllegalArgumentException("Unknown impact severity");
         }
         return normalized;
@@ -238,7 +237,7 @@ public class ImpactFeedService {
     public record ConsolidatedAssessment(ImpactUrgency netStatus, List<Citation> citations,
             List<String> uncertaintyNotes, List<ImpactView> breakdown) {}
     public record ImpactView(long id, long policyId, String policyTitle, String policyAgency,
-            String severity, ImpactUrgency urgency, boolean requiresHumanReview,
+            @io.swagger.v3.oas.annotations.media.Schema(implementation = ImpactUrgency.class) String severity, ImpactUrgency urgency, boolean requiresHumanReview,
             String summary, int confidence, String confidenceLabel,
             List<String> analysis, List<String> missingInformation, List<Citation> citations,
             List<ActionItemView> actionItems, boolean reviewedByHuman, Instant reviewedAt,
