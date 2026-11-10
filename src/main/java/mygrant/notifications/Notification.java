@@ -51,10 +51,6 @@ public class Notification {
     @Column(name = "affected_fields")
     private String affectedFields;
 
-    /** Set by profile impact assessment (HIGH, MEDIUM, ...); null until that runs per recipient. */
-    @Column(name = "impact_severity", length = 20, insertable = false, updatable = false)
-    private String impactSeverity;
-
     /**
      * The alert email carrying this notification, claimed by a conditional update so it is
      * emailed at most once. Read-only here: the entity is saved with full-row updates, so a
@@ -85,7 +81,6 @@ public class Notification {
     public Instant getReadAt() { return readAt; }
     public boolean isActionRequired() { return actionRequired; }
     public int getProfileVersion() { return profileVersion; }
-    public String getImpactSeverity() { return impactSeverity; }
     public UUID getEmailDeliveryId() { return emailDeliveryId; }
 
     public List<ProfileField> getAffectedFields() {

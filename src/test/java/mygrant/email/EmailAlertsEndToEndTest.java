@@ -39,7 +39,7 @@ class EmailAlertsEndToEndTest extends EmailIntegrationTestBase {
         User user = applicant();
         Notification notice = publishPolicy("Fee schedule notice", user).get(0);
         Notification urgent = publishPolicy("Status change rule", user).get(0);
-        rateHigh(urgent);
+        requireAction(urgent);
 
         // Immediate: only the critical alert, and running the job again queues nothing more.
         assertThat(immediateQueue.queueDueFor(user.getId(), now)).isEqualTo(1);
@@ -109,7 +109,7 @@ class EmailAlertsEndToEndTest extends EmailIntegrationTestBase {
         user.setWorkosUserId(null);
         users.saveAndFlush(user);
         Notification urgent = publishPolicy("Unverified rule", user).get(0);
-        rateHigh(urgent);
+        requireAction(urgent);
         publishPolicy("Unverified notice", user);
 
         assertThat(immediateQueue.queueDueFor(user.getId(), now)).isZero();

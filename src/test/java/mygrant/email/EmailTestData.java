@@ -55,11 +55,6 @@ final class EmailTestData {
         return notification;
     }
 
-    static Notification withSeverity(Notification notification, String severity) {
-        ReflectionTestUtils.setField(notification, "impactSeverity", severity);
-        return notification;
-    }
-
     static Notification inDelivery(Notification notification, UUID deliveryId) {
         ReflectionTestUtils.setField(notification, "emailDeliveryId", deliveryId);
         return notification;
