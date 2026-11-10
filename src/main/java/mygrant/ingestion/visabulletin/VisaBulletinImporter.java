@@ -4,6 +4,8 @@ import java.time.YearMonth;
 import java.time.Instant;
 
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 
 import mygrant.ingestion.connector.ConnectorFetch;
 import mygrant.ingestion.connector.ConnectorHealth;
@@ -20,12 +22,21 @@ public class VisaBulletinImporter implements DataConnector<YearMonth, String,
     private final VisaBulletinClient client;
     private final VisaBulletinParser parser;
     private final VisaBulletinStore store;
+    private final ApplicationEventPublisher events;
 
+    @Autowired
     public VisaBulletinImporter(VisaBulletinClient client, VisaBulletinParser parser,
-            VisaBulletinStore store) {
+            VisaBulletinStore store, ApplicationEventPublisher events) {
         this.client = client;
         this.parser = parser;
         this.store = store;
+        this.events = events;
+    }
+
+    /** Compatibility constructor for isolated connector tests. */
+    public VisaBulletinImporter(VisaBulletinClient client, VisaBulletinParser parser,
+            VisaBulletinStore store) {
+        this(client, parser, store, null);
     }
 
     public Result importMonth(YearMonth month) {
@@ -53,8 +64,9 @@ public class VisaBulletinImporter implements DataConnector<YearMonth, String,
     @Override
     public Result persistDeduplicated(PreparedBulletin prepared, YearMonth month) {
         VisaBulletinParser.Bulletin bulletin = prepared.bulletin();
-        return new Result(bulletin.publicationMonth(),
-                store.save(bulletin, prepared.contentHash()), bulletin.sourceUrl());
+        int count = store.save(bulletin, prepared.contentHash());
+        if (events != null) events.publishEvent(new BulletinImported(bulletin.publicationMonth()));
+        return new Result(bulletin.publicationMonth(), count, bulletin.sourceUrl());
     }
 
     @Override
@@ -115,4 +127,5 @@ public class VisaBulletinImporter implements DataConnector<YearMonth, String,
     public record Result(YearMonth publicationMonth, int entriesProcessed, String sourceUrl) {}
 
     public record PreparedBulletin(VisaBulletinParser.Bulletin bulletin, String contentHash) {}
+    public record BulletinImported(YearMonth month) {}
 }
