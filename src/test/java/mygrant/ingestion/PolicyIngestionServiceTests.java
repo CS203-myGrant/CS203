@@ -78,6 +78,7 @@ class PolicyIngestionServiceTests {
         assertThat(response.chunksIndexed()).isPositive();
         assertThat(response.alreadyIndexed()).isFalse();
         verify(vectorStore).add(any());
+        verify(eventPublisher).publishEvent(new mygrant.impact.PolicyAssessmentRequested(1L));
         verify(eventPublisher).publishEvent(argThat((Object event) -> event instanceof PolicyIndexedEvent indexed
                 && indexed.policyId().equals(1L) && indexed.visaTypes().equals(java.util.List.of("F-1"))));
         verify(ruleTracker).track(argThat(policy -> policy.getId().equals(1L)), eq(java.util.Set.of()),
@@ -295,7 +296,8 @@ class PolicyIngestionServiceTests {
 
         verify(vectorStore).add(argThat(chunks -> chunks.stream()
                 .allMatch(chunk -> "SECONDARY".equals(chunk.getMetadata().get("sourceType")))));
-        verify(eventPublisher, never()).publishEvent(any(Object.class));
+        verify(eventPublisher, never()).publishEvent(any(PolicyIndexedEvent.class));
+        verify(eventPublisher).publishEvent(new mygrant.impact.PolicyAssessmentRequested(2L));
     }
 
     private IngestPolicyRequest request() {

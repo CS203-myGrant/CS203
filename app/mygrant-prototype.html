@@ -3373,9 +3373,9 @@ function renderProofGrid(ingest, result, evidenceItems){
     </div>
     <div class="proof-card">
       <div class="proof-kicker">STEP 3 &middot; PROFILE IMPACT</div>
-      <h3>${impact ? escapeHtml(formatUrgency(impact.urgency)) : 'Waiting for import'}</h3>
-      <p>${impact ? escapeHtml(impact.summary) : 'Groq compares the imported source with the signed-in user profile.'}</p>
-      <span class="live-pill ${impact && impact.urgency!=='UNAVAILABLE'?'pass':''}">${impact ? (impact.urgency==='UNAVAILABLE' ? 'Human review required' : `${escapeHtml(impact.confidence)}% model-reported confidence`) : 'Waiting'}</span>
+      <h3>${impact ? escapeHtml(formatUrgency(impact.urgency)) : (ingest ? 'Assessment queued' : 'Waiting for import')}</h3>
+      <p>${impact ? escapeHtml(impact.summary) : (ingest ? 'Assessments run in the background for matching profiles after a new import.' : 'Import a policy to assess its impact on matching profiles.')}</p>
+      <span class="live-pill ${impact && impact.urgency!=='UNAVAILABLE'?'pass':''}">${impact ? (impact.urgency==='UNAVAILABLE' ? 'Human review required' : `${escapeHtml(impact.confidence)}% model-reported confidence`) : (ingest ? 'Background processing' : 'Waiting')}</span>
     </div>
     <div class="proof-card">
       <div class="proof-kicker">STEP 4 &middot; RAG ANSWER</div>

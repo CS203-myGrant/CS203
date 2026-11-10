@@ -2,6 +2,9 @@
 # Scheduled email jobs never run in tests; tests call the email services directly. Nor does the
 # startup rule backfill, which would link documents other tests create; PolicyRuleBackfillTest runs it.
 mygrant:
+  # Async assessment integration tests opt in with mocked providers.
+  impact:
+    assessments-enabled: false
   email:
     jobs-enabled: false
   rules:
