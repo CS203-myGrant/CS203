@@ -656,6 +656,9 @@ const initialState = () => ({
   forecastSeries: {},
   forecastAlerts: null,
   forecastAlertsError: null,
+  visaTracking: null,
+  visaTrackingError: null,
+  visaTrackingBusy: false,
   actionsError: null,
   actionsLoading: false,
   actionsTab: 'active',
@@ -810,8 +813,9 @@ function renderProfileCompletion(){
       <div class="field"><label for="workos-opt-start">OPT start date (Optional)</label><input id="workos-opt-start" type="date"></div>
       <div class="field"><label for="workos-i140-date">I-140 filing date (Optional)</label><input id="workos-i140-date" type="date"></div>
       <div class="field"><label for="workos-travel-date">Upcoming travel date (Optional)</label><input id="workos-travel-date" type="date"></div>
-      <div class="field"><label for="workos-immigrant-category">Immigrant category (Optional)</label><input id="workos-immigrant-category" placeholder="e.g. EB-2"></div>
-      <div class="field"><label for="workos-chargeability">Chargeability area (Optional)</label><input id="workos-chargeability" placeholder="Country of chargeability"></div>
+      <div class="field"><label for="workos-immigrant-category">Immigrant category (Optional)</label><input id="workos-immigrant-category" list="immigrant-category-options" placeholder="e.g. EB-2"></div>
+      <div class="field"><label for="workos-chargeability">Chargeability area (Optional)</label><select id="workos-chargeability"><option value="">Choose the Visa Bulletin chart column</option>${['ALL CHARGEABILITY AREAS EXCEPT THOSE LISTED','CHINA-MAINLAND BORN','INDIA','MEXICO','PHILIPPINES'].map(area=>`<option value="${area}">${area}</option>`).join('')}</select></div>
+      <datalist id="immigrant-category-options">${['EB-1','EB-2','EB-3','EB-3 Other Workers','EB-4','EB-4 Religious Workers','EB-5','EB-5 Rural','EB-5 High Unemployment','EB-5 Infrastructure','F1','F2A','F2B','F3','F4'].map(value=>`<option value="${value}">`).join('')}</datalist>
       <div class="field"><label for="workos-priority-date">Priority date (Optional)</label><input id="workos-priority-date" type="date"></div>
       <datalist id="workos-country-options">${countryOptions()}</datalist>
       ${onboardingConsentControls()}
@@ -825,6 +829,12 @@ async function submitProfileCompletion(event){
   error.style.display='none';
   try{
     const consentedFields = selectedConsentFields();
+    const visaError=visaBulletinEntryError({
+      immigrantCategory:document.getElementById('workos-immigrant-category').value.trim(),
+      chargeabilityArea:document.getElementById('workos-chargeability').value,
+      priorityDate:document.getElementById('workos-priority-date').value
+    },consentedFields);
+    if(visaError) throw new Error(visaError);
     const response=await apiFetch('/api/v1/profiles/me',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       visaType:document.getElementById('workos-visa').value,
       countryOfOrigin:document.getElementById('workos-origin').value.trim() || null,
@@ -1306,6 +1316,7 @@ function goto(view, param){
   }
   if (view === 'profile') {
     loadProfile();
+    loadVisaTracking();
     loadImmigrationDocuments();
     loadEmailPreferences();
     loadTestClock();
@@ -1318,7 +1329,7 @@ function goto(view, param){
   updateBreadcrumb(view);
   render();
   // Reload both on every visit so a policy imported since login shows up here.
-  if(view==='dashboard'){ loadPolicies(); loadNotifications(); loadImpacts(); loadActions(); loadForecasts(); loadForecastAlerts(); loadTestClock(); }
+  if(view==='dashboard'){ loadPolicies(); loadNotifications(); loadImpacts(); loadActions(); loadForecasts(); loadForecastAlerts(); loadVisaTracking(); loadTestClock(); }
   if(view==='manager' && state.role==='manager') loadManagerDashboard();
   if(view==='queue' && state.role==='manager') loadReviewQueue();
   if(view==='admin' && state.role==='admin'){ loadAdminUsers(); loadAdminSources(); loadAdminMetrics(); loadTestClock(); loadPolicies(); }
@@ -1511,6 +1522,7 @@ function renderLiveDashboard(){
     </div>
 
     ${renderProcessingTimeline()}
+    ${renderVisaTrackingDashboard()}
     <div class="block-label">Notifications${state.unreadCount ? ` &middot; ${state.unreadCount} unread` : ''}</div>
     ${state.forecastAlertsError ? `<div class="rag-error">${escapeHtml(state.forecastAlertsError)}</div>` : ''}
     ${forecastAlertRows}
@@ -1529,6 +1541,91 @@ function renderLiveDashboard(){
       : policyRows || `<div class="empty"><div class="big">${state.impactsArchived?'No archived policy assessments':'No matching policies yet'}</div>${state.impactsArchived?'Archived assessments will appear here.':'Import a Federal Register document from the RAG inspector.'}</div>`}
 
     ${renderActionChecklist()}`;
+}
+
+async function loadVisaTracking(){
+  if(state.role!=='student' || !state.user) return;
+  const account=state.user.email;
+  try{
+    const tracking=await parseApiResponse(await apiFetch('/api/v1/visa-bulletin/tracking'));
+    if(state.user?.email!==account || state.role!=='student') return;
+    state.visaTracking=tracking;
+    state.visaTrackingError=null;
+  }catch(error){
+    if(state.user?.email!==account || state.role!=='student') return;
+    state.visaTrackingError=error.message;
+  }
+  if(['dashboard','profile'].includes(state.view)) render();
+}
+
+async function setVisaTracking(enabled){
+  if(state.visaTrackingBusy) return;
+  state.visaTrackingBusy=true;
+  render();
+  try{
+    state.visaTracking=await parseApiResponse(await apiFetch('/api/v1/visa-bulletin/tracking',{
+      method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({enabled})
+    }));
+    state.visaTrackingError=null;
+    showToast(enabled ? 'Visa Bulletin updates enabled.' : 'Visa Bulletin updates turned off.');
+  }catch(error){
+    state.visaTrackingError=error.message;
+    showToast(error.message);
+  }finally{
+    state.visaTrackingBusy=false;
+    if(['dashboard','profile'].includes(state.view)) render();
+  }
+}
+
+function visaCutoffLabel(row){
+  return row.cutoffKind==='CURRENT' ? 'Current (C)' : row.cutoffKind==='UNAVAILABLE'
+    ? 'Unavailable (U)' : formatDate(row.cutoffDate);
+}
+
+function renderVisaTrackingDashboard(){
+  const tracking=state.visaTracking;
+  if(state.visaTrackingError) return `<div class="rag-error" role="alert">Visa Bulletin updates: ${escapeHtml(state.visaTrackingError)}</div>`;
+  if(!tracking) return '<div class="block-label">Visa Bulletin updates</div><p class="sub">Loading your tracking settings...</p>';
+  if(!tracking.enabled) return `<div class="block-label">Visa Bulletin updates</div>
+    <div class="empty">Pursuing a family or employment based green card? You can track changes to your immigrant category's cutoff in <button class="btn ghost small" onclick="goto('profile')">Your profile</button>. OPT and H-1B alone do not use these charts.</div>`;
+  const cutoffs=(tracking.currentCutoffs || []).map(row=>`<li>${escapeHtml(row.chartType==='FINAL_ACTION'?'Final action dates':'Dates for filing')}: <strong>${escapeHtml(visaCutoffLabel(row))}</strong></li>`).join('');
+  const alerts=(tracking.alerts || []).map(alert=>`<div class="entry urgency-low"><div class="flag"></div>
+    <div class="entry-case">${escapeHtml(alert.publicationMonth)}<br>${escapeHtml(alert.chartType==='FINAL_ACTION'?'Final action':'Dates for filing')}</div>
+    <div class="entry-body"><h3>Visa Bulletin cutoff changed</h3><p>${escapeHtml(alert.message)}</p></div>
+    <div class="entry-action"><a class="btn ghost small" href="${escapeAttribute(alert.sourceUrl)}" target="_blank" rel="noopener noreferrer">Official source</a></div></div>`).join('');
+  return `<div class="block-label">Visa Bulletin updates</div>
+    <p class="sub">Tracking ${escapeHtml(tracking.category)} / ${escapeHtml(tracking.chargeabilityArea)} with priority date ${escapeHtml(formatDate(tracking.priorityDate))}.</p>
+    ${tracking.latestMonth ? `<p class="sub">Latest imported month: ${escapeHtml(tracking.latestMonth)}.</p>${cutoffs ? `<ul>${cutoffs}</ul>` : '<p class="sub">No matching cutoff is stored yet.</p>'}` : '<p class="sub">An admin has not imported a bulletin yet.</p>'}
+    ${alerts || '<div class="empty">No cutoff changes for your selected chart row yet.</div>'}
+    <p class="rag-status">These are published chart values, not a filing eligibility decision. Check the official bulletin and USCIS chart selection.</p>`;
+}
+
+function visaTrackingMissing(profile){
+  const required=[
+    [profile.immigrantCategory, 'immigrant category'],
+    [profile.chargeabilityArea, 'chargeability area'],
+    [profile.priorityDate, 'priority date'],
+    [profile.consents?.IMMIGRANT_CATEGORY, 'immigrant category consent'],
+    [profile.consents?.CHARGEABILITY_AREA, 'chargeability area consent'],
+    [profile.consents?.PRIORITY_DATE, 'priority date consent']
+  ];
+  return required.filter(([saved])=>!saved).map(([,label])=>label);
+}
+
+function renderVisaTrackingSettings(){
+  const tracking=state.visaTracking;
+  const profile=state.profile || {};
+  const missing=visaTrackingMissing(profile);
+  const ready=missing.length===0;
+  return `<section class="detail-card" style="margin-top:24px;">
+    <h2>Optional green-card date tracking</h2>
+    <p>Track monthly Visa Bulletin cutoff changes for your saved immigrant category, chargeability column and priority date. This is separate from OPT and H-1B work authorization.</p>
+    ${state.visaTrackingError?`<p class="rag-error" role="alert">${escapeHtml(state.visaTrackingError)}</p>`:''}
+    ${!tracking && !state.visaTrackingError?'<p class="sub">Loading tracking settings...</p>':tracking?.enabled
+      ? `<p>Tracking is on for ${escapeHtml(tracking.category)} / ${escapeHtml(tracking.chargeabilityArea)}.</p><button class="btn ghost small" type="button" onclick="setVisaTracking(false)" ${state.visaTrackingBusy?'disabled':''}>Turn off updates</button>`
+      : `<p>${ready?'Your profile has the required details.':`Your saved profile still needs: ${missing.map(escapeHtml).join(', ')}. Fill those fields and tick their consent boxes above, then save the profile. Other consent boxes are optional for this feature.`}</p><button class="btn small" type="button" onclick="setVisaTracking(true)" ${state.visaTrackingBusy?'disabled':''}>Turn on updates</button>`}
+    <p class="rag-status">Alerts explain chart changes; they do not confirm whether you can file. An admin imports official HTML when a new monthly bulletin is published.</p>
+  </section>`;
 }
 
 async function loadForecastAlerts(){
@@ -2350,12 +2447,19 @@ function renderProfileForm(){
 
       <div class="field">
         <label for="profile-immigrant-category">Immigrant category</label>
-        <input id="profile-immigrant-category" placeholder="e.g. EB-2" value="${escapeAttribute(profile.immigrantCategory || '')}">
+        <input id="profile-immigrant-category" list="immigrant-category-options" placeholder="e.g. EB-2 (not F-1 student status)" value="${escapeAttribute(profile.immigrantCategory || '')}">
+        <datalist id="immigrant-category-options">${['EB-1','EB-2','EB-3','EB-3 Other Workers','EB-4','EB-4 Religious Workers','EB-5','EB-5 Rural','EB-5 High Unemployment','EB-5 Infrastructure','F1','F2A','F2B','F3','F4'].map(value=>`<option value="${value}">`).join('')}</datalist>
+        <small>Use the immigrant preference category from your case. Family F1 is different from F-1 student status.</small>
       </div>
 
       <div class="field">
         <label for="profile-chargeability">Chargeability area</label>
-        <input id="profile-chargeability" placeholder="Country of chargeability" value="${escapeAttribute(profile.chargeabilityArea || '')}">
+        <select id="profile-chargeability">
+          <option value="">Choose the Visa Bulletin chart column</option>
+          ${profile.chargeabilityArea && !['ALL CHARGEABILITY AREAS EXCEPT THOSE LISTED','CHINA-MAINLAND BORN','INDIA','MEXICO','PHILIPPINES'].includes(String(profile.chargeabilityArea).toUpperCase()) ? `<option value="${escapeAttribute(profile.chargeabilityArea)}" selected>${escapeHtml(profile.chargeabilityArea)} (choose a chart column to track)</option>` : ''}
+          ${['ALL CHARGEABILITY AREAS EXCEPT THOSE LISTED','CHINA-MAINLAND BORN','INDIA','MEXICO','PHILIPPINES'].map(area=>`<option value="${area}" ${String(profile.chargeabilityArea || '').toUpperCase()===area?'selected':''}>${area}</option>`).join('')}
+        </select>
+        <small>Choose the column that applies to your case; it is usually based on country of birth, not citizenship.</small>
       </div>
 
       <div class="field"><label for="profile-academic-level">Academic level (Optional)</label><input id="profile-academic-level" value="${escapeAttribute(profile.academicLevel || '')}"></div>
@@ -2367,12 +2471,15 @@ function renderProfileForm(){
       <div class="form-actions">
         <button class="btn" type="submit">Save profile</button>
       </div>
+      <div id="profile-save-error" class="rag-error" role="alert" style="display:none;grid-column:1/-1;"></div>
     </form>
   `;
 }
 
 async function saveProfile(event){
   event.preventDefault();
+  const errorBox=document.getElementById('profile-save-error');
+  if(errorBox) errorBox.style.display='none';
 
   const value = id => document.getElementById(id).value.trim();
   const payload = {
@@ -2398,6 +2505,12 @@ async function saveProfile(event){
     consentedFields: selectedConsentFields()
   };
 
+  const visaError=visaBulletinEntryError(payload,payload.consentedFields);
+  if(visaError){
+    if(errorBox){ errorBox.textContent=visaError; errorBox.style.display='block'; }
+    return;
+  }
+
   try{
     const response = await apiFetch('/api/v1/profiles/me', {
       method: 'PUT',
@@ -2410,10 +2523,23 @@ async function saveProfile(event){
     state.ragVisaType = state.profile.visaType || 'F-1';
 
     showToast(`Profile saved (version ${state.profile.version}).`);
+    await loadVisaTracking();
     render();
   }catch(error){
+    if(errorBox){ errorBox.textContent=`Profile was not saved: ${error.message}`; errorBox.style.display='block'; }
     showToast(error.message);
   }
+}
+
+function visaBulletinEntryError(values,consentedFields){
+  const fields=[
+    ['IMMIGRANT_CATEGORY','immigrant category',values.immigrantCategory],
+    ['CHARGEABILITY_AREA','chargeability area',values.chargeabilityArea],
+    ['PRIORITY_DATE','priority date',values.priorityDate]
+  ];
+  if(!fields.some(([key])=>consentedFields.includes(key))) return null;
+  const missing=fields.filter(([, , value])=>!value).map(([,label])=>label);
+  return missing.length ? `The consent boxes do not fill in your profile. Enter ${missing.join(', ')} above before saving.` : null;
 }
 
 function selectedConsentFields(){
@@ -2498,7 +2624,7 @@ function profileConsentControls(profile){
   ];
   return `<section class="consent-panel">
     <h2>Consent and removal</h2>
-    <p class="sub">Only populated fields with your consent are included in future assessments. Remove a saved optional field to withdraw it.</p>
+    <p class="sub">Only populated fields with your consent are included in future assessments. A checked box without a value is not saved. Remove a saved optional field to withdraw it.</p>
     <div class="consent-list">
     ${fields.map(([name, key, purpose, required]) => `<div class="consent-entry">${consentControl(name, purpose, required, Boolean(consents[name]))}
       ${!required && profile[key] ? `<button class="btn ghost small consent-card__remove" type="button" onclick="withdrawProfileField('${name}')">Remove</button>` : ''}</div>`).join('')}
@@ -2787,6 +2913,8 @@ function renderAccountProfile(){
     </div>
 
     ${renderProfileForm()}
+
+    ${renderVisaTrackingSettings()}
 
     ${renderEmailPreferences()}
 
@@ -3150,17 +3278,17 @@ function renderVisaBulletin(){
     <td>${escapeHtml(bulletinCutoff(entry))}</td>
   </tr>`).join('');
   const rawError = health?.errorMessage || '';
-  const healthError = rawError.includes('403 Forbidden')
-    ? 'The official website refused the automated download (HTTP 403). Save the official HTML page and import it below.'
-    : rawError.slice(0,240);
+  const needsManualImport = rawError.includes('403 Forbidden');
+  const healthError = needsManualImport ? '' : rawError.slice(0,240);
   return `
     <div class="page-head"><h1>Visa Bulletin</h1>
-      <p class="sub">Admin inspection of imported monthly cutoff charts. These values are not shown to applicants.</p></div>
+      <p class="sub">Admins inspect imported monthly cutoff charts. Opted-in applicants see only their matching chart values.</p></div>
     <div class="stat-row">
-      <div class="stat-box"><div class="lbl">Import health</div><div class="num" style="font-size:25px;">${escapeHtml(health?.status || 'Loading')}</div></div>
+      <div class="stat-box"><div class="lbl">Import health</div><div class="num" style="font-size:25px;">${escapeHtml(needsManualImport ? 'MANUAL IMPORT NEEDED' : health?.status || 'Loading')}</div></div>
       <div class="stat-box"><div class="lbl">Last successful import</div><div style="margin-top:10px;">${health?.lastSuccessAt ? escapeHtml(formatTimestamp(health.lastSuccessAt)) : 'None yet'}</div></div>
       <div class="stat-box"><div class="lbl">Stored rows for ${escapeHtml(month)}</div><div class="num">${all.length}</div></div>
     </div>
+    ${needsManualImport ? '<p class="rag-status">The prior server download received HTTP 403. Open the official page in your browser, save its HTML, and import it below.</p>' : ''}
     ${healthError ? `<div class="rag-error">${escapeHtml(healthError)}</div>` : ''}
     ${state.bulletinError ? `<div class="rag-error">${escapeHtml(state.bulletinError)}</div>` : ''}
     ${state.bulletinMessage ? `<p role="status">${escapeHtml(state.bulletinMessage)}</p>` : ''}
@@ -3168,14 +3296,13 @@ function renderVisaBulletin(){
       <div class="field"><label for="bulletin-month">Publication month</label>
         <input id="bulletin-month" type="month" value="${escapeAttribute(month)}" onchange="selectBulletinMonth(this.value)" ${state.bulletinLoading || state.bulletinImporting ? 'disabled' : ''}></div>
       <button class="btn ghost small" type="button" onclick="loadVisaBulletin()" ${state.bulletinLoading || state.bulletinImporting ? 'disabled' : ''}>Refresh</button>
-      <button class="btn small" type="button" onclick="importVisaBulletin(false)" ${state.bulletinLoading || state.bulletinImporting ? 'disabled' : ''}>Fetch official page</button>
       <a class="btn ghost small" href="${escapeAttribute(bulletinOfficialUrl(month))}" target="_blank" rel="noopener noreferrer">Open official page</a>
     </div>
     <div class="bulletin-controls">
       <div class="field"><label for="bulletin-file">Saved official HTML page</label>
         <input id="bulletin-file" type="file" accept=".html,.htm,text/html" ${state.bulletinImporting ? 'disabled' : ''}></div>
       <button class="btn ghost small" type="button" onclick="importVisaBulletin(true)" ${state.bulletinLoading || state.bulletinImporting ? 'disabled' : ''}>Import saved HTML</button>
-      <span>The saved page's publication month is detected automatically.</span>
+      <span>Save the complete official HTML page in your browser. Its publication month is detected automatically.</span>
     </div>
     ${state.bulletinImporting || state.bulletinLoading ? '<p class="rag-status">Loading bulletin data...</p>' : ''}
     ${health?.sourceUrl ? `<p>Reference page for last imported month: <a href="${escapeAttribute(health.sourceUrl)}" target="_blank" rel="noopener noreferrer">Official Visa Bulletin</a> (${escapeHtml(health.publicationMonth || '')})</p>` : ''}
@@ -3304,9 +3431,10 @@ function renderAdmin(){
   if(state.role !== 'admin' || state.user?.role !== 'ADMIN') return '<p>Administrator access is required.</p>';
   const rows = state.adminSources.map(source=>{
     const health = source.health;
+    const manual = source.type === 'VISA_BULLETIN';
     const failed = (health?.failureCount || 0) > 0 || health?.lastError;
-    const status = !health?.lastRunAt ? 'Not synced' : failed ? 'Needs attention' : 'Healthy';
-    const statusClass = !health?.lastRunAt || failed ? 'warn' : '';
+    const status = manual ? 'Manual import' : !health?.lastRunAt ? 'Not synced' : failed ? 'Needs attention' : 'Healthy';
+    const statusClass = manual ? '' : !health?.lastRunAt || failed ? 'warn' : '';
     return `<tr>
       <td><strong>${escapeHtml(source.name)}</strong><br><span class="tag">${escapeHtml(source.type)}</span></td>
       <td><span class="status-dot ${statusClass}">${escapeHtml(status)}</span><br><small>${source.enabled?'Enabled':'Disabled'}</small></td>
@@ -3314,10 +3442,11 @@ function renderAdmin(){
       <td>${health?.documentsFetched ?? 0}</td>
       <td>${health?.chunksVectorised ?? 0}</td>
       <td>${health?.failureCount ?? 0}</td>
-      <td><button class="btn ghost small" onclick="openSourceModal(${source.id})">Edit</button>
+      <td>${manual ? '<button class="btn ghost small" onclick="goto(\'visaBulletin\')">Import HTML</button>'
+        : `<button class="btn ghost small" onclick="openSourceModal(${source.id})">Edit</button>
         <button class="btn ghost small" onclick="toggleSource(${source.id},${!source.enabled})">${source.enabled?'Disable':'Enable'}</button>
-        <button class="btn small" onclick="syncSource(${source.id})" ${!source.enabled?'disabled':''}>Sync now</button></td>
-    </tr>${health?.lastError ? `<tr><td colspan="7"><div class="rag-error">${escapeHtml(health.lastError)}</div></td></tr>` : ''}`;
+        <button class="btn small" onclick="syncSource(${source.id})" ${!source.enabled?'disabled':''}>Sync now</button>`}</td>
+    </tr>${!manual && health?.lastError ? `<tr><td colspan="7"><div class="rag-error">${escapeHtml(health.lastError)}</div></td></tr>` : ''}`;
   }).join('');
   const userRows = state.adminUsers.map(user=>`
     <tr>

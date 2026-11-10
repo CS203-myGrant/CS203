@@ -61,6 +61,7 @@ public class OpenApiConfig {
                     + "the ADMIN or MANAGER role."),
             tag("Ingestion", "Admin-only policy imports, and the health of every source connector."),
             tag("Ingestion: Visa Bulletin", "Admin-only import and inspection of Visa Bulletin cutoff charts."),
+            tag("Visa Bulletin tracking", "Applicant opt-in, matching cutoff values and monthly change alerts."),
             tag("Ingestion: USCIS processing times", "Admin-only import of saved USCIS processing-time results."),
             tag("Ingestion: News RSS", "Admin-only import of the secondary immigration news feed."),
             tag("Admin", "Admin-only user management."),

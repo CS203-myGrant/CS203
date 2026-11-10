@@ -362,8 +362,8 @@ Swagger UI is available at `http://localhost:8080/swagger-ui.html`; see
 ### Import a Visa Bulletin
 
 Sign in as an admin, then open **Admin → Visa Bulletin**. The panel shows
-import health and saved cutoff entries for a publication month. It can attempt to
-fetch the official page or import a saved official HTML page. Applicants and managers cannot
+import health and saved cutoff entries for a publication month. Open the official page in a
+normal browser, save its complete HTML, and use **Import saved HTML**. Applicants and managers cannot
 access the panel or its API. Every `/api/v1/ingestion` request needs an admin JWT; an
 applicant's `$TOKEN` gets 403. Sign in as the [admin account](#admin-account-setup) with
 `.env` loaded:
@@ -375,23 +375,11 @@ ADMIN_TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
 ```
 
-Then (`YYYY-MM` is the bulletin publication month):
-
-```bash
-curl -X POST http://localhost:8080/api/v1/ingestion/visa-bulletin/2026-10 \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-curl http://localhost:8080/api/v1/ingestion/visa-bulletin/health \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-curl "http://localhost:8080/api/v1/ingestion/visa-bulletin/entries/2026-10?size=200" \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-```
-
-The entries come back as a [page](#pagination), 20 at a time unless you pass `size`; a
-month has about 150.
-
-If the Department of State blocks the server download (HTTP 403), use the
-**Open official page** link in the admin panel, save that page as HTML in a
-normal browser, and import the saved copy. The import detects the publication
+The server's direct HTML and PDF downloads currently receive HTTP 403 from the Department
+of State, so the scheduled source sync and bulk sync skip Visa Bulletin. The old direct
+fetch API remains available for a future permitted access route but is not used by the
+admin interface. Import the saved official page when each new monthly bulletin is
+published; publication is not necessarily on the first day of the month. The import detects the publication
 month from the page heading and rejects unrelated or incomplete HTML. This
 checks content and layout; it cannot prove where an uploaded file originated.
 The equivalent API request is:
@@ -402,13 +390,37 @@ curl -X POST http://localhost:8080/api/v1/ingestion/visa-bulletin/saved \
   --data-binary @saved-bulletin.html
 ```
 
+Check the import and saved rows (`YYYY-MM` is the publication month):
+
+```bash
+curl http://localhost:8080/api/v1/ingestion/visa-bulletin/health \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+curl "http://localhost:8080/api/v1/ingestion/visa-bulletin/entries/2026-10?size=200" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+The entries come back as a [page](#pagination), 20 at a time unless you pass `size`; a
+month has about 150.
+
 The importer saves the four family/employment cutoff charts in
 `visa_bulletin_entries`. A repeated import updates the same monthly keys. If
 the page is missing a chart or its layout changes, no partial chart is saved
 and health becomes `FAILED`; the last successful import time remains visible.
 This is immigrant preference data. The bulletin's family `F1` category is
-different from an `F-1` student visa, so it is not automatically matched to
-student profiles.
+different from an `F-1` student visa. A student's F-1 status alone does not
+enable tracking.
+
+Applicants may optionally turn on **Visa Bulletin updates** in Your profile after saving
+an immigrant preference category (such as `EB-2`), an exact chargeability chart column,
+and a priority date, with consent to use all three fields. This is separate from F-1,
+OPT and H-1B status. The applicant dashboard shows the latest saved chart cutoffs and,
+after a later monthly import changes their row, an in-app alert. The first imported month
+is a baseline; importing an older month does not announce a historical change. Re-imports
+update the same alert rather than duplicating it. Turning tracking off deletes its alerts.
+These are published cutoff changes, not eligibility or filing advice. The user must check
+the official bulletin and USCIS chart selection. `GET` and `PUT`
+`/api/v1/visa-bulletin/tracking` are authenticated applicant-only endpoints; `PUT` accepts
+`{"enabled":true}` or `{"enabled":false}`.
 
 The myGRANT application is available at `http://localhost:8080/`. Create an account
 there or sign in with an existing account. The browser stores the JWT in session storage

@@ -98,6 +98,8 @@ public class AccountPurgeService {
         if (forecastJdbc != null) {
             forecastJdbc.update("DELETE FROM forecast_deadline_alerts WHERE user_id=?", userId);
             forecastJdbc.update("DELETE FROM forecast_series_selections WHERE user_id=?", userId);
+            forecastJdbc.update("DELETE FROM visa_bulletin_alerts WHERE user_id=?", userId);
+            forecastJdbc.update("DELETE FROM visa_bulletin_subscriptions WHERE user_id=?", userId);
         }
         userProfileRepository.deleteRecommendationsByUserId(userId);
         userProfileRepository.deleteApplicationProgressByUserId(userId);
