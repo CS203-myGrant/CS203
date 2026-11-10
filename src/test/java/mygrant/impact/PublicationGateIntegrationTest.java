@@ -39,6 +39,7 @@ class PublicationGateIntegrationTest {
     @Autowired PolicyDocumentRepository policies;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper mapper;
+    @Autowired QualityMetricsService qualityMetrics;
     @MockBean ImpactJudgeService judge;
     User owner, admin;
     PolicyDocument policy;
@@ -209,5 +210,22 @@ class PublicationGateIntegrationTest {
         assertThat(held.evaluation().citationsValid()).isFalse();
         assertThat(held.publicationStatus()).isEqualTo("PENDING_REVIEW");
         assertThat(history.context(owner.getEmail(), policy.getId()).getLast().message()).contains("awaiting human review");
+    }
+
+    @Test void managerDecisionComparesWithLatestAnswerReevaluationRatherThanInitialRejection() throws Exception {
+        UUID id = answer("Supported after re-evaluation [1]", "NO");
+        stubAnswer("YES");
+        var approved = publication.evaluate(id);
+        admin.setRole(UserRole.MANAGER);
+        users.saveAndFlush(admin);
+        jdbc.update("INSERT INTO manager_user_memberships(manager_id,user_id) VALUES (?,?)", admin.getId(),owner.getId());
+        review.publishCorrection(approved.reviewId(),admin.getEmail(),new ImpactReviewController.Correction(
+                "INFO",90,"Human confirms the answer [1]",List.of(),List.of(),List.of()));
+        var today=LocalDate.now(java.time.ZoneOffset.UTC);
+        var report=qualityMetrics.metrics(today,today);
+        assertThat(report.managerReviewedOutputs()).isEqualTo(1);
+        assertThat(report.comparableManagerReviews()).isEqualTo(1);
+        assertThat(report.managerOverrides()).isZero();
+        assertThat(report.managerOverrideRate()).isZero();
     }
 }

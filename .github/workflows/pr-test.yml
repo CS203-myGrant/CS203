@@ -58,7 +58,7 @@ jobs:
         run: ./mvnw test -Dtest=OpenApiContractTest
 
       - name: Run tests and generate coverage report
-        # verify runs the Testcontainers pgvector flow, the permission matrix, and JaCoCo.
+        # verify includes evaluator persistence, publication, metrics fixtures, Testcontainers, and JaCoCo.
         run: ./mvnw verify
 
       - name: Upload JaCoCo coverage report
@@ -68,6 +68,13 @@ jobs:
           name: jacoco-coverage-report
           path: target/site/jacoco/
           if-no-files-found: warn
+
+      - name: Upload Maven test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maven-test-reports
+          path: target/surefire-reports/
 
       - name: Set up Node for dashboard tests
         uses: actions/setup-node@v4

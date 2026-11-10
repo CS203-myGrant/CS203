@@ -133,9 +133,11 @@ public class OutputPublicationService {
                 jdbc.update("UPDATE stored_ai_outputs SET review_id = ? WHERE id = ?", reviewId, output.id());
             } else if (reviewId != null) {
                 jdbc.update("""
-                        UPDATE policy_recommendations SET publication_status = ?, version = version + 1,
+                        UPDATE policy_recommendations SET publication_status = ?,
+                            assessment_json = jsonb_set(assessment_json::jsonb, '{evaluation}', ?::jsonb)::text,
+                            version = version + 1,
                             updated_at = CURRENT_TIMESTAMP WHERE id = ? AND reviewed_by_human = FALSE
-                        """, state, reviewId);
+                        """, state, json(evaluation), reviewId);
             }
             updateAnswer(output, passed ? read(output.candidate(), String.class)
                     : "This answer is awaiting human review. Please consult the original source or contact support.",
