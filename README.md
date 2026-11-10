@@ -2124,3 +2124,5 @@ the embedding model requires the same 1024 dimensions, or a matching change to
 `POST /api/v1/ingestion/embeddings/rebuild`.
 
 AI output evaluation (CS203-88): see [judge configuration, versioning, and limitations](docs/ai-output-evaluation.md).
+
+Admin quality dashboard (CS203-88): see [metrics API, date boundaries, denominators, and limitations](docs/admin-quality-metrics.md).

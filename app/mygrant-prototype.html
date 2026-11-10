@@ -698,6 +698,12 @@ const initialState = () => ({
   inboxLastSeen: 0,
   seenFeedbackMsgIds: [],
   adminUsers: [],
+  adminMetrics: null,
+  adminMetricsLoading: false,
+  adminMetricsError: null,
+  adminMetricsFrom: null,
+  adminMetricsTo: null,
+  adminMetricsRequest: 0,
   adminUsersLoading: false,
   adminUsersError: null,
   adminSources: [],
@@ -1281,6 +1287,10 @@ function startFeedbackBadgePoll(role){
 }
 
 function goto(view, param){
+  if(view === 'admin' && state.role !== 'admin'){
+    showToast('Administrator access is required.');
+    view = homeView();
+  }
   if(state.view==='applicationProgress' && view==='applicationProgress') return;
   if(!confirmApplicationLeave()) return;
   stopFeedbackPolling();
@@ -1309,7 +1319,7 @@ function goto(view, param){
   if(view==='dashboard'){ loadPolicies(); loadNotifications(); loadImpacts(); loadActions(); loadForecasts(); loadForecastAlerts(); loadTestClock(); }
   if(view==='manager' && state.role==='manager') loadManagerDashboard();
   if(view==='queue' && state.role==='manager') loadReviewQueue();
-  if(view==='admin' && state.role==='admin'){ loadAdminUsers(); loadAdminSources(); loadTestClock(); loadPolicies(); }
+  if(view==='admin' && state.role==='admin'){ loadAdminUsers(); loadAdminSources(); loadAdminMetrics(); loadTestClock(); loadPolicies(); }
   if(view==='anomalies' && state.role==='admin') loadAnomalies();
   if(view==='visaBulletin' && state.role==='admin'){ loadVisaBulletin(); }
   if(view==='feedback') openHumanFeedback();
@@ -3121,7 +3131,82 @@ function renderAnomalies(){
   const types=['ALL','EFFECTIVE_DATE_CONFLICT','UNCERTAIN_RULE_LINK','MALFORMED_SOURCE_DATA','CLASSIFICATION_FAILED']; const statuses=['ALL','OPEN','RESOLVED','IGNORED'];
   return `<div class="page-head"><h1>Anomalies</h1><p class="sub">Review conflicting or unreliable source data.</p></div><div class="form-grid"><div class="field"><label>Status</label><select onchange="state.anomalyStatus=this.value;loadAnomalies()">${statuses.map(x=>`<option ${state.anomalyStatus===x?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Type</label><select onchange="state.anomalyType=this.value;loadAnomalies()">${types.map(x=>`<option ${state.anomalyType===x?'selected':''}>${x}</option>`).join('')}</select></div></div><button class="btn ghost small anomaly-refresh" onclick="loadAnomalies()">Refresh</button><table><tr><th>Type</th><th>Details and related records</th><th>Reported</th><th>Action</th></tr>${rows||'<tr><td colspan="4">No anomalies match these filters.</td></tr>'}</table>`;
 }
+/* Admin quality metrics: the existing admin page owns the date filters and results. */
+async function loadAdminMetrics(){
+  if(state.role !== 'admin' || state.user?.role !== 'ADMIN'){
+    state.adminMetrics = null;
+    return;
+  }
+  if(!state.adminMetricsTo) state.adminMetricsTo = new Date().toISOString().slice(0,10);
+  if(!state.adminMetricsFrom){
+    const first = new Date(`${state.adminMetricsTo}T00:00:00Z`);
+    first.setUTCDate(first.getUTCDate()-29);
+    state.adminMetricsFrom = first.toISOString().slice(0,10);
+  }
+  state.adminMetricsError = null;
+  state.adminMetrics = null;
+  const request = ++state.adminMetricsRequest;
+  state.adminMetricsLoading = false;
+  if(state.adminMetricsFrom > state.adminMetricsTo){
+    state.adminMetricsError = 'Start date must be on or before end date.';
+    if(state.view === 'admin') render();
+    return;
+  }
+  const session = state;
+  state.adminMetricsLoading = true;
+  if(state.view === 'admin') render();
+  const current = () => state === session && state.role === 'admin' && state.user?.role === 'ADMIN'
+    && state.adminMetricsRequest === request;
+  try{
+    const query = new URLSearchParams({from:state.adminMetricsFrom,to:state.adminMetricsTo});
+    const metrics = await parseApiResponse(await apiFetch(`/api/v1/admin/metrics?${query}`));
+    if(current()) state.adminMetrics = metrics;
+  }catch(error){
+    if(current()) state.adminMetricsError = error.message;
+  }finally{
+    if(current()){
+      state.adminMetricsLoading = false;
+      if(state.view === 'admin') render();
+    }
+  }
+}
+function applyAdminMetricsRange(event){
+  event.preventDefault();
+  state.adminMetricsFrom = event.currentTarget.elements.from.value;
+  state.adminMetricsTo = event.currentTarget.elements.to.value;
+  return loadAdminMetrics();
+}
+function renderAdminMetrics(){
+  if(state.role !== 'admin' || state.user?.role !== 'ADMIN') return '';
+  const m = state.adminMetrics;
+  const rate = value => value == null ? 'No data' : `${(value*100).toFixed(1)}%`;
+  const score = value => value == null ? 'No data' : value.toFixed(3);
+  const card = (label,value,detail) => `<div class="stat-box"><div class="lbl">${label}</div><div class="num">${value}</div><p>${detail}</p></div>`;
+  return `<section aria-labelledby="quality-heading">
+    <div class="page-head"><h2 id="quality-heading">AI output quality</h2>
+      <p class="sub">Evaluation results and human review activity. Dates include both selected days in UTC.</p></div>
+    <form class="bulletin-controls" onsubmit="applyAdminMetricsRange(event)">
+      <div class="field"><label for="quality-from">Start date (UTC)</label><input id="quality-from" name="from" type="date" required value="${escapeAttribute(state.adminMetricsFrom || '')}"></div>
+      <div class="field"><label for="quality-to">End date (UTC)</label><input id="quality-to" name="to" type="date" required value="${escapeAttribute(state.adminMetricsTo || '')}"></div>
+      <button class="btn small" type="submit">Apply dates</button>
+    </form>
+    ${state.adminMetricsLoading ? '<p role="status">Loading quality metrics...</p>' : ''}
+    ${state.adminMetricsError ? `<div class="rag-error" role="alert">${escapeHtml(state.adminMetricsError)}</div>` : ''}
+    ${m ? `<p>${m.evaluatedVersions === 0 ? 'No evaluated versions in this date range.' : `${m.evaluatedVersions} evaluated content versions.`} Repeated evaluations use the latest result in the range; identical output content counts once.</p>
+      <div class="stat-row">
+        ${card('Pass rate',rate(m.passRate),`${m.passedVersions} / ${m.evaluatedVersions} versions; ${m.failedVersions} failed, ${m.unavailableVersions} unavailable.`)}
+        ${card('Average faithfulness',score(m.averageFaithfulness),`${m.faithfulnessSampleSize} scored versions; scale 0–1.`)}
+        ${card('Average relevance',score(m.averageRelevance),`${m.relevanceSampleSize} scored versions; scale 0–1.`)}
+        ${card('Pending review at range end',m.pendingReviewAtEnd,'Includes earlier backlog still pending at the end of the selected UTC day.')}
+        ${card('Entered review in range',m.reviewQueueEntries,'Distinct review records entering the queue; repeated entries count once.')}
+        ${card('Manager override rate',rate(m.managerOverrideRate),`${m.managerOverrides} / ${m.comparableManagerReviews} comparable decisions; ${m.managerReviewedOutputs} manager-reviewed records.`)}
+      </div>
+      <p class="sub">Unavailable evaluations count in the pass-rate denominator. Averages exclude missing scores. Manager comparisons exclude missing or unavailable automated verdicts and use the reviewer’s current role. Scores are model judgments, not proof of factual accuracy.</p>` : ''}
+  </section>`;
+}
+/* End admin quality metrics. */
 function renderAdmin(){
+  if(state.role !== 'admin' || state.user?.role !== 'ADMIN') return '<p>Administrator access is required.</p>';
   const rows = state.adminSources.map(source=>{
     const health = source.health;
     const failed = (health?.failureCount || 0) > 0 || health?.lastError;
@@ -3167,6 +3252,7 @@ function renderAdmin(){
     <button class="btn small" onclick="syncAllSources()" ${state.adminSources.length?'':'disabled'}>Sync all enabled</button>
     <div class="page-head" style="margin-top:42px;"><h2>User access</h2><p class="sub">Assign applicant, manager, or administrator access.</p></div>
     ${usersContent}
+    ${renderAdminMetrics()}
     ${renderTestClock('global')}
   `;
 }
