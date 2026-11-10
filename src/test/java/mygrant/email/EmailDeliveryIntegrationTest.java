@@ -40,7 +40,7 @@ class EmailDeliveryIntegrationTest extends EmailIntegrationTestBase {
         sender.failNext(FakeEmailSender.retryable("HTTP 503 service_unavailable"));
 
         Notification alert = publishPolicy("Outage rule", user).get(0);
-        requireAction(alert);
+        rateHigh(alert);
         UUID email = outbox.queueImmediate(user.getId(), alert.getId(), now).orElseThrow();
 
         // The alert exists and was pushed to open pages before email was even involved.
@@ -71,7 +71,7 @@ class EmailDeliveryIntegrationTest extends EmailIntegrationTestBase {
     void anOverlappingRunCannotClaimAnEmailBeingSentAndIsNotBlockedByIt() throws Exception {
         User user = applicant();
         Notification alert = publishPolicy("Overlap rule", user).get(0);
-        requireAction(alert);
+        rateHigh(alert);
         UUID email = outbox.queueImmediate(user.getId(), alert.getId(), now).orElseThrow();
         CountDownLatch inSend = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);

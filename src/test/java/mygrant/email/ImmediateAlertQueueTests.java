@@ -3,6 +3,7 @@ package mygrant.email;
 import static mygrant.email.EmailTestData.critical;
 import static mygrant.email.EmailTestData.informational;
 import static mygrant.email.EmailTestData.verifiedUser;
+import static mygrant.email.EmailTestData.withSeverity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -47,6 +48,15 @@ class ImmediateAlertQueueTests {
     @Test
     void queuesCriticalAlertsForUsersOnTheDefaultSettings() {
         Notification alert = critical(42L, 7L, NOW.minusSeconds(30));
+        candidates(List.of(alert), List.of(verifiedUser(7L)));
+        when(outbox.queueImmediate(7L, 42L, NOW)).thenReturn(Optional.of(UUID.randomUUID()));
+
+        assertThat(queue().queueDue(NOW)).isEqualTo(1);
+    }
+
+    @Test
+    void highImpactAlertsCountAsCritical() {
+        Notification alert = withSeverity(informational(42L, 7L, NOW), "HIGH");
         candidates(List.of(alert), List.of(verifiedUser(7L)));
         when(outbox.queueImmediate(7L, 42L, NOW)).thenReturn(Optional.of(UUID.randomUUID()));
 

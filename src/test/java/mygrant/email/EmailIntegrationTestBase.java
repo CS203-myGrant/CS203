@@ -125,9 +125,9 @@ abstract class EmailIntegrationTestBase {
         return created;
     }
 
-    /** Makes an alert require action so it uses the critical email setting. */
-    protected void requireAction(Notification notification) {
-        jdbc.update("UPDATE notifications SET action_required = TRUE WHERE id = ?", notification.getId());
+    /** Marks an alert as rated HIGH, which makes it critical; no rule flags these test policies. */
+    protected void rateHigh(Notification notification) {
+        jdbc.update("UPDATE notifications SET impact_severity = 'HIGH' WHERE id = ?", notification.getId());
     }
 
     protected UUID emailOf(Notification notification) {
