@@ -52,7 +52,7 @@ import mygrant.user.UserRole;
  */
 @WebMvcTest({PolicyController.class, RagController.class, VisaBulletinController.class,
         FeedbackController.class, ImmigrationDocumentController.class})
-@Import({SecurityConfig.class, JwtAuthenticationFilter.class})
+@Import({SecurityConfig.class, JwtAuthenticationFilter.class, QuestionRateLimiter.class})
 class ApiErrorResponsesTest {
     @MockBean mygrant.policies.PolicyQuestionHistory questionHistory;
 
