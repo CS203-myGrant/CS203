@@ -93,8 +93,8 @@ public class IngestionController {
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Import a Federal Register document",
             description = "Downloads the document, detects the F-1, J-1 and H-1B categories it affects, "
-                    + "indexes it and assesses its impact on the caller's profile.")
-    @ApiResponse(responseCode = "201", description = "Imported, with its classification and assessment")
+                    + "indexes it and queues assessments for every matching profile after commit.")
+    @ApiResponse(responseCode = "201", description = "Imported, with classification; profile assessments run asynchronously")
     @ApiResponse(responseCode = "400", description = "The document was not found, or affects no supported "
             + "visa category")
     public FederalRegisterIngestionResponse ingestFederalRegister(

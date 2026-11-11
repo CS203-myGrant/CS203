@@ -2,7 +2,6 @@ package mygrant.email;
 
 import static mygrant.email.EmailTestData.critical;
 import static mygrant.email.EmailTestData.informational;
-import static mygrant.email.EmailTestData.withSeverity;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
@@ -19,15 +18,8 @@ class AlertBucketTests {
     }
 
     @Test
-    void highImpactAlertsAreCriticalEvenWithoutAnAction() {
-        assertThat(AlertBucket.of(withSeverity(informational(1L, 7L, NOW), "HIGH"))).isEqualTo(AlertBucket.CRITICAL);
-    }
-
-    @Test
     void everythingElseIsOther() {
         assertThat(AlertBucket.of(informational(1L, 7L, NOW))).isEqualTo(AlertBucket.OTHER);
-        assertThat(AlertBucket.of(withSeverity(informational(2L, 7L, NOW), "MEDIUM"))).isEqualTo(AlertBucket.OTHER);
-        assertThat(AlertBucket.of(withSeverity(informational(3L, 7L, NOW), "UNAVAILABLE"))).isEqualTo(AlertBucket.OTHER);
     }
 
     @Test

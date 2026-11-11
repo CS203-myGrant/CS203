@@ -19,7 +19,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import mygrant.impact.ProfileImpactAssessmentService;
 import mygrant.ingestion.classification.VisaClassification;
 import mygrant.ingestion.classification.VisaTypeClassifier;
 import mygrant.ingestion.connector.DataConnector;
@@ -39,7 +38,6 @@ class FederalRegisterConnectorTest {
     @Mock private FederalRegisterClient client;
     @Mock private VisaTypeClassifier classifier;
     @Mock private PolicyIngestionService policyIngestion;
-    @Mock private ProfileImpactAssessmentService impactAssessment;
 
     @Test
     void connectorKeepsFederalRegisterImportAndDuplicateResult() {
@@ -72,9 +70,7 @@ class FederalRegisterConnectorTest {
         verify(policyIngestion).ingest(request.capture(), eq("F-1 student policy"), eq(java.util.Set.of()));
         assertThat(request.getValue().sourceType()).isEqualTo(SourceType.PRIMARY);
         assertThat(request.getValue().externalId()).isEqualTo(document.documentNumber());
-        verify(impactAssessment).assess(eq("admin@example.com"), eq(document),
-                eq("Department of Homeland Security"), eq("F-1 student policy"), any(),
-                org.mockito.ArgumentMatchers.argThat(context -> context.contains("affectedCountries: []")));
+        assertThat(result.impactAssessment()).isNull();
     }
 
     @Test
@@ -145,7 +141,7 @@ class FederalRegisterConnectorTest {
         when(client.downloadFullText(document.rawTextUrl())).thenReturn(content);
 
         var connector = new FederalRegisterIngestionService(client, new VisaTypeClassifier(),
-                policyIngestion, impactAssessment);
+                policyIngestion);
         var request = new FederalRegisterImportRequest(document.documentNumber(), "admin@example.com");
         var fetched = connector.fetch(request);
         var prepared = connector.transform(fetched, request);
@@ -196,7 +192,7 @@ class FederalRegisterConnectorTest {
         when(client.getDocument(document.documentNumber())).thenReturn(document);
         when(client.downloadFullText(document.rawTextUrl())).thenReturn(content);
         var connector = new FederalRegisterIngestionService(client, new VisaTypeClassifier(),
-                policyIngestion, impactAssessment);
+                policyIngestion);
         var request = new FederalRegisterImportRequest(document.documentNumber(), "admin@example.com");
         return connector.transform(connector.fetch(request), request);
     }
@@ -223,6 +219,6 @@ class FederalRegisterConnectorTest {
     }
 
     private FederalRegisterIngestionService service() {
-        return new FederalRegisterIngestionService(client, classifier, policyIngestion, impactAssessment);
+        return new FederalRegisterIngestionService(client, classifier, policyIngestion);
     }
 }

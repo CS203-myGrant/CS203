@@ -28,11 +28,11 @@ function page(fetch){
 test('loads current published feed in severity order and shows critical warning first',async()=>{
   const calls=[];
   const view=page(async path=>{calls.push(path);return {content:[
-    impact(2,'CRITICAL','Act now'),impact(1,'LOW','Reminder')],totalPages:1};});
+    impact(2,'HIGH','Act now'),impact(1,'LOW','Reminder')],totalPages:1};});
   await view.loadImpacts();
   assert.match(calls[0],/sort=severity,desc&archived=false/);
   const rendered=view.renderImpactFeed();
-  assert.ok(rendered.indexOf('WARNING: CRITICAL')<rendered.indexOf('Reminder'));
+  assert.ok(rendered.indexOf('HIGH')<rendered.indexOf('Reminder'));
   assert.match(rendered,/View details and checklist/);
   assert.doesNotMatch(rendered,/Check the official source/);
 });
@@ -40,7 +40,7 @@ test('archives through PATCH and switches to the archived list',async()=>{
   const calls=[];
   const view=page(async(path,options)=>{
     calls.push([path,options]);
-    return options?.method==='PATCH'?{...impact(2,'CRITICAL','Act now'),archived:true}
+    return options?.method==='PATCH'?{...impact(2,'HIGH','Act now'),archived:true}
       :{content:[],totalPages:0};
   });
   await view.setImpactArchived(2,true);
@@ -51,7 +51,7 @@ test('archives through PATCH and switches to the archived list',async()=>{
 });
 test('detail shows human correction, citation, disclaimer and escaped text',()=>{
   const view=page(async()=>({}));
-  view.state.impactDetail={...impact(4,'CRITICAL','<script>bad</script>'),
+  view.state.impactDetail={...impact(4,'HIGH','<script>bad</script>'),
     policyAgency:'DHS',analysis:['A reason'],missingInformation:[],
     citations:[{title:'Official rule',url:'https://www.federalregister.gov/example'}],
     reviewedByHuman:true,disclaimer:'Not legal advice'};

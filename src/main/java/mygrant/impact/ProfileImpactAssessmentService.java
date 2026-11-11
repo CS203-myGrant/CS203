@@ -28,7 +28,7 @@ import mygrant.user.ProfileFieldConsentRepository;
 import mygrant.user.ProfileFieldDefinition;
 import mygrant.policies.PolicyDocument;
 
-/** Uses OpenAI structured output to assess a newly imported policy for the signed-in user. */
+/** Uses OpenAI structured output to assess a newly imported policy for one anonymised, consented profile. */
 @Service
 public class ProfileImpactAssessmentService {
 
@@ -104,8 +104,14 @@ public class ProfileImpactAssessmentService {
         UserProfile profile = profileRepository.findById(user.getId())
                 .orElseGet(() -> UserProfile.empty(user.getId()));
 
+        return assess(profile, document, agency, content, classification, restrictionMetadata);
+    }
+
+    /** Assess a captured profile version; identity is never included in model context. */
+    public ProfileImpactAssessment assess(UserProfile profile, FederalRegisterDocument document,
+            String agency, String content, VisaClassification classification, String restrictionMetadata) {
         Set<ProfileFieldDefinition> consentedFields = consentRepository
-                .findByUserId(user.getId())
+                .findByUserId(profile.getUserId())
                 .stream()
                 .map(ProfileFieldConsent::getFieldName)
                 .collect(java.util.stream.Collectors.toCollection(
@@ -144,7 +150,7 @@ public class ProfileImpactAssessmentService {
             throws Exception {
         RawAssessment raw = objectMapper.readValue(json, RawAssessment.class);
         ImpactUrgency urgency = ImpactUrgency.valueOf(raw.urgency());
-        if (urgency == ImpactUrgency.UNAVAILABLE || raw.summary() == null || raw.summary().isBlank()) {
+        if (raw.summary() == null || raw.summary().isBlank()) {
             throw new IllegalArgumentException("Invalid generator output");
         }
         return new ProfileImpactAssessment(urgency,
@@ -250,7 +256,8 @@ public class ProfileImpactAssessmentService {
         addFact(facts, consentedFields, ProfileFieldDefinition.EMPLOYMENT_STATUS,
                 "employmentStatus", profile.getEmploymentStatus());
         addFact(facts, consentedFields, ProfileFieldDefinition.EMPLOYER,
-                "employer", profile.getEmployer());
+                "employerProvided", profile.getEmployer() == null || profile.getEmployer().isBlank()
+                        ? null : true);
         addFact(facts, consentedFields, ProfileFieldDefinition.VISA_START_DATE,
                 "visaStartDate", profile.getVisaStartDate());
         addFact(facts, consentedFields, ProfileFieldDefinition.VISA_EXPIRY_DATE,
@@ -291,7 +298,7 @@ public class ProfileImpactAssessmentService {
         return Map.of(
                 "type", "object",
                 "properties", Map.of(
-                        "urgency", Map.of("type", "string", "enum", List.of("HIGH", "MEDIUM", "LOW", "NOT_APPLICABLE")),
+                        "urgency", Map.of("type", "string", "enum", ImpactUrgency.labels()),
                         "confidence", Map.of("type", "integer", "minimum", 0, "maximum", 100),
                         "summary", Map.of("type", "string"),
                         "reasons", Map.of("type", "array", "items", Map.of("type", "string")),
@@ -303,12 +310,12 @@ public class ProfileImpactAssessmentService {
                 "additionalProperties", false);
     }
 
-    private ProfileImpactAssessment unavailable(String summary) {
+    ProfileImpactAssessment unavailable(String summary) {
         return unavailable(summary, null, 0);
     }
 
     private ProfileImpactAssessment unavailable(String summary, JudgeEvaluation evaluation, int attempts) {
-        return new ProfileImpactAssessment(ImpactUrgency.UNAVAILABLE, 0, summary,
+        return new ProfileImpactAssessment(null, 0, summary,
                 List.of(), List.of("Consult the official source and a qualified adviser."), List.of(), true,
                 "OpenAI", model, evaluation, attempts);
     }

@@ -896,18 +896,7 @@ The response includes classification flags and the signals that caused each matc
   "detectedVisaTypes": ["F-1", "J-1"],
   "matchedSignals": ["F-1:academic student", "J-1:exchange visitor"],
   "ingestion": { "chunksIndexed": 6, "alreadyIndexed": false },
-  "impactAssessment": {
-    "urgency": "HIGH",
-    "confidence": 92,
-    "summary": "The rule may affect the user's upcoming travel.",
-    "reasons": ["The profile contains upcoming travel near the effective date."],
-    "recommendedActions": ["Review the primary source and contact the school adviser."],
-    "requiresHumanReview": true,
-    "provider": "OpenAI",
-    "model": "gpt-6.1-sol",
-    "evaluation": { "verdict": "YES", "reason": "The assessment is supported.", "model": "claude-haiku-5-5" },
-    "attempts": 1
-  }
+  "impactAssessment": null
 }
 ```
 
@@ -922,56 +911,50 @@ ANTHROPIC_API_KEY=...
 ANTHROPIC_JUDGE_MODEL=claude-haiku-5-5
 ```
 
-Restart Spring Boot after changing `.env`. During each authenticated Federal Register
-import, the backend sends only relevant profile fields (not the user's name or email),
-policy metadata, deterministic visa matches, and a bounded source excerpt to OpenAI GPT-6.1 Sol. OpenAI
-returns strict structured JSON with `HIGH`, `MEDIUM`, `LOW`, or `NOT_APPLICABLE` urgency,
-confidence, reasons, actions, and a human-review flag. The RAG Inspector displays that
-assessment immediately above the imported source. Claude Haiku 5.5 independently judges
-the generated assessment using the Anthropic API.
+Restart Spring Boot after changing `.env`. After a new Federal Register or manual
+policy import commits, assessments run in the background for every profile whose
+visa type matches the stored visa tags. Federal Register tags come from the
+classifier; manual tags come from the ingestion request. The importing admin's
+identity does not determine who is assessed. The import response keeps the legacy
+`impactAssessment` field as `null` and no longer waits for model generation.
 
-Claude Haiku 5.5 independently checks the generated urgency and recommended next steps against the
-same profile and policy excerpt. A `YES` verdict returns the assessment. A `NO` returns a
-safe human-review response without retrying either model. If Claude is unavailable, the
-generated assessment is withheld with an `UNAVAILABLE` judge result and a retry/support notice.
-If OpenAI is unavailable, the app reports that recommendations are temporarily unavailable;
-it does not display a self-reviewed fallback. Saved recommendations are reused only when
-their independent evaluation is `YES` and their policy/profile inputs are current.
-Policy follow-up chat and the RAG query endpoint also send every generated answer through
-the independent judge using the same source evidence, question and profile context used
-for generation. Rejected or unchecked answers are replaced by a safe notice; the API returns
-the judge result in `evaluation`. A successful judge verdict is not proof of legal accuracy.
-High-urgency results always require human review. Confidence is model-reported and is not
-a calibrated probability. This review is based on the first 12,000 characters, not the
-whole document; the deterministic notification rules remain separate. Both prompts use
-the stated visa type and instruct the models not to assume that an I-140 filing means a
-different current immigration status. The judge can still make mistakes; consult the
-official source and a qualified adviser when appropriate.
+Only populated, consented profile facts go into the prompt. Names, emails and user
+IDs are omitted; an employer name is represented only by `employerProvided: true`.
+The prompt includes policy metadata, visa matches, structured restriction metadata
+and at most the first 12,000 characters of source text. OpenAI returns structured
+`HIGH`, `MEDIUM`, `LOW` or `NOT_APPLICABLE` urgency, confidence, reasons, actions
+and a review flag. Claude independently evaluates the candidate.
 
-To inspect the judge result in the terminal, get `ADMIN_TOKEN` as in
-[Import a Visa Bulletin](#import-a-visa-bulletin) and run:
+Results are saved in `impact_assessments` with the captured profile version,
+provider and model. A model review request, an unverified candidate or confidence
+below `IMPACT_REVIEW_CONFIDENCE_THRESHOLD` (default `60`, integer percent) produces
+`PENDING_REVIEW`. A score equal to the threshold does not by itself require review.
+The visibility-filtered repository query returns only completed assessments that
+do not need review or have been approved; pending/rejected results are excluded.
+The existing feed still uses `policy_recommendations`: connecting those consumers
+and implementing review actions are separate tasks.
 
-```bash
-curl -s -X POST http://localhost:8080/api/v1/ingestion/federal-register/2026-14439 \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.impactAssessment'
-```
+An OpenAI failure saves `status = UNAVAILABLE` with null urgency and confidence,
+without undoing ingestion or stopping other profiles. Reprocessing skips existing
+rows, including failures; retry execution is separate work. Unchanged re-imports
+create neither new assessments nor new vectors. Profile edits do not trigger
+regeneration. Concurrent processing can make duplicate model calls, but the
+unique user/policy/profile-version constraint allows only one saved result.
 
-Check `evaluation.verdict` (`YES`, `NO`, or `UNAVAILABLE`), `evaluation.reason`, and
-`attempts`. Re-imports reuse vectors but run a fresh profile assessment and judgment.
+Set `IMPACT_ASSESSMENTS_ENABLED=false` to disable background assessments. Work is
+queued in the application's in-memory executor after commit; a process restart
+can lose queued work, and submission failures are logged without failing ingestion.
+A durable job queue and recovery sweep are not implemented here.
 
-If both providers are unavailable, ingestion and pgvector indexing still complete and the
-response uses `UNAVAILABLE` rather than fabricating an assessment. In a single-provider
-failure, the working provider returns one unverified assessment instead of starting a retry loop.
-Spring Boot logs only the error type or HTTP status; it does not log API keys, policy text,
-profile details, or provider responses. The displayed `attempts` is always `1`.
-
-To run the focused generator and judge tests in WSL:
+Run the focused tests with Docker available:
 
 ```bash
-./mvnw '-Dtest=ImpactJudgeServiceTests,ProfileImpactAssessmentServiceTests' test
+./mvnw '-Dtest=IngestionAssessmentIntegrationTest,IngestionAssessmentListenerTests,ImpactAssessmentPersistenceTest,ProfileImpactAssessmentServiceTests,FederalRegisterConnectorTest,PolicyIngestionServiceTests' test
 ```
 
-These tests mock OpenAI and Claude; they do not verify live API credentials, model access, or model quality.
+These tests mock AI providers; they do not verify live credentials or model quality.
+Confidence is model-reported, not a calibrated probability, and a passing independent
+judge is not proof of legal accuracy.
 
 The chunk count can vary. Importing the same unchanged document again returns
 `"alreadyIndexed":true` and `"chunksIndexed":0`; this means the existing vectors were
@@ -1021,11 +1004,11 @@ as `PENDING_REVIEW` and is not returned by the applicant feed or detail APIs;
 temporary AI failures are not saved. Managers and admins can correct and publish
 held assessments with `/api/v1/review/impacts`. Corrections retain previous
 versions and show a **Reviewed by a human** marker. `HIGH` assessment urgency is
-shown as `CRITICAL` severity so the dashboard presents it as a warning.
+shown as `HIGH` severity so the dashboard presents it as a warning.
 
 `GET /api/v1/impacts` returns the signed-in user's published assessments, 20 per
 page by default, sorted by severity then date. Use `sort=date,desc` or
-`sort=severity,asc`, `severity=CRITICAL`, and `archived=true` for archived items.
+`sort=severity,asc`, `severity=HIGH`, and `archived=true` for archived items.
 `GET /api/v1/impacts/{id}` shows the analysis, source citation, action items and
 disclaimer. `PATCH /api/v1/impacts/{id}` with `{"archived":true}` archives the
 record; use `false` to unarchive it. A missing, pending, or another user's id
@@ -1069,7 +1052,7 @@ curl -s -H "Authorization: Bearer $MANAGER_TOKEN" \
   'http://localhost:8080/api/v1/review/impacts'
 curl -s -X PATCH -H "Authorization: Bearer $MANAGER_TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"severity":"CRITICAL","confidence":85,"summary":"Corrected impact summary", "analysis":["Why the source applies"],"actionItems":["Check the official source"],"missingInformation":[]}' \
+  -d '{"severity":"HIGH","confidence":85,"summary":"Corrected impact summary", "analysis":["Why the source applies"],"actionItems":["Check the official source"],"missingInformation":[]}' \
   'http://localhost:8080/api/v1/review/impacts/IMPACT_ID'
 ```
 
@@ -1102,8 +1085,8 @@ How items are made:
 - The title is the action text with spaces trimmed from both ends. Text longer
   than 120 characters is cut to 117 characters and an ellipsis, and the full text
   becomes the description.
-- The priority follows the assessment's severity: `CRITICAL` and `HIGH` give
-  `HIGH`, `MEDIUM` gives `MEDIUM`, and `LOW` and `INFO` give `LOW`.
+- The priority follows the assessment's severity: `HIGH` gives `HIGH`, `MEDIUM` gives `MEDIUM`, and `LOW` and
+  `NOT_APPLICABLE` give `LOW`.
 - The deadline is the policy's effective date when the item is made. A policy
   without one gives an item without a deadline.
 - Each item has a key: the SHA-256 of its text, ignoring case and runs of spaces,
@@ -1846,9 +1829,10 @@ imported for, leave **Also import Federal Register policies** ticked when the ad
 the date. It searches the Federal Register for rules, proposed rules and notices from
 DHS, State and Labor that mention F-1, J-1 or H-1B and were published in the 30 days up
 to the date. It imports up to 20 of them before updating inboxes. Documents the classifier
-finds are not about a supported visa type are skipped. These imports skip the AI impact
-assessment, but each still downloads the full text and embeds it with OpenAI, so
-expect it to take a minute. Imported policies stay in the database after the clock moves.
+finds are not about a supported visa type are skipped. Each new import downloads and
+embeds the full text, then queues impact assessments for matching profiles in the
+background. Expect embedding to take a minute. Imported policies stay in the database
+after the clock moves.
 
 Dates are kept in memory, so a restart returns everyone to the real date. Alerts created
 this way are real rows, so they are also emailed when email alerts are configured. Turn
@@ -2138,3 +2122,10 @@ the embedding model requires the same 1024 dimensions, or a matching change to
 AI output evaluation (CS203-88): see [judge configuration, versioning, and limitations](docs/ai-output-evaluation.md).
 
 Admin quality dashboard (CS203-88): see [metrics API, date boundaries, denominators, and limitations](docs/admin-quality-metrics.md).
+
+## Canonical impact severity
+
+Assessment code, prompts, storage and APIs use `HIGH / MEDIUM / LOW / NOT_APPLICABLE`.
+See [definitions, availability and migration](docs/impact-severity.md) and
+[aligned story descriptions](docs/impact-severity-stories.md). `UNAVAILABLE` is a
+processing status with null urgency, not a severity.

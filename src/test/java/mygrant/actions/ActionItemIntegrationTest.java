@@ -46,7 +46,9 @@ import mygrant.user.UserRole;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
-class ActionItemIntegrationTest {
+@org.springframework.test.annotation.DirtiesContext(
+        classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
+class ActionItemIntegrationTest extends mygrant.support.PgvectorIntegrationTestBase {
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper mapper;
@@ -184,9 +186,9 @@ class ActionItemIntegrationTest {
         User owner = account(UserRole.APPLICANT);
         LocalDate later = LocalDate.of(2027, 3, 1);
         long low = publish(owner, policy(later), "LOW", List.of("Low one", "Low two"));
-        long critical = publish(owner, policy(later), "CRITICAL", List.of("Critical one"));
+        long critical = publish(owner, policy(later), "HIGH", List.of("Critical one"));
         publish(owner, policy(null), "MEDIUM", List.of("Undated"));
-        publish(owner, policy(LocalDate.of(2027, 2, 1)), "INFO", List.of("Sooner"));
+        publish(owner, policy(LocalDate.of(2027, 2, 1)), "NOT_APPLICABLE", List.of("Sooner"));
         publish(owner, policy(later), "LOW", List.of("Second low assessment"));
 
         assertThat(titles(list(owner, ""))).containsExactly("Sooner", "Critical one", "Low one", "Low two",

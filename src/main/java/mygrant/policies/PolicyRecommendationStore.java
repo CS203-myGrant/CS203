@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import mygrant.actions.ActionItemService;
 import mygrant.impact.ImpactUrgency;
+import mygrant.impact.AssessmentStatus;
 import mygrant.impact.ProfileImpactAssessment;
 import mygrant.user.UserProfile;
 import mygrant.user.UserProfileRepository;
@@ -84,7 +85,7 @@ public class PolicyRecommendationStore {
             }
         }
         ProfileImpactAssessment result = generate.get();
-        if (result.urgency() == ImpactUrgency.UNAVAILABLE && result.evaluation() != null
+        if (result.status() == AssessmentStatus.UNAVAILABLE && result.evaluation() != null
                 && result.evaluation().evaluationId() != null && evaluations != null) {
             var evaluation = result.evaluation();
             var raw = evaluations.candidate(evaluation.evaluationId());
@@ -103,7 +104,7 @@ public class PolicyRecommendationStore {
         // Generation outages with no candidate remain retryable. A successful candidate
         // remains visible if independent review is unavailable or rejects it; its saved
         // evaluation and requiresHumanReview flag make that state explicit to the user.
-        if (result.urgency() != ImpactUrgency.UNAVAILABLE) {
+        if (result.status() == AssessmentStatus.COMPLETED) {
             Long id = jdbc.queryForObject("""
                     INSERT INTO policy_recommendations
                         (user_id, policy_id, input_hash, assessment_json, publication_status, severity)
@@ -148,7 +149,7 @@ public class PolicyRecommendationStore {
         jdbc.update("""
                 INSERT INTO policy_recommendations
                     (user_id, policy_id, input_hash, assessment_json, publication_status, severity)
-                VALUES (?, ?, ?, ?, 'PENDING_REVIEW', 'INFO')
+                VALUES (?, ?, ?, ?, 'PENDING_REVIEW', 'MEDIUM')
                 ON CONFLICT (user_id, policy_id, input_hash) DO NOTHING
                 """, user.getId(), policy.getId(), hash, json(draft));
     }
@@ -188,17 +189,12 @@ public class PolicyRecommendationStore {
     }
 
     private static ProfileImpactAssessment awaitingReview(int attempts) {
-        return new ProfileImpactAssessment(ImpactUrgency.UNAVAILABLE, 0,
+        return new ProfileImpactAssessment(null, 0,
                 "This assessment is awaiting review.", List.of(), List.of(), List.of(),
                 true, "Review queue", "", null, attempts);
     }
 
     private static String severity(ProfileImpactAssessment assessment) {
-        return switch (assessment.urgency()) {
-            case HIGH -> "CRITICAL";
-            case MEDIUM -> "MEDIUM";
-            case LOW -> "LOW";
-            case NOT_APPLICABLE, UNAVAILABLE -> "INFO";
-        };
+        return assessment.urgency().name();
     }
 }

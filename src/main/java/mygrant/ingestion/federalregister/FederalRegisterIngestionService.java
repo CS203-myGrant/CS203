@@ -20,10 +20,7 @@ import mygrant.ingestion.classification.VisaTypeClassifier;
 import mygrant.ingestion.classification.EntryRestrictionExtractor;
 import mygrant.ingestion.dto.IngestPolicyRequest;
 import mygrant.ingestion.dto.IngestionResponse;
-import mygrant.impact.ProfileImpactAssessment;
-import mygrant.impact.ProfileImpactAssessmentService;
 import mygrant.policies.PolicyStatus;
-import mygrant.policies.PolicyAssessmentInputs;
 import mygrant.policies.SourceType;
 import mygrant.rules.RuleIdentifiers;
 
@@ -44,32 +41,22 @@ public class FederalRegisterIngestionService
     private final VisaTypeClassifier classifier;
     private final EntryRestrictionExtractor restrictionExtractor;
     private final PolicyIngestionService ingestionService;
-    private final ProfileImpactAssessmentService impactAssessmentService;
-    private mygrant.policies.PolicyRecommendationStore recommendations;
-    private mygrant.policies.PolicyService policies;
-    @Autowired
-    void setPublication(mygrant.policies.PolicyRecommendationStore recommendations, mygrant.policies.PolicyService policies) {
-        this.recommendations = recommendations;
-        this.policies = policies;
-    }
     private final AtomicReference<ConnectorHealth> currentHealth =
             new AtomicReference<>(ConnectorHealth.notChecked(SOURCE));
 
     @Autowired
     public FederalRegisterIngestionService(FederalRegisterClient client,
-            VisaTypeClassifier classifier, EntryRestrictionExtractor restrictionExtractor, PolicyIngestionService ingestionService,
-            ProfileImpactAssessmentService impactAssessmentService) {
+            VisaTypeClassifier classifier, EntryRestrictionExtractor restrictionExtractor, PolicyIngestionService ingestionService) {
         this.client = client;
         this.classifier = classifier;
         this.restrictionExtractor = restrictionExtractor;
         this.ingestionService = ingestionService;
-        this.impactAssessmentService = impactAssessmentService;
     }
 
-    /** Compatibility constructor for existing connector tests and callers. */
+    /** Convenience constructor for connector tests without a custom restriction extractor. */
     public FederalRegisterIngestionService(FederalRegisterClient client, VisaTypeClassifier classifier,
-            PolicyIngestionService ingestionService, ProfileImpactAssessmentService impactAssessmentService) {
-        this(client, classifier, new EntryRestrictionExtractor(), ingestionService, impactAssessmentService);
+            PolicyIngestionService ingestionService) {
+        this(client, classifier, new EntryRestrictionExtractor(), ingestionService);
     }
 
     /** Imports a published document by number; repeat imports are idempotent. */
@@ -138,19 +125,14 @@ public class FederalRegisterIngestionService
                 content,
                 RuleIdentifiers.fromFederalRegisterApi(document.docketIds(), document.regulationIdNumbers()));
 
-        java.util.function.Supplier<ProfileImpactAssessment> generate = () -> impactAssessmentService.assess(
-                request.userEmail(), document, prepared.agency(), content, classification,
-                PolicyAssessmentInputs.restrictionContext(restrictions));
-        ProfileImpactAssessment impactAssessment = !request.assessImpact() ? null
-                : recommendations == null ? generate.get()
-                : recommendations.getOrGenerate(request.userEmail(), policies.findById(ingestion.policyId()), generate);
-
+        // The shared ingestion transaction queues all matching profiles after commit.
+        // Keep the response field for compatibility, without a synchronous AI call.
         return new FederalRegisterIngestionResponse(
                 document.documentNumber(), document.title(), document.type(), prepared.agency(),
                 document.publicationDate(), document.effectiveDate(), document.htmlUrl(),
                 classification.affectsF1(), classification.affectsJ1(),
                 classification.affectsH1b(), classification.visaTypes(),
-                classification.matchedSignals(), ingestion, impactAssessment);
+                classification.matchedSignals(), ingestion, null);
     }
 
     @Override

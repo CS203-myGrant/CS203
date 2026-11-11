@@ -87,7 +87,7 @@ class PolicyRecommendationStoreTest {
 
     @Test
     void temporaryFailureIsNotSaved() {
-        var unavailable = new ProfileImpactAssessment(ImpactUrgency.UNAVAILABLE, 0, "Try later",
+        var unavailable = new ProfileImpactAssessment(null, 0, "Try later",
                 List.of(), List.of(), List.of(), true, "OpenAI", "model", null, 0);
         store().getOrGenerate("user", policy, () -> unavailable);
         assertNull(savedJson);

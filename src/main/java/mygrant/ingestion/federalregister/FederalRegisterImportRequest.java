@@ -1,8 +1,8 @@
 package mygrant.ingestion.federalregister;
 
 /**
- * A document number and the signed-in admin whose profile is assessed. Bulk imports skip
- * the AI impact assessment, which is slow and billed per document.
+ * A document number and importing admin. The legacy assessImpact flag is retained for
+ * caller compatibility; all new imports now assess matching profiles asynchronously.
  */
 public record FederalRegisterImportRequest(String documentNumber, String userEmail, boolean assessImpact) {
     public FederalRegisterImportRequest {

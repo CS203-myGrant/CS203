@@ -14,6 +14,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import mygrant.impact.PolicyAssessmentRequested;
 import mygrant.ingestion.dto.IngestPolicyRequest;
 import mygrant.ingestion.dto.IngestionResponse;
 import mygrant.ingestion.connector.ContentHash;
@@ -131,6 +132,8 @@ public class PolicyIngestionService {
         if (saved.getSourceType() == SourceType.PRIMARY) {
             eventPublisher.publishEvent(PolicyIndexedEvent.from(saved, rule.changeAlerted()));
         }
+
+        eventPublisher.publishEvent(new PolicyAssessmentRequested(saved.getId()));
 
         return new IngestionResponse(saved.getId(), saved.getExternalId(), chunksIndexed, indexedAt, false);
     }

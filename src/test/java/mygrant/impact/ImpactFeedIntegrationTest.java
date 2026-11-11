@@ -40,7 +40,9 @@ import mygrant.user.UserProfileRepository;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
-class ImpactFeedIntegrationTest {
+@org.springframework.test.annotation.DirtiesContext(
+        classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
+class ImpactFeedIntegrationTest extends mygrant.support.PgvectorIntegrationTestBase {
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper mapper;
@@ -57,7 +59,7 @@ class ImpactFeedIntegrationTest {
         User stranger = account(UserRole.APPLICANT);
         PolicyDocument policy = policy();
         long low = insert(owner, policy, "LOW", "PUBLISHED", approved(ImpactUrgency.LOW, "Reminder"));
-        long critical = insert(owner, policy, "CRITICAL", "PUBLISHED",
+        long critical = insert(owner, policy, "HIGH", "PUBLISHED",
                 approved(ImpactUrgency.HIGH, "Urgent review"));
         long pending = insert(owner, policy, "MEDIUM", "PENDING_REVIEW",
                 pending(ImpactUrgency.MEDIUM, "Do not show this draft"));
@@ -94,7 +96,7 @@ class ImpactFeedIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM impact_archive_events WHERE assessment_id = ?",
                 Long.class, critical)).isEqualTo(1L);
-        long newer = insert(owner, policy, "CRITICAL", "PUBLISHED",
+        long newer = insert(owner, policy, "HIGH", "PUBLISHED",
                 approved(ImpactUrgency.HIGH, "New rule version"));
         mvc.perform(get("/api/v1/impacts").header("Authorization", token(owner)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(2))
@@ -129,7 +131,7 @@ class ImpactFeedIntegrationTest {
         mvc.perform(patch("/api/v1/review/impacts/" + id)
                         .header("Authorization", token(manager)).contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"severity":"CRITICAL","confidence":85,
+                                {"severity":"HIGH","confidence":85,
                                  "summary":"Manager corrected the assessment",
                                  "analysis":["The official text affects this profile"],
                                  "actionItems":["Check the source"],"missingInformation":[]}
@@ -192,7 +194,7 @@ class ImpactFeedIntegrationTest {
                 LocalDate.of(2025, 9, 21), proclamation10973, "Historical source fixture", "hash",
                 java.util.Set.of(), java.util.Set.of(RestrictionCategory.WORK_AUTHORIZATION),
                 List.of(proclamation10973), List.of()));
-        insert(owner, visaPolicy, "CRITICAL", "PUBLISHED", approved(ImpactUrgency.HIGH, "H-1B impact"));
+        insert(owner, visaPolicy, "HIGH", "PUBLISHED", approved(ImpactUrgency.HIGH, "H-1B impact"));
         // A newer draft for the same policy must not replace the current published assessment.
         insert(owner, visaPolicy, "HIGH", "PENDING_REVIEW", pending(ImpactUrgency.HIGH, "Unreviewed draft"));
         insert(owner, nationalityPolicy, "MEDIUM", "PUBLISHED", new ProfileImpactAssessment(
