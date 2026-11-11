@@ -13,6 +13,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 import mygrant.user.ProfileFieldConsent;
@@ -32,6 +33,23 @@ class VisaBulletinTrackingIntegrationTest {
     @Autowired UserRepository users;
     @Autowired UserProfileRepository profiles;
     @Autowired ProfileFieldConsentRepository consents;
+    @Autowired JdbcTemplate jdbc;
+
+    @org.junit.jupiter.api.BeforeEach
+    void isolateBulletinFixtures() {
+        // These tests use saved bulletin pages and must not depend on rows left by a
+        // previous run against the shared PostgreSQL test database.
+        jdbc.update("DELETE FROM visa_bulletin_alerts");
+        jdbc.update("DELETE FROM visa_bulletin_subscriptions");
+        jdbc.update("DELETE FROM visa_bulletin_entries");
+        jdbc.update("DELETE FROM visa_bulletin_imports");
+        jdbc.update("""
+                UPDATE visa_bulletin_health
+                SET status='NOT_CHECKED', last_attempt_at=NULL, last_success_at=NULL,
+                    publication_month=NULL, source_url=NULL, error_stage=NULL, error_message=NULL
+                WHERE source_name='VISA_BULLETIN'
+                """);
+    }
 
     @Test
     void consentedApplicantGetsDeduplicatedMonthlyAlertsOnlyAfterAChange() throws IOException {

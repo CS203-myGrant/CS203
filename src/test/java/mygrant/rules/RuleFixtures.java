@@ -54,7 +54,10 @@ final class RuleFixtures {
             "What the new admission rule means for F-1 students", "Universities sue over F-1 student admission limits",
             LIFT_HEADLINE);
     static final List<String> IDENTIFIERS = List.of("ICEB-2025-0001", "1653-AA95", "ICEB-2019-0006", "1653-AA78",
-            "USCIS-2023-0005", "1615-AC70", "USCIS-2020-0019", "1615-AC61");
+            "USCIS-2023-0005", "1615-AC70", "USCIS-2020-0019", "1615-AC61",
+            // Identifiers used by the linking fixtures. Including them here makes isolation
+            // robust even when an earlier run created a synthetic rule instead of linking it.
+            "ETA-2026-0007", "1205-AC99", "1653-AB01");
 
     static final String H1B_TITLE = "Modernizing H-1B Requirements, Providing Flexibility in the F-1 Program, and "
             + "Program Improvements Affecting Other Nonimmigrant Workers";
@@ -150,9 +153,11 @@ final class RuleFixtures {
         jdbc.update("""
                 DELETE FROM policy_rules r WHERE EXISTS (
                     SELECT 1 FROM policy_rule_documents d
-                    JOIN policy_document_identifiers i ON i.policy_id = d.policy_id
-                    WHERE d.rule_id = r.id AND i.value IN (:identifiers))
-                """, Map.of("identifiers", IDENTIFIERS));
+                    JOIN policy_documents p ON p.id = d.policy_id
+                    LEFT JOIN policy_document_identifiers i ON i.policy_id = d.policy_id
+                    WHERE d.rule_id = r.id
+                      AND (i.value IN (:identifiers) OR p.external_id IN (:externalIds)))
+                """, Map.of("identifiers", IDENTIFIERS, "externalIds", externalIds));
         jdbc.update("DELETE FROM policy_document_identifiers WHERE value IN (:identifiers)",
                 Map.of("identifiers", IDENTIFIERS));
         jdbc.update("DELETE FROM policy_documents WHERE external_id IN (:ids)", Map.of("ids", externalIds));

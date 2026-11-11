@@ -60,6 +60,10 @@ public record EmailProperties(
         return appBaseUrl + "/api/v1/email/unsubscribe?token=" + token;
     }
 
+    public String verificationUrl(String token) {
+        return appBaseUrl + "/api/v1/auth/verify-email?token=" + token;
+    }
+
     /** How long to wait after the given failed attempt (1-based) before the next one. */
     public Duration backoffAfter(int attempt) {
         return retryBackoff.get(Math.min(Math.max(attempt, 1), retryBackoff.size()) - 1);

@@ -60,6 +60,7 @@ public class UserService {
         user.setEmail(email);
         user.setRole(UserRole.APPLICANT);
         user.setProfileComplete(false);
+        user.setEmailVerified(false);
         user.setPasswordHash(passwordEncoder.encode(userCreation.getUserPassword()));
 
         User savedUser;
@@ -113,12 +114,14 @@ public class UserService {
             user.setEmail(email);
             user.setRole(UserRole.APPLICANT);
             user.setWorkosUserId(workOsUser.id());
+            user.setEmailVerified(true);
             user.setProfileComplete(false);
             user = userRepository.save(user);
         } else if (!user.isActive()) {
             throw new InvalidCredentialsException("Invalid email or password");
         } else if (user.getWorkosUserId() == null) {
             user.setWorkosUserId(workOsUser.id());
+            user.setEmailVerified(true);
             user = userRepository.save(user);
         }
 
