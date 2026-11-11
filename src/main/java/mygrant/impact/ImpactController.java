@@ -91,18 +91,33 @@ public class ImpactController {
     @ApiResponse(responseCode = "201", description = "The report, now open for review")
     @ApiResponse(responseCode = "400", description = "Missing or unknown category, or empty or oversized details")
     @ApiResponse(responseCode = "404", description = "Missing, unpublished or owned by another user")
-    @ApiResponse(responseCode = "409", description = "You already have an open report on it, or it changed since you loaded it")
+    @ApiResponse(responseCode = "409", description = "Five of your reports on it are already waiting for review, or it changed since you loaded it")
     public RecommendationReportService.Report report(Principal principal, @PathVariable long id,
             @Valid @RequestBody ReportRequest request) {
         return reports.report(principal.getName(), id, request.category(), request.details(), request.version());
     }
 
     @GetMapping("/{id}/reports")
-    @Operation(summary = "List your reports on one of your published assessments", description = "Newest first.")
+    @Operation(summary = "List your reports on one of your published assessments",
+            description = "Newest first, with each report's review status: OPEN (waiting), RESOLVED (a reviewer "
+                    + "published a correction) or DISMISSED (a reviewer found the assessment correct).")
     @ApiResponse(responseCode = "200", description = "Your reports and their review status")
     @ApiResponse(responseCode = "404", description = "Missing, unpublished or owned by another user")
     public List<RecommendationReportService.Report> reports(Principal principal, @PathVariable long id) {
         return reports.mine(principal.getName(), id);
+    }
+
+    @PatchMapping("/{id}/reports/{reportId}")
+    @Operation(summary = "Archive or restore one of your answered reports",
+            description = "Hides a corrected or dismissed report from your list and the updates bell; "
+                    + "`archived: false` restores it. Reports still waiting for review cannot be archived.")
+    @ApiResponse(responseCode = "200", description = "The report with its new archive state")
+    @ApiResponse(responseCode = "400", description = "archived must be true or false")
+    @ApiResponse(responseCode = "404", description = "Not your report, or the assessment is not visible to you")
+    @ApiResponse(responseCode = "409", description = "The report is still waiting for review")
+    public RecommendationReportService.Report archiveReport(Principal principal, @PathVariable long id,
+            @PathVariable long reportId, @Valid @RequestBody ArchiveRequest request) {
+        return reports.archive(principal.getName(), id, reportId, request.archived());
     }
 
     public record ArchiveRequest(@NotNull Boolean archived) {}

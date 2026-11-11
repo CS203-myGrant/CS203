@@ -138,6 +138,32 @@
   .profile-btn svg{width:22px;height:22px;fill:currentColor;}
   .profile-btn:hover{background:var(--ink-soft);}
   .profile-btn.active{background:#fff;color:var(--ink);}
+  /* CS203-97: bell for reviewer answers to the applicant's reports. */
+  .updates-wrap{position:relative;display:inline-flex;}
+  .updates-btn{position:relative;}
+  .updates-badge{position:absolute;top:-6px;right:-8px;min-width:20px;height:20px;padding:0 6px;border-radius:10px;
+    background:var(--urgent);color:#fff;font-size:12px;font-weight:700;line-height:1;align-items:center;justify-content:center;
+    box-shadow:0 0 0 2px var(--ink);}
+  .updates-panel{position:absolute;top:calc(100% + 10px);right:0;width:380px;max-width:calc(100vw - 32px);max-height:70vh;overflow-y:auto;
+    background:#fff;color:var(--text);border:1px solid var(--line);border-radius:6px;box-shadow:0 10px 30px rgba(0,0,0,.25);z-index:25;text-align:left;}
+  .updates-panel__head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;}
+  .updates-panel__close{background:none;border:0;font-size:24px;line-height:1;color:var(--muted);cursor:pointer;}
+  .updates-panel__list{list-style:none;margin:0;padding:0;}
+  .updates-panel__empty{margin:0;padding:18px 16px;color:var(--muted);}
+  .updates-item{border-bottom:1px solid var(--line);}
+  .updates-item:last-child{border-bottom:0;}
+  .updates-item--new{background:var(--primary-light);}
+  .updates-item__link{display:flex;flex-direction:column;gap:4px;width:100%;padding:14px 16px;background:none;border:0;text-align:left;font:inherit;color:inherit;cursor:pointer;}
+  .updates-item__link:hover{background:var(--base-lightest);}
+  .updates-item__top{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .updates-item__status{font-size:12px;font-weight:700;padding:2px 10px;border-radius:999px;}
+  .updates-item__status--resolved{background:var(--calm-bg);color:var(--calm-text);}
+  .updates-item__status--dismissed{background:var(--base-lighter);color:var(--text);}
+  .updates-item__new{font-size:11px;font-weight:700;color:#fff;background:var(--urgent);padding:1px 8px;border-radius:999px;}
+  .updates-item__title{font-weight:700;}
+  .updates-item__meta{font-size:13px;color:var(--muted);}
+  .updates-item__note{font-size:14px;line-height:1.45;white-space:pre-wrap;}
+  .updates-item__cta{font-size:14px;font-weight:700;color:var(--primary);}
 
   .main{padding:16px 24px 72px;max-width:1100px;margin:0 auto;}
   .main > *{max-width:980px;}
@@ -255,6 +281,33 @@
     font-family:var(--sans);font-size:17px;padding:8px 10px;height:42px;border:1px solid var(--field-border);border-radius:0;background:#fff;color:var(--text);
   }
   .field input[type="file"]{height:auto;padding:10px;border-style:dashed;}
+  .report-form{display:flex;flex-direction:column;gap:18px;margin-top:16px;width:100%;}
+  .report-form .field select{height:48px;padding:10px 12px;cursor:pointer;width:auto;max-width:100%;align-self:flex-start;}
+  .report-form .field textarea{height:auto;min-height:120px;padding:10px 12px;line-height:1.5;resize:vertical;}
+  .report-form__sent{margin:0;padding:10px 14px;border-left:4px solid var(--calm);background:var(--calm-bg);color:var(--calm-text);}
+  .report-form__limit{margin:16px 0 0;padding:10px 14px;border-left:4px solid var(--caution);background:var(--caution-bg);}
+  .report-history{margin-top:28px;border-top:1px solid var(--line);padding-top:18px;}
+  .report-history__title{font-family:var(--serif);font-size:19px;margin:0 0 12px;}
+  .report-history__list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px;}
+  .report-history__item{border:1px solid var(--line);border-left:4px solid var(--caution);padding:12px 16px;background:#fff;}
+  .report-history__item--resolved{border-left-color:var(--calm);}
+  .report-history__item--dismissed{border-left-color:var(--field-border);}
+  .report-history__head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;}
+  .report-history__meta{margin:4px 0 8px;font-size:14px;color:var(--muted);}
+  .report-history__details{margin:0;white-space:pre-wrap;line-height:1.5;}
+  .report-history__note{margin:8px 0 0;font-size:14px;color:var(--muted);}
+  .report-history__actions{display:flex;justify-content:flex-end;margin-top:10px;}
+  .report-history__item--archived{background:var(--base-lightest);opacity:.85;}
+  .report-history__empty{margin:0;color:var(--muted);}
+  .report-history__toggle{margin-top:14px;padding:0;background:none;border:0;color:var(--primary);font:inherit;font-weight:700;cursor:pointer;text-decoration:underline;}
+  .report-history__list--archived{margin-top:12px;}
+  .report-history__reply{margin-top:10px;padding:10px 12px;background:var(--base-lightest);border-left:3px solid var(--primary);}
+  .report-history__reply span{display:block;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--primary);}
+  .report-history__reply p{margin:4px 0 0;white-space:pre-wrap;line-height:1.5;}
+  .report-status{font-size:13px;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap;}
+  .report-status--open{background:var(--caution-bg);color:#5C4809;}
+  .report-status--resolved{background:var(--calm-bg);color:var(--calm-text);}
+  .report-status--dismissed{background:var(--base-lightest);color:var(--text);}
   .field input:focus, .field select:focus, .field textarea:focus{outline:4px solid var(--focus);outline-offset:0;}
   .consent-panel{grid-column:1/-1;border-top:1px solid var(--base-lighter);padding-top:24px;margin-top:4px;}
   .consent-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;}
@@ -309,9 +362,63 @@
 
   .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;z-index:10;}
   .modal-bg.show{display:flex;}
+  /* The floating Feedback button would cover a pop-up's buttons, so it steps aside while one is open. */
+  body:has(.modal-bg.show) .feedback-fab{display:none;}
   .modal{background:#fff;width:460px;max-width:calc(100vw - 32px);padding:28px;border-radius:4px;}
   .modal h3{font-family:var(--serif);margin:0 0 16px;font-size:22px;font-weight:700;}
   .modal .field{margin-bottom:16px;}
+
+  /* Review queue editor: wide, two columns (what is being reviewed | the correction). */
+  .review-modal{width:min(1120px, calc(100vw - 32px));max-height:calc(100vh - 48px);padding:0;display:flex;flex-direction:column;overflow:hidden;}
+  .review-modal__head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:22px 28px 16px;border-bottom:1px solid var(--line);}
+  .review-modal__head h3{margin:0;}
+  .review-modal__policy{margin:6px 0 0;color:var(--muted);font-size:16px;}
+  .review-modal__close{background:none;border:0;font-size:30px;line-height:1;color:var(--muted);cursor:pointer;padding:0 4px;}
+  .review-modal__close:hover{color:var(--text);}
+  .review-modal__body{display:grid;grid-template-columns:minmax(280px, 2fr) 3fr;flex:1;min-height:0;overflow:hidden;}
+  .review-modal__context{background:var(--base-lightest);padding:20px 24px;overflow-y:auto;border-right:1px solid var(--line);}
+  .review-modal__context .block-label{margin-top:20px;}
+  .review-modal__form{padding:20px 28px;overflow-y:auto;}
+  .review-modal__form .field textarea{height:auto;line-height:1.5;resize:vertical;}
+  .review-modal__row{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .review-modal__facts{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;margin:0;}
+  .review-modal__facts dt{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+  .review-modal__facts dd{margin:2px 0 0;font-weight:600;}
+  .review-modal__excerpt{max-height:320px;overflow:auto;white-space:pre-wrap;background:#fff;border:1px solid var(--line);padding:12px;font-size:13px;}
+  .review-modal__actions{display:flex;align-items:center;gap:10px;padding:14px 28px;border-top:1px solid var(--line);background:#fff;}
+  .review-modal__spacer{flex:1;}
+  .review-modal__error{margin:0;padding:10px 28px;background:var(--urgent-bg);color:var(--urgent);font-weight:600;border-top:1px solid var(--line);}
+  .review-note{margin-top:8px;padding:14px 16px;border-left:4px solid var(--urgent);background:var(--urgent-bg);}
+  .review-note .field{margin-bottom:8px;}
+  .review-note__required{color:var(--urgent);font-weight:700;}
+  .review-note__hint{margin:0;font-size:14px;color:var(--text);font-weight:600;}
+  .review-note__rules{margin:6px 0 0;padding-left:20px;font-size:14px;line-height:1.5;}
+  /* Queue: reported items stand out and come first. */
+  .queue-alert{display:flex;align-items:center;gap:14px;margin:0 0 18px;padding:14px 18px;border-left:6px solid var(--urgent);background:var(--urgent-bg);}
+  .queue-alert__count{flex:none;min-width:40px;height:40px;padding:0 10px;border-radius:20px;background:var(--urgent);color:#fff;font-weight:700;font-size:18px;display:flex;align-items:center;justify-content:center;}
+  .queue-alert strong{display:block;color:var(--urgent);}
+  .queue-row--reported th[scope="row"]{box-shadow:inset 5px 0 0 var(--urgent);}
+  .queue-new{color:var(--urgent);font-size:12px;vertical-align:middle;}
+  .review-report{background:#fff;border-left:4px solid var(--urgent);padding:12px 14px;margin:10px 0;}
+  .review-report__category{font-weight:700;color:var(--urgent);}
+  .review-report__meta{margin:4px 0 8px;font-size:14px;color:var(--muted);}
+  .review-report__details{margin:0;white-space:pre-wrap;line-height:1.5;}
+  @media (max-width:760px){
+    .review-modal__body{grid-template-columns:1fr;overflow-y:auto;}
+    .review-modal__context{border-right:0;border-bottom:1px solid var(--line);overflow:visible;}
+    .review-modal__form{overflow:visible;}
+    .review-modal__row{grid-template-columns:1fr;}
+  }
+
+  /* "Why queued" column in the review queue. */
+  .queue-reason{display:flex;flex-direction:column;gap:2px;padding:6px 10px;margin:2px 0;border-left:4px solid var(--field-border);background:var(--base-lightest);font-size:14px;line-height:1.35;}
+  .queue-reason strong{font-size:12px;text-transform:uppercase;letter-spacing:.05em;}
+  .queue-reason--report{border-left-color:var(--urgent);background:var(--urgent-bg);}
+  .queue-reason--report strong{color:var(--urgent);}
+  .queue-applicant{display:flex;flex-direction:column;gap:2px;line-height:1.35;}
+  .queue-applicant a{font-size:14px;word-break:break-all;}
+  .queue-applicant span{font-size:13px;color:var(--muted);}
+  .review-modal__facts dd{word-break:break-word;}
   .empty{padding:32px 24px;color:var(--text);border-left:8px solid var(--primary);background:var(--primary-light);}
   .empty .big{font-family:var(--serif);font-size:19px;font-weight:700;color:var(--text);margin-bottom:6px;}
 
@@ -478,6 +585,14 @@
       </a>
       <div class="header-tools">
         <span class="role-tag" id="role-tag">STUDENT VIEW</span>
+        <div class="updates-wrap" id="report-updates-wrap" style="display:none;">
+          <button class="profile-btn updates-btn" id="report-updates-btn" type="button" onclick="toggleReportUpdates()"
+            aria-label="Updates on your reports" title="Updates on your reports" aria-haspopup="true" aria-expanded="false" aria-controls="report-updates-panel">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1z"/></svg>
+            <span class="updates-badge" id="report-updates-badge" style="display:none;">0</span>
+          </button>
+          <div class="updates-panel" id="report-updates-panel" role="region" aria-label="Updates on your reports" hidden></div>
+        </div>
         <button class="profile-btn" id="profile-btn" data-view="profile" type="button" onclick="goto('profile')" aria-label="Your profile" title="Your profile" style="display:none;">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7z"/></svg>
         </button>
@@ -496,7 +611,7 @@
     <div id="nav-manager" class="nav-group" style="display:none;">
       <div class="nav-label">Team</div>
       <a class="nav-link" data-view="manager" onclick="goto('manager')">Team impact</a>
-      <a class="nav-link" data-view="queue" onclick="goto('queue')">Review queue</a>
+      <a class="nav-link" data-view="queue" onclick="goto('queue')">Review queue<span class="nav-badge nav-queue-badge" style="display:none;" title="Open applicant reports">0</span></a>
       <a class="nav-link" data-view="feedbackInbox" onclick="goto('feedbackInbox')">Feedback inbox<span class="nav-badge nav-feedback-badge" style="display:none;">0</span></a>
     </div>
 
@@ -506,6 +621,7 @@
       <a class="nav-link" data-view="anomalies" onclick="goto('anomalies')">Anomalies</a>
       <a class="nav-link" data-view="visaBulletin" onclick="goto('visaBulletin')">Visa Bulletin</a>
       <a class="nav-link" data-view="rag" onclick="goto('rag')">RAG inspector</a>
+      <a class="nav-link" data-view="queue" onclick="goto('queue')">Review queue<span class="nav-badge nav-queue-badge" style="display:none;" title="Open applicant reports">0</span></a>
       <a class="nav-link" data-view="feedbackInbox" onclick="goto('feedbackInbox')">Feedback inbox<span class="nav-badge nav-feedback-badge" style="display:none;">0</span></a>
     </div>
 
@@ -551,25 +667,56 @@
 </div>
 
 <div class="modal-bg" id="review-modal-bg">
-  <div class="modal">
-    <h3 id="review-editor-title">Review and publish assessment</h3>
-    <input id="review-edit-id" type="hidden">
-    <div id="review-reports" hidden></div>
-    <div class="field"><label for="review-edit-severity">Severity</label><select id="review-edit-severity"><option>HIGH</option><option selected>MEDIUM</option><option>LOW</option><option>NOT_APPLICABLE</option></select></div>
-    <div class="field"><label for="review-edit-confidence">Confidence (0–100)</label><input id="review-edit-confidence" type="number" min="0" max="100" value="80"></div>
-    <div class="field"><label for="review-edit-summary">Summary</label><input id="review-edit-summary" maxlength="1500" required></div>
-    <div class="field"><label for="review-edit-analysis">Analysis (one point per line)</label><textarea id="review-edit-analysis" rows="3"></textarea></div>
-    <div class="field"><label for="review-edit-actions">Recommended actions (one per line)</label><textarea id="review-edit-actions" rows="3"></textarea></div>
-    <div class="field"><label for="review-edit-missing">Missing information (one point per line)</label><textarea id="review-edit-missing" rows="3"></textarea></div>
-    <div id="review-extraction-fields" hidden>
-      <p><a id="review-extraction-source" target="_blank" rel="noopener">Open official source</a></p>
-      <pre id="review-extraction-excerpt" style="max-height:260px;overflow:auto;white-space:pre-wrap"></pre>
-      <div class="field"><label for="review-edit-country-rules">Confirmed affected countries and scope (one ISO code and FULL/PARTIAL per line, e.g. AF,FULL)</label><textarea id="review-edit-country-rules" rows="5"></textarea></div>
+  <div class="modal review-modal" role="dialog" aria-modal="true" aria-labelledby="review-editor-title">
+    <div class="review-modal__head">
+      <div>
+        <h3 id="review-editor-title">Review and publish assessment</h3>
+        <p class="review-modal__policy" id="review-editor-policy"></p>
+      </div>
+      <button class="review-modal__close" type="button" aria-label="Close" onclick="closeQueueEditor()">&times;</button>
     </div>
-    <div class="form-actions">
-      <button class="btn ghost small" onclick="closeQueueEditor()">Cancel</button>
-      <button class="btn ghost small" id="review-dismiss" hidden onclick="dismissQueueReports()">Dismiss report — assessment is correct</button>
-      <button class="btn small" onclick="publishEditedQueue()">Publish correction</button>
+    <input id="review-edit-id" type="hidden">
+    <div class="review-modal__body">
+      <aside class="review-modal__context" aria-label="What is being reviewed">
+        <dl class="review-modal__facts" id="review-editor-facts"></dl>
+        <div id="review-reports" hidden></div>
+        <div id="review-extraction-context" hidden>
+          <div class="block-label">Official source</div>
+          <p><a id="review-extraction-source" target="_blank" rel="noopener">Open official source</a></p>
+          <pre id="review-extraction-excerpt" class="review-modal__excerpt"></pre>
+        </div>
+      </aside>
+      <div class="review-modal__form">
+        <div class="review-modal__row">
+          <div class="field"><label for="review-edit-severity">Severity</label><select id="review-edit-severity"><option>HIGH</option><option selected>MEDIUM</option><option>LOW</option><option>NOT_APPLICABLE</option></select></div>
+          <div class="field"><label for="review-edit-confidence">Confidence (0–100)</label><input id="review-edit-confidence" type="number" min="0" max="100" value="80"></div>
+        </div>
+        <div class="field"><label for="review-edit-summary">Summary</label><textarea id="review-edit-summary" maxlength="1500" rows="3" required></textarea></div>
+        <div class="field"><label for="review-edit-analysis">Analysis (one point per line)</label><textarea id="review-edit-analysis" rows="4"></textarea></div>
+        <div class="field"><label for="review-edit-actions">Recommended actions (one per line)</label><textarea id="review-edit-actions" rows="4"></textarea></div>
+        <div class="field"><label for="review-edit-missing">Missing information (one point per line)</label><textarea id="review-edit-missing" rows="3"></textarea></div>
+        <div id="review-extraction-fields" hidden>
+          <div class="field"><label for="review-edit-country-rules">Confirmed affected countries and scope (one ISO code and FULL/PARTIAL per line, e.g. AF,FULL)</label><textarea id="review-edit-country-rules" rows="5"></textarea></div>
+        </div>
+        <div id="review-note-wrap" class="review-note" hidden>
+          <div class="field">
+            <label for="review-edit-note">Note to the applicant <span class="review-note__required">(required)</span></label>
+            <textarea id="review-edit-note" rows="3" maxlength="1000" placeholder="Publishing a correction: say what you changed and why. Dismissing: explain why the assessment is already correct."></textarea>
+          </div>
+          <p class="review-note__hint">You must write a note whichever button you use — the applicant sees it next to their report.</p>
+          <ul class="review-note__rules">
+            <li><strong>Publish correction:</strong> change the assessment, and tell the applicant what you changed and why.</li>
+            <li><strong>Dismiss report:</strong> leave the assessment as it is, and tell the applicant why it is already correct.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <p id="review-error" class="review-modal__error" role="alert" hidden></p>
+    <div class="review-modal__actions">
+      <button class="btn ghost small" type="button" onclick="closeQueueEditor()">Cancel</button>
+      <span class="review-modal__spacer"></span>
+      <button class="btn ghost small" type="button" id="review-dismiss" hidden onclick="dismissQueueReports()">Dismiss report — assessment is correct</button>
+      <button class="btn small" type="button" onclick="publishEditedQueue()">Publish correction</button>
     </div>
   </div>
 </div>
@@ -757,6 +904,7 @@ function enterApp(){
   document.getElementById('nav-admin').style.display = role==='admin' ? 'block':'none';
   // Show the profile shortcut only to students who have completed onboarding.
   document.getElementById('profile-btn').style.display = role==='student' && state.user?.profileComplete !== false ? 'inline-flex':'none';
+  document.getElementById('report-updates-wrap').style.display = role==='student' && state.user?.profileComplete !== false ? 'inline-flex':'none';
   document.getElementById('role-tag').textContent = role.toUpperCase()+' VIEW';
   if(state.user && state.user.profileComplete === false){
     document.querySelectorAll('.nav-group').forEach(element=>element.style.display='none');
@@ -770,6 +918,8 @@ function enterApp(){
   if(role==='student') loadNotifications();
   if(role==='student') connectNotificationStream();
   startFeedbackBadgePoll(role);
+  if(role==='manager' || role==='admin') loadReviewQueueBadge();
+  if(role==='student') loadReportUpdates();
   openDeepLink();
 }
 /* Runs once the user is in the app with a complete profile; alerts and email settings
@@ -1285,19 +1435,128 @@ function startFeedbackBadgePoll(role){
   if(feedbackBadgeTimer) clearInterval(feedbackBadgeTimer);
   if(role === 'student'){
     feedbackBadgeTimer = setInterval(async () => {
-      if(!state.token || state.view === 'feedback') return;
+      if(!state.token) return;
+      // CS203-97: a reviewer's answer to one of the applicant's reports lights up the bell.
+      loadReportUpdates();
+      if(state.view === 'feedback') return;
       if(!state.feedbackConversation) return;
       await loadHumanMessages(false);
     }, 10000);
   } else {
     feedbackBadgeTimer = setInterval(async () => {
-      if(!state.token || state.view === 'feedbackInbox') return;
+      if(!state.token) return;
+      // CS203-97: new applicant reports light up the review queue for managers and admins.
+      if(role === 'manager' || role === 'admin') loadReviewQueueBadge();
+      if(state.view === 'feedbackInbox') return;
       try{
         const convos = await fetchAllPages('/api/v1/feedback/admin/conversations');
         updateInboxBadge(convos);
       }catch(e){}
     }, 10000);
   }
+}
+
+/* CS203-97: the applicant's bell for reviewer answers to their recommendation reports. */
+async function loadReportUpdates(){
+  try{
+    const updates = await parseApiResponse(await apiFetch('/api/v1/report-updates'));
+    state.reportUpdates = updates || {unseen:0,items:[]};
+  }catch(e){ return; }
+  updateReportUpdatesBadge();
+  if(state.reportUpdatesOpen) renderReportUpdatesPanel();
+}
+function updateReportUpdatesBadge(){
+  const count = state.reportUpdates?.unseen || 0;
+  const badge = document.getElementById('report-updates-badge');
+  if(!badge) return;
+  badge.textContent = count > 99 ? '99+' : String(count);
+  badge.style.display = count > 0 ? 'inline-flex' : 'none';
+  document.getElementById('report-updates-btn')?.setAttribute('aria-label',
+    count ? `Updates on your reports, ${count} new` : 'Updates on your reports');
+}
+function renderReportUpdatesPanel(){
+  const panel = document.getElementById('report-updates-panel');
+  if(!panel) return;
+  const items = state.reportUpdates?.items || [];
+  const fresh = state.reportUpdatesFresh || new Set();
+  panel.innerHTML = `<div class="updates-panel__head"><strong>Updates on your reports</strong>
+      <button type="button" class="updates-panel__close" aria-label="Close" onclick="toggleReportUpdates(false)">&times;</button></div>
+    ${items.length ? `<ul class="updates-panel__list">${items.map(item=>{
+      const corrected = item.status==='RESOLVED';
+      return `<li class="updates-item ${fresh.has(item.reportId)?'updates-item--new':''}">
+        <button type="button" class="updates-item__link" onclick="openReportUpdate(${Number(item.assessmentId)})">
+          <span class="updates-item__top">
+            <span class="updates-item__status updates-item__status--${corrected?'resolved':'dismissed'}">${corrected?'Corrected':'Reviewed — no change'}</span>
+            ${fresh.has(item.reportId)?'<span class="updates-item__new">New</span>':''}
+          </span>
+          <span class="updates-item__title">${escapeHtml(item.policyTitle || 'Policy assessment')}</span>
+          <span class="updates-item__meta">Your report: ${escapeHtml(reportCategoryLabel(item.category))} · ${escapeHtml(formatTimestamp(item.resolvedAt))}</span>
+          ${item.resolutionNote?`<span class="updates-item__note">“${escapeHtml(item.resolutionNote)}”</span>`:''}
+          <span class="updates-item__cta">View assessment →</span>
+        </button></li>`;}).join('')}</ul>`
+      : '<p class="updates-panel__empty">No updates yet. When a reviewer answers one of your reports, it appears here.</p>'}`;
+}
+async function toggleReportUpdates(force){
+  const panel = document.getElementById('report-updates-panel');
+  const open = force === undefined ? panel.hidden : force;
+  state.reportUpdatesOpen = open;
+  panel.hidden = !open;
+  document.getElementById('report-updates-btn').setAttribute('aria-expanded', String(open));
+  if(!open) return;
+  await loadReportUpdates();
+  // Remember which were new so they stay highlighted while the panel is open, then clear the badge.
+  state.reportUpdatesFresh = new Set((state.reportUpdates?.items || []).filter(item=>!item.seen).map(item=>item.reportId));
+  renderReportUpdatesPanel();
+  if(state.reportUpdatesFresh.size){
+    try{
+      await parseApiResponse(await apiFetch('/api/v1/report-updates/seen',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}));
+      state.reportUpdates.unseen = 0;
+      state.reportUpdates.items.forEach(item=>{item.seen=true;});
+      updateReportUpdatesBadge();
+    }catch(e){}
+  }
+}
+function openReportUpdate(assessmentId){
+  toggleReportUpdates(false);
+  openImpact(assessmentId);
+}
+/** Opening an assessment counts as seeing the outcomes on it. */
+async function markReportUpdatesSeen(assessmentId){
+  const unseenHere = (state.reportUpdates?.items || []).some(item=>!item.seen && Number(item.assessmentId)===Number(assessmentId));
+  const anyClosed = (state.impactRecommendationReport?.history || []).some(item=>item.status!=='OPEN');
+  if(!unseenHere && !anyClosed) return;
+  try{
+    await parseApiResponse(await apiFetch('/api/v1/report-updates/seen',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({assessmentId})}));
+    await loadReportUpdates();
+  }catch(e){}
+}
+document.addEventListener('click', event=>{
+  if(!state.reportUpdatesOpen) return;
+  const wrap = document.getElementById('report-updates-wrap');
+  if(wrap && !wrap.contains(event.target)) toggleReportUpdates(false);
+});
+document.addEventListener('keydown', event=>{
+  if(event.key==='Escape' && state.reportUpdatesOpen){
+    toggleReportUpdates(false);
+    document.getElementById('report-updates-btn')?.focus();
+  }
+});
+
+/** Red badge on "Review queue": how many applicant reports are waiting. */
+async function loadReviewQueueBadge(){
+  try{
+    const count = await parseApiResponse(await apiFetch('/api/v1/review/impacts/reports/count'));
+    updateReviewQueueBadge(count?.openReports || 0);
+  }catch(e){}
+}
+function updateReviewQueueBadge(count){
+  state.reviewQueueBadge = count;
+  document.querySelectorAll('.nav-queue-badge').forEach(b => {
+    b.textContent = count > 99 ? '99+' : String(count);
+    b.style.display = count > 0 ? 'inline-block' : 'none';
+    b.setAttribute('aria-label', `${count} open applicant report${count===1?'':'s'}`);
+  });
 }
 
 function goto(view, param){
@@ -1333,7 +1592,7 @@ function goto(view, param){
   // Reload both on every visit so a policy imported since login shows up here.
   if(view==='dashboard'){ loadPolicies(); loadNotifications(); loadImpacts(); loadActions(); loadForecasts(); loadForecastAlerts(); loadVisaTracking(); loadTestClock(); }
   if(view==='manager' && state.role==='manager') loadManagerDashboard();
-  if(view==='queue' && state.role==='manager') loadReviewQueue();
+  if(view==='queue' && (state.role==='manager' || state.role==='admin')) loadReviewQueue();
   if(view==='admin' && state.role==='admin'){ loadAdminUsers(); loadAdminSources(); loadAdminMetrics(); loadTestClock(); loadPolicies(); }
   if(view==='anomalies' && state.role==='admin') loadAnomalies();
   if(view==='visaBulletin' && state.role==='admin'){ loadVisaBulletin(); }
@@ -1803,11 +2062,12 @@ function renderImpactFeed(){
   </section>`;
 }
 async function openImpact(id){
-  state.impactDetail=null; state.impactChat=null; state.impactRecommendationReport={category:'',text:'',sending:false,open:null,error:null}; state.impactDetailError=null; state.impactDetailLoading=true;
+  state.impactDetail=null; state.impactChat=null; state.impactRecommendationReport={category:'',text:'',sending:false,history:[],justSent:false,error:null}; state.impactDetailError=null; state.impactDetailLoading=true;
   goto('impactDetail'); render();
   try{
     state.impactDetail=await parseApiResponse(await apiFetch(`/api/v1/impacts/${id}`));
     await loadImpactRecommendationReport(state.impactDetail);
+    markReportUpdatesSeen(state.impactDetail.id);
     state.policyChats=state.policyChats || {};
     const policyId=state.impactDetail.policyId;
     state.impactChat={id:policyId,chat:state.policyChats[policyId]
@@ -1895,52 +2155,126 @@ function reportCategoryLabel(category){
   return (REPORT_CATEGORIES.find(([value])=>value===category) || [category,category || 'Other'])[1];
 }
 
+/* What each review outcome means to the applicant. */
+const REPORT_STATUS={
+  OPEN:{label:'Waiting for review',note:'A reviewer has not looked at this yet. You can keep using this assessment meanwhile.'},
+  RESOLVED:{label:'Corrected',note:'A reviewer published an updated assessment. The version shown above is the corrected one.'},
+  DISMISSED:{label:'Reviewed — no change',note:'A reviewer checked the assessment and found it correct as published.'}};
+const MAX_OPEN_REPORTS=5;
+
+function renderImpactReportItem(item){
+  const status=REPORT_STATUS[item.status] || {label:item.status,note:''};
+  const when=item.resolvedAt?` · ${item.status==='RESOLVED'?'Corrected':'Reviewed'} ${escapeHtml(formatTimestamp(item.resolvedAt))}`:'';
+  const busy=state.impactRecommendationReport?.archiving===item.id;
+  // Only answered reports can be archived; one waiting for review stays visible.
+  const action=item.status==='OPEN' ? ''
+    : item.archivedAt
+      ? `<button class="btn ghost small" type="button" ${busy?'disabled':''} onclick="archiveImpactReport(${Number(item.id)},false)">${busy?'Restoring…':'Restore'}</button>`
+      : `<button class="btn ghost small" type="button" ${busy?'disabled':''} onclick="archiveImpactReport(${Number(item.id)},true)" title="Hide this answered report from your list">${busy?'Archiving…':'Archive'}</button>`;
+  return `<li class="report-history__item report-history__item--${escapeAttribute(String(item.status).toLowerCase())}${item.archivedAt?' report-history__item--archived':''}">
+    <div class="report-history__head">
+      <strong>${escapeHtml(reportCategoryLabel(item.category))}</strong>
+      <span class="report-status report-status--${escapeAttribute(String(item.status).toLowerCase())}">${escapeHtml(status.label)}</span>
+    </div>
+    <p class="report-history__meta">Sent ${escapeHtml(formatTimestamp(item.createdAt))} · version ${Number(item.assessmentVersion)}${when}${item.archivedAt?` · Archived ${escapeHtml(formatTimestamp(item.archivedAt))}`:''}</p>
+    <p class="report-history__details">${escapeHtml(item.details || '')}</p>
+    ${item.resolutionNote?`<div class="report-history__reply"><span>Reviewer's note</span><p>${escapeHtml(item.resolutionNote)}</p></div>`:''}
+    ${status.note && !item.archivedAt?`<p class="report-history__note">${escapeHtml(status.note)}</p>`:''}
+    ${action?`<div class="report-history__actions">${action}</div>`:''}
+  </li>`;
+}
+
+function renderImpactReportHistory(reports){
+  if(!reports.length) return '';
+  const active=reports.filter(item=>!item.archivedAt);
+  const archived=reports.filter(item=>item.archivedAt);
+  const showArchived=!!state.impactRecommendationReport?.showArchived;
+  return `<div class="report-history">
+    <h3 class="report-history__title">Your reports on this assessment</h3>
+    ${active.length?`<ul class="report-history__list">${active.map(renderImpactReportItem).join('')}</ul>`
+      :'<p class="report-history__empty">All your answered reports are archived.</p>'}
+    ${archived.length?`<button class="report-history__toggle" type="button" aria-expanded="${showArchived}" onclick="toggleArchivedImpactReports()">
+        ${showArchived?'Hide':'Show'} archived reports (${archived.length})</button>
+      ${showArchived?`<ul class="report-history__list report-history__list--archived">${archived.map(renderImpactReportItem).join('')}</ul>`:''}`:''}
+  </div>`;
+}
+
+function toggleArchivedImpactReports(){
+  const report=state.impactRecommendationReport;
+  if(!report) return;
+  report.showArchived=!report.showArchived;
+  render();
+}
+
+async function archiveImpactReport(reportId, archived){
+  const report=state.impactRecommendationReport,impact=state.impactDetail;
+  if(!report || !impact || report.archiving) return;
+  report.archiving=reportId;report.error=null;render();
+  try{
+    const updated=await parseApiResponse(await apiFetch(`/api/v1/impacts/${impact.id}/reports/${reportId}`,{method:'PATCH',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({archived})}));
+    report.history=(report.history || []).map(item=>item.id===reportId?updated:item);
+    showToast(archived?'Report archived.':'Report restored.');
+    if(typeof loadReportUpdates==='function') loadReportUpdates();
+  }catch(error){showToast(error.message);}
+  finally{report.archiving=null;if(state.view==='impactDetail')render();}
+}
+
 function renderImpactRecommendationReport(impact){
   const report=state.impactRecommendationReport;
   if(!report) return '';
-  const open=report.open;
-  const body=open
-    ? `<p role="status">Report sent on ${escapeHtml(formatTimestamp(open.createdAt))} for version ${open.assessmentVersion} of this assessment: <strong>${escapeHtml(reportCategoryLabel(open.category))}</strong>. A reviewer will check it and publish a correction if needed. You can keep using this assessment meanwhile.</p>`
-    : `<form onsubmit="reportImpactRecommendation(event)">
-        <label for="impact-recommendation-category">What kind of problem is it?</label>
-        <select id="impact-recommendation-category" required style="display:block;width:100%;margin:8px 0 12px;" onchange="state.impactRecommendationReport.category=this.value">
-          <option value="" ${report.category?'':'selected'} disabled>Choose a category</option>
-          ${REPORT_CATEGORIES.map(([value,label])=>`<option value="${value}" ${report.category===value?'selected':''}>${escapeHtml(label)}</option>`).join('')}
-        </select>
-        <label for="impact-recommendation-report">What needs correcting?</label>
-        <textarea id="impact-recommendation-report" required maxlength="900" rows="4" style="display:block;width:100%;margin:12px 0;" oninput="state.impactRecommendationReport.text=this.value">${escapeHtml(report.text)}</textarea>
+  const history=report.history || [];
+  const openCount=history.filter(item=>item.status==='OPEN').length;
+  const atLimit=openCount>=MAX_OPEN_REPORTS;
+  const form=atLimit
+    ? `<p class="report-form__limit" role="status">You have ${MAX_OPEN_REPORTS} reports waiting for review on this assessment. You can send another once a reviewer has looked at them.</p>`
+    : `<form class="report-form" onsubmit="reportImpactRecommendation(event)">
+        <div class="field">
+          <label for="impact-recommendation-category">What kind of problem is it?</label>
+          <select id="impact-recommendation-category" required onchange="state.impactRecommendationReport.category=this.value">
+            <option value="" ${report.category?'':'selected'} disabled>Choose a category</option>
+            ${REPORT_CATEGORIES.map(([value,label])=>`<option value="${value}" ${report.category===value?'selected':''}>${escapeHtml(label)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field">
+          <label for="impact-recommendation-report">What needs correcting?</label>
+          <textarea id="impact-recommendation-report" required maxlength="900" rows="4" placeholder="For example: my program ends in 2028, so this deadline does not apply to me." oninput="state.impactRecommendationReport.text=this.value">${escapeHtml(report.text)}</textarea>
+        </div>
         ${report.error?`<p class="rag-error" role="alert">${escapeHtml(report.error)}</p>`:''}
-        <button class="btn small" type="submit" ${report.sending?'disabled':''}>${report.sending?'Sending…':'Send report'}</button>
+        ${report.justSent?'<p class="report-form__sent" role="status">Report sent. A reviewer will check it — you can follow its status below.</p>':''}
+        <div><button class="btn small" type="submit" ${report.sending?'disabled':''}>${report.sending?'Sending…':openCount?'Send another report':'Send report'}</button></div>
       </form>`;
   return `<section class="detail-card" aria-labelledby="impact-recommendation-report-heading">
     <h2 id="impact-recommendation-report-heading">Report a recommendation</h2>
-    <p>Tell a reviewer what seems incorrect or missing. Your report is linked to this exact assessment and goes to the review queue.</p>
-    ${body}
+    <p>Tell a reviewer what seems incorrect or missing. Your report is linked to this exact assessment and goes to the review queue. You can report more than one problem.</p>
+    ${form}
+    ${renderImpactReportHistory(history)}
   </section>`;
 }
 
-/** The signed-in user's open report on this assessment, if any, so the form is not offered twice. */
+/** The signed-in user's reports on this assessment, newest first, with their review status. */
 async function loadImpactRecommendationReport(impact){
   const report=state.impactRecommendationReport;
   if(!report || !impact) return;
   try{
-    const reports=await parseApiResponse(await apiFetch(`/api/v1/impacts/${impact.id}/reports`));
-    report.open=(reports || []).find(item=>item.status==='OPEN') || null;
-  }catch(error){report.open=null;}
+    report.history=await parseApiResponse(await apiFetch(`/api/v1/impacts/${impact.id}/reports`)) || [];
+  }catch(error){report.history=report.history || [];}
 }
 
 async function reportImpactRecommendation(event){
   event.preventDefault();
   const report=state.impactRecommendationReport,impact=state.impactDetail;
-  if(!report || !impact || report.sending || report.open) return;
+  if(!report || !impact || report.sending) return;
+  report.justSent=false;
   if(!report.category){report.error='Choose what kind of problem it is.';render();return;}
   if(!report.text.trim()){report.error='Describe what needs correcting.';render();return;}
   report.sending=true;report.error=null;render();
   try{
-    report.open=await parseApiResponse(await apiFetch(`/api/v1/impacts/${impact.id}/reports`,{method:'POST',
+    const sent=await parseApiResponse(await apiFetch(`/api/v1/impacts/${impact.id}/reports`,{method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({category:report.category,details:report.text.trim().slice(0,900),version:impact.version})}));
-    report.text='';
+    report.history=[sent,...(report.history || [])];
+    report.text='';report.category='';report.justSent=true;
   }catch(error){report.error=error.message;}
   finally{report.sending=false;if(state.view==='impactDetail')render();}
 }
@@ -3066,6 +3400,7 @@ async function loadReviewQueue(){
   render();
   try{
     state.reviewQueue = await parseApiResponse(await apiFetch('/api/v1/review/impacts'));
+    loadReviewQueueBadge();
   }catch(error){
     state.reviewQueue = [];
     state.reviewQueueError = error.message;
@@ -3165,33 +3500,54 @@ async function removeManagerMember(userId){
 }
 
 function renderQueue(){
-  const title = '<div class="page-head"><h1>Review queue</h1><p class="sub">Pending assessments for applicants linked to your manager account.</p></div>';
+  const admin = state.role==='admin';
+  const title = `<div class="page-head"><h1>Review queue</h1><p class="sub">${admin
+    ? 'Reported assessments and drafts awaiting review, for every applicant.'
+    : 'Reported assessments and drafts awaiting review, for applicants linked to your manager account.'}</p></div>`;
   if(state.reviewQueueLoading) return `${title}<p role="status">Loading review queue…</p>`;
   if(state.reviewQueueError) return `${title}<div class="empty" role="alert">${escapeHtml(state.reviewQueueError)}</div>`;
-  if(!state.reviewQueue.length) return `${title}<div class="empty"><div class="big">Queue is clear</div>No reports are waiting for review for your linked applicants.</div>`;
-  const rows = state.reviewQueue.map(report=>`
-    <tr><th scope="row">${escapeHtml(report.policyTitle || 'Policy report')}</th>
+  if(!state.reviewQueue.length) return `${title}<div class="empty"><div class="big">Queue is clear</div>No reports are waiting for review${admin?'':' for your linked applicants'}.</div>`;
+  // Applicant reports first: a person is waiting on them.
+  const isReported = item => (item.reports || []).length > 0;
+  const items = [...state.reviewQueue].sort((a,b)=>Number(isReported(b))-Number(isReported(a)));
+  const reportCount = items.reduce((sum,item)=>sum+(item.reports || []).length,0);
+  const reportedItems = items.filter(isReported).length;
+  const banner = reportCount ? `<div class="queue-alert" role="status">
+      <span class="queue-alert__count">${reportCount}</span>
+      <div><strong>${reportCount} applicant report${reportCount===1?'':'s'} waiting</strong>
+        <span>on ${reportedItems} assessment${reportedItems===1?'':'s'}. They are listed first. Each one needs a correction or a dismissal, with a note to the applicant.</span></div>
+    </div>` : '';
+  const rows = items.map(report=>`
+    <tr class="${isReported(report)?'queue-row--reported':''}"><th scope="row">${isReported(report)?'<span class="queue-new" aria-label="Reported">●</span> ':''}${escapeHtml(report.policyTitle || 'Policy report')}</th>
       <td>${escapeHtml(report.draftSummary || '')}</td>
-      <td>${queueReason(report)}</td><td>${report.userId}</td>
+      <td>${queueReason(report)}</td><td>${queueApplicant(report)}</td>
       <td><button class="btn small" type="button" onclick="openQueueEditor(${report.id})">Review</button></td></tr>
   `).join('');
-  return `${title}<table><thead><tr><th scope="col">Policy</th><th scope="col">Draft summary</th><th scope="col">Why queued</th><th scope="col">Applicant ID</th><th scope="col">Action</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return `${title}${banner}<table><thead><tr><th scope="col">Policy</th><th scope="col">Draft summary</th><th scope="col">Why queued</th><th scope="col">Applicant</th><th scope="col">Action</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+/** Who the queued item belongs to: name, then email, then the numeric ID for reference. */
+function queueApplicant(item){
+  return `<div class="queue-applicant"><strong>${escapeHtml(item.applicantName || 'Applicant')}</strong>
+    ${item.applicantEmail?`<a href="mailto:${escapeAttribute(item.applicantEmail)}">${escapeHtml(item.applicantEmail)}</a>`:''}
+    <span>ID ${Number(item.userId)}</span></div>`;
 }
 
 /** CS203-97: applicant reports name their category; other items are drafts held for review. */
 function queueReason(item){
   const reports=item.reports || [];
-  if(!reports.length) return escapeHtml(item.reviewType==='Policy extractor' ? 'Extraction check' : 'Draft awaiting review');
-  return reports.map(report=>`<span class="tag action">Reported: ${escapeHtml(reportCategoryLabel(report.category))}</span>`).join(' ');
+  if(!reports.length) return `<div class="queue-reason"><strong>${escapeHtml(item.reviewType==='Policy extractor' ? 'Extraction check' : 'Draft')}</strong><span>Awaiting review</span></div>`;
+  return reports.map(report=>`<div class="queue-reason queue-reason--report"><strong>Reported</strong><span>${escapeHtml(reportCategoryLabel(report.category))}</span></div>`).join('');
 }
 
 function renderQueueReports(item){
   const reports=item.reports || [];
   if(!reports.length) return '';
   return `<div class="block-label">Applicant report${reports.length>1?'s':''}</div>` + reports.map(report=>`
-    <div class="detail-card" style="margin:8px 0;">
-      <p><strong>${escapeHtml(reportCategoryLabel(report.category))}</strong> · version ${report.assessmentVersion}${report.assessmentVersion!==item.version?` (current version ${item.version})`:''} · ${escapeHtml(formatTimestamp(report.createdAt))}</p>
-      <p style="white-space:pre-wrap">${escapeHtml(report.details)}</p>
+    <div class="review-report">
+      <div class="review-report__category">${escapeHtml(reportCategoryLabel(report.category))}</div>
+      <p class="review-report__meta">Reported on version ${report.assessmentVersion}${report.assessmentVersion!==item.version?` (now version ${item.version})`:''} · ${escapeHtml(formatTimestamp(report.createdAt))}</p>
+      <blockquote class="review-report__details">${escapeHtml(report.details)}</blockquote>
     </div>`).join('');
 }
 
@@ -3213,29 +3569,39 @@ function openQueueEditor(id){
   document.getElementById('review-edit-missing').value = reported ? (item.draftMissingInformation || []).join('\n') : '';
   const extractionReview = item.reviewType === 'Policy extractor';
   document.getElementById('review-editor-title').textContent = extractionReview
-    ? 'Review policy extraction' : 'Review and publish assessment';
+    ? 'Review policy extraction' : reported ? 'Review reported assessment' : 'Review and publish assessment';
+  document.getElementById('review-editor-policy').textContent = item.policyTitle || 'Policy';
+  const fact = (label, value) => value===undefined || value===null || value==='' ? ''
+    : `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(String(value))}</dd></div>`;
+  document.getElementById('review-editor-facts').innerHTML =
+    fact('Why queued', reported ? 'Reported by the applicant' : extractionReview ? 'Extraction check' : 'Draft awaiting review')
+    + fact('Applicant', item.applicantName || 'Applicant')
+    + fact('Email', item.applicantEmail)
+    + fact('Applicant ID', item.userId)
+    + fact('Current version', item.version)
+    + fact('Created', item.createdAt ? formatTimestamp(item.createdAt) : '');
+  document.getElementById('review-extraction-context').hidden = !extractionReview;
   document.getElementById('review-extraction-fields').hidden = !extractionReview;
   document.getElementById('review-extraction-source').href = item.sourceUrl || '#';
   document.getElementById('review-extraction-excerpt').textContent = item.sourceExcerpt || '';
   document.getElementById('review-edit-country-rules').value = '';
+  document.getElementById('review-note-wrap').hidden = !reported;
+  document.getElementById('review-edit-note').value = '';
+  showReviewError('');
+  state.reviewEditing = item;
   document.getElementById('review-modal-bg').classList.add('show');
 }
-function closeQueueEditor(){ document.getElementById('review-modal-bg').classList.remove('show'); }
-async function dismissQueueReports(){
-  const id = document.getElementById('review-edit-id').value;
-  if(!confirm('Dismiss this report and keep the assessment as published?')) return;
-  try{
-    await parseApiResponse(await apiFetch(`/api/v1/review/impacts/${id}/reports/dismiss`,{method:'POST'}));
-    closeQueueEditor();
-    showToast('Report dismissed. The assessment stays as published.');
-    await loadReviewQueue();
-    if(state.view==='manager') await loadManagerDashboard();
-  }catch(error){ showToast(error.message); }
+function closeQueueEditor(){ document.getElementById('review-modal-bg').classList.remove('show'); state.reviewEditing = null; }
+function showReviewError(message){
+  const box = document.getElementById('review-error');
+  box.textContent = message;
+  box.hidden = !message;
 }
-async function publishEditedQueue(){
-  const id = document.getElementById('review-edit-id').value;
+
+/** The correction as typed, normalised the same way the server compares it. */
+function reviewCorrectionFromForm(){
   const lines = fieldId=>document.getElementById(fieldId).value.split('\n').map(value=>value.trim()).filter(Boolean);
-  const correction = {
+  return {
     severity:document.getElementById('review-edit-severity').value,
     confidence:Number(document.getElementById('review-edit-confidence').value),
     summary:document.getElementById('review-edit-summary').value.trim(),
@@ -3248,18 +3614,72 @@ async function publishEditedQueue(){
         return {countryCode, scope};
       })
   };
+}
+
+/** CS203-97: true when a reported assessment would be republished exactly as it was. */
+function reviewCorrectionUnchanged(item, correction){
+  const norm = value => String(value ?? '').trim().replace(/\s+/g,' ');
+  const list = values => (values || []).map(norm).filter(Boolean).join('\n');
+  return item.draftUrgency === correction.severity
+    && Number(item.draftConfidence) === correction.confidence
+    && norm(item.draftSummary) === norm(correction.summary)
+    && list(item.draftAnalysis) === list(correction.analysis)
+    && list(item.draftActionItems) === list(correction.actionItems)
+    && list(item.draftMissingInformation) === list(correction.missingInformation);
+}
+
+function reviewNoteOrError(message){
+  const note = document.getElementById('review-edit-note').value.trim();
+  if(!note){
+    showReviewError(message);
+    document.getElementById('review-edit-note').focus();
+    return null;
+  }
+  return note;
+}
+
+async function dismissQueueReports(){
+  const id = document.getElementById('review-edit-id').value;
+  const note = reviewNoteOrError('Dismissing still needs a note. Tell the applicant why the assessment is already correct.');
+  if(!note) return;
+  if(!confirm('Dismiss this report and keep the assessment as published?')) return;
+  try{
+    await parseApiResponse(await apiFetch(`/api/v1/review/impacts/${id}/reports/dismiss`,{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({note})}));
+    closeQueueEditor();
+    showToast('Report dismissed. The applicant can see your note.');
+    await loadReviewQueue();
+    if(state.view==='manager') await loadManagerDashboard();
+  }catch(error){ showReviewError(error.message); }
+}
+async function publishEditedQueue(){
+  const id = document.getElementById('review-edit-id').value;
+  const item = state.reviewEditing;
+  const reported = (item?.reports || []).length > 0;
+  const correction = reviewCorrectionFromForm();
+  showReviewError('');
   if(!correction.summary || !Number.isInteger(correction.confidence) || correction.confidence<0 || correction.confidence>100){
-    showToast('Enter a summary and a confidence from 0 to 100.'); return;
+    showReviewError('Enter a summary and a confidence from 0 to 100.'); return;
+  }
+  if(reported){
+    if(reviewCorrectionUnchanged(item, correction)){
+      showReviewError('Nothing in the assessment was changed. Edit it to publish a correction, or use "Dismiss report" if it is already correct.');
+      return;
+    }
+    const note = reviewNoteOrError('Publishing needs a note. Tell the applicant what you changed and why.');
+    if(!note) return;
+    correction.reviewNote = note;
   }
   try{
     await parseApiResponse(await apiFetch(`/api/v1/review/impacts/${id}`,{
       method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(correction)
     }));
     closeQueueEditor();
-    showToast(correction.countryRestrictions ? 'Policy extraction correction saved and matching resumed.' : 'Corrected assessment published.');
+    showToast(correction.countryRestrictions ? 'Policy extraction correction saved and matching resumed.'
+      : reported ? 'Correction published. The applicant can see your note.' : 'Corrected assessment published.');
     await loadReviewQueue();
     if(state.view==='manager') await loadManagerDashboard();
-  }catch(error){ showToast(error.message); }
+  }catch(error){ showReviewError(error.message); }
 }
 
 function bulletinCurrentMonth(){
