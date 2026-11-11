@@ -68,3 +68,44 @@ test('empty state explains incomplete profile',()=>{
   view.state.user.profileComplete=false;
   assert.match(view.renderImpactFeed(),/Complete your profile/);
 });
+
+test('report posts a category, details and the viewed version to the assessment, not support chat',async()=>{
+  const calls=[];
+  const view=page(async(path,options)=>{calls.push([path,options]);
+    return {id:3,assessmentId:5,assessmentVersion:2,category:'WRONG_SEVERITY',status:'OPEN',createdAt:'2026-11-11T00:00:00Z'};});
+  view.state.view='impactDetail';
+  view.state.impactDetail={...impact(5,'HIGH','Urgent'),version:2};
+  view.state.impactRecommendationReport={category:'',text:'Not urgent for me',sending:false,open:null,error:null};
+
+  await view.reportImpactRecommendation({preventDefault(){}});
+  assert.equal(calls.length,0);
+  assert.match(view.state.impactRecommendationReport.error,/Choose what kind of problem/);
+
+  view.state.impactRecommendationReport.category='WRONG_SEVERITY';
+  await view.reportImpactRecommendation({preventDefault(){}});
+  assert.equal(calls.length,1);
+  assert.equal(calls[0][0],'/api/v1/impacts/5/reports');
+  assert.equal(calls[0][1].method,'POST');
+  assert.deepEqual(JSON.parse(calls[0][1].body),{category:'WRONG_SEVERITY',details:'Not urgent for me',version:2});
+  assert.equal(view.state.impactRecommendationReport.open.status,'OPEN');
+  assert.doesNotMatch(calls.map(call=>call[0]).join(' '),/feedback/);
+
+  const rendered=view.renderImpactRecommendationReport(view.state.impactDetail);
+  assert.match(rendered,/The severity is wrong/);
+  assert.match(rendered,/version 2/);
+  assert.doesNotMatch(rendered,/<form/);
+});
+
+test('opening an assessment with an open report shows its status instead of the form',async()=>{
+  const view=page(async path=>{
+    if(path==='/api/v1/impacts/5/reports') return [{id:3,assessmentId:5,assessmentVersion:1,category:'UNCLEAR',status:'OPEN',createdAt:'2026-11-11T00:00:00Z'}];
+    if(path==='/api/v1/impacts/5') return {...impact(5,'LOW','Reminder'),policyId:1,version:1};
+    return [];
+  });
+  view.loadPolicyChatHistory=async()=>{};
+  await view.openImpact(5);
+  assert.equal(view.state.impactRecommendationReport.open.category,'UNCLEAR');
+  const rendered=view.renderImpactRecommendationReport(view.state.impactDetail);
+  assert.match(rendered,/It is hard to understand/);
+  assert.doesNotMatch(rendered,/<form/);
+});

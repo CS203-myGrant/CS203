@@ -11,6 +11,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -51,6 +52,16 @@ public class ImpactReviewController {
     public ImpactReviewService.ReviewResult publish(@PathVariable long id, Principal principal,
             @Valid @RequestBody Correction correction) {
         return service.publishCorrection(id, principal.getName(), correction);
+    }
+
+    @PostMapping("/{id}/reports/dismiss")
+    @Operation(summary = "Dismiss applicant reports on an assessment that is correct as published",
+            description = "Closes the open reports without changing the assessment. To fix the assessment, "
+                    + "publish a correction instead, which also resolves the reports.")
+    @ApiResponse(responseCode = "200", description = "How many open reports were dismissed")
+    @ApiResponse(responseCode = "404", description = "Assessment not found, outside your scope, or without open reports")
+    public ImpactReviewService.ReportDismissal dismissReports(@PathVariable long id, Principal principal) {
+        return service.dismissReports(id, principal.getName());
     }
 
     public record Correction(@NotBlank

@@ -1,6 +1,7 @@
 package mygrant.impact;
 
 import java.security.Principal;
+import java.util.List;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -11,15 +12,21 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 /** The signed-in user's published impact feed. */
 @RestController
@@ -27,9 +34,11 @@ import jakarta.validation.constraints.NotNull;
 @Tag(name = "Impacts")
 public class ImpactController {
     private final ImpactFeedService service;
+    private final RecommendationReportService reports;
 
-    public ImpactController(ImpactFeedService service) {
+    public ImpactController(ImpactFeedService service, RecommendationReportService reports) {
         this.service = service;
+        this.reports = reports;
     }
 
     @GetMapping
@@ -73,5 +82,34 @@ public class ImpactController {
         return service.archive(principal.getName(), id, request.archived());
     }
 
+    @PostMapping("/{id}/reports")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Report a problem with one of your published assessments",
+            description = "Records the category, your description and the assessment version you saw, and sends "
+                    + "the assessment to the reviewer queue. The assessment stays visible until a reviewer "
+                    + "publishes a correction or dismisses the report.")
+    @ApiResponse(responseCode = "201", description = "The report, now open for review")
+    @ApiResponse(responseCode = "400", description = "Missing or unknown category, or empty or oversized details")
+    @ApiResponse(responseCode = "404", description = "Missing, unpublished or owned by another user")
+    @ApiResponse(responseCode = "409", description = "You already have an open report on it, or it changed since you loaded it")
+    public RecommendationReportService.Report report(Principal principal, @PathVariable long id,
+            @Valid @RequestBody ReportRequest request) {
+        return reports.report(principal.getName(), id, request.category(), request.details(), request.version());
+    }
+
+    @GetMapping("/{id}/reports")
+    @Operation(summary = "List your reports on one of your published assessments", description = "Newest first.")
+    @ApiResponse(responseCode = "200", description = "Your reports and their review status")
+    @ApiResponse(responseCode = "404", description = "Missing, unpublished or owned by another user")
+    public List<RecommendationReportService.Report> reports(Principal principal, @PathVariable long id) {
+        return reports.mine(principal.getName(), id);
+    }
+
     public record ArchiveRequest(@NotNull Boolean archived) {}
+
+    public record ReportRequest(
+            @NotNull ReportCategory category,
+            @NotBlank @Size(max = 900) String details,
+            @io.swagger.v3.oas.annotations.media.Schema(description = "The assessment version being reported, from its detail view")
+            @NotNull @Min(1) Integer version) {}
 }

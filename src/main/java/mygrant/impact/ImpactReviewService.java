@@ -35,6 +35,9 @@ public class ImpactReviewService {
     private OutputPublicationService publication;
     @Autowired
     void setPublication(OutputPublicationService publication) { this.publication = publication; }
+    private RecommendationReportService reports;
+    @Autowired
+    void setReports(RecommendationReportService reports) { this.reports = reports; }
 
     @Autowired
     public ImpactReviewService(JdbcTemplate jdbc, ObjectMapper mapper, UserRepository users,
@@ -67,25 +70,39 @@ public class ImpactReviewService {
         }
         String sql = """
                 SELECT r.id, r.user_id, r.policy_id, p.title, r.assessment_json, r.generated_at,
-                       p.source_url, p.content, o.id AS output_id
+                       r.version, p.source_url, p.content, o.id AS output_id
                 FROM policy_recommendations r JOIN policy_documents p ON p.id = r.policy_id
                 LEFT JOIN stored_ai_outputs o ON o.review_id = r.id
-                WHERE r.publication_status = 'PENDING_REVIEW'
+                WHERE (r.publication_status = 'PENDING_REVIEW'
+                    OR EXISTS (SELECT 1 FROM recommendation_reports rr
+                               WHERE rr.assessment_id = r.id AND rr.status = 'OPEN'))
                 """ + scope + """
                 ORDER BY r.generated_at, r.id LIMIT 100
                 """;
-        return reviewer.getRole() == UserRole.ADMIN
+        List<PendingImpact> rows = reviewer.getRole() == UserRole.ADMIN
                 ? jdbc.query(sql, (rs, row) -> pendingRow(rs))
                 : jdbc.query(sql, (rs, row) -> pendingRow(rs), reviewer.getId());
+        // CS203-97: applicant reports travel with the assessment they are about.
+        var open = reports.openFor(rows.stream().map(PendingImpact::id).toList());
+        return rows.stream().map(item -> item.withReports(open.getOrDefault(item.id(), List.of()))).toList();
     }
 
+    /**
+     * CS203-97: the reviewer checked the reported assessment and found it correct, so it stays
+     * as published and the applicant's open reports are closed as dismissed.
+     */
     @Transactional
-    public ReviewResult publishCorrection(long id, String reviewerEmail, Correction correction) {
+    public ReportDismissal dismissReports(long id, String reviewerEmail) {
         User reviewer = reviewer(reviewerEmail);
-        Long reviewerId = reviewer.getId();
-        String scope = "";
-        if (reviewer.getRole() != UserRole.ADMIN) {
-            scope = """
+        if (lockInScope(id, reviewer).isEmpty()) throw new ImpactNotFoundException();
+        int closed = reports.close(id, reviewer.getId(), RecommendationReportService.Outcome.DISMISSED);
+        if (closed == 0) throw new ImpactNotFoundException();
+        return new ReportDismissal(id, closed, Instant.now());
+    }
+
+    /** Locks the assessment if the reviewer may act on it: admins on any, managers on linked applicants'. */
+    private List<Integer> lockInScope(long id, User reviewer) {
+        String scope = reviewer.getRole() == UserRole.ADMIN ? "" : """
                   AND EXISTS (
                       SELECT 1 FROM manager_user_memberships m
                       JOIN users owner ON owner.id = m.user_id
@@ -93,12 +110,17 @@ public class ImpactReviewService {
                         AND owner.role = 'APPLICANT' AND owner.active = TRUE
                   )
                 """;
-        }
-        String sql = "SELECT r.version FROM policy_recommendations r WHERE r.id = ? "
-                + scope + " FOR UPDATE";
-        List<Integer> versions = reviewer.getRole() == UserRole.ADMIN
+        String sql = "SELECT r.version FROM policy_recommendations r WHERE r.id = ? " + scope + " FOR UPDATE";
+        return reviewer.getRole() == UserRole.ADMIN
                 ? jdbc.query(sql, (rs, row) -> rs.getInt(1), id)
-                : jdbc.query(sql, (rs, row) -> rs.getInt(1), id, reviewerId);
+                : jdbc.query(sql, (rs, row) -> rs.getInt(1), id, reviewer.getId());
+    }
+
+    @Transactional
+    public ReviewResult publishCorrection(long id, String reviewerEmail, Correction correction) {
+        User reviewer = reviewer(reviewerEmail);
+        Long reviewerId = reviewer.getId();
+        List<Integer> versions = lockInScope(id, reviewer);
         if (versions.isEmpty()) throw new ImpactNotFoundException();
         String provider = jdbc.queryForObject("SELECT assessment_json::jsonb ->> 'provider' FROM policy_recommendations WHERE id = ?",
                 String.class, id);
@@ -131,6 +153,8 @@ public class ImpactReviewService {
                     version = version + 1, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """, json, severity, reviewerId, id);
+        // CS203-97: the published correction answers any applicant reports on this assessment.
+        reports.close(id, reviewerId, RecommendationReportService.Outcome.RESOLVED);
         String outputType = jdbc.queryForObject("SELECT output_type FROM policy_recommendations WHERE id = ?", String.class, id);
         if ("ANSWER".equals(outputType)) {
             publication.publishHumanAnswer(id, correction.summary().trim());
@@ -200,7 +224,9 @@ public class ImpactReviewService {
             return new PendingImpact(rs.getLong("id"), rs.getLong("user_id"),
                     rs.getLong("policy_id"), rs.getString("title"), assessment.summary(),
                     rs.getTimestamp("generated_at").toInstant(), rs.getString("source_url"),
-                    reviewExcerpt(rs.getString("content")), assessment.provider(), rs.getObject("output_id", java.util.UUID.class));
+                    reviewExcerpt(rs.getString("content")), assessment.provider(), rs.getObject("output_id", java.util.UUID.class),
+                    rs.getInt("version"), assessment.urgency(), assessment.confidence(), assessment.reasons(),
+                    assessment.recommendedActions(), assessment.missingInformation(), List.of());
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Stored pending impact is unreadable", exception);
         }
@@ -237,7 +263,19 @@ public class ImpactReviewService {
 
     public record PendingImpact(long id, long userId, long policyId,
             String policyTitle, String draftSummary, Instant createdAt,
-            String sourceUrl, String sourceExcerpt, String reviewType, java.util.UUID outputId) {}
+            String sourceUrl, String sourceExcerpt, String reviewType, java.util.UUID outputId,
+            int version, ImpactUrgency draftUrgency, int draftConfidence, List<String> draftAnalysis,
+            List<String> draftActionItems, List<String> draftMissingInformation,
+            @io.swagger.v3.oas.annotations.media.Schema(description =
+                    "Open applicant reports on this assessment; empty when it is queued for another reason")
+            List<RecommendationReportService.Report> reports) {
+        PendingImpact withReports(List<RecommendationReportService.Report> open) {
+            return new PendingImpact(id, userId, policyId, policyTitle, draftSummary, createdAt, sourceUrl,
+                    sourceExcerpt, reviewType, outputId, version, draftUrgency, draftConfidence, draftAnalysis,
+                    draftActionItems, draftMissingInformation, List.copyOf(open));
+        }
+    }
+    public record ReportDismissal(long id, int dismissedReports, Instant dismissedAt) {}
     public record ReviewResult(long id, int version, boolean reviewedByHuman,
             String publicationStatus, Instant reviewedAt) {}
 }

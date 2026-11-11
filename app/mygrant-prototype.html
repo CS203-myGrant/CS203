@@ -554,6 +554,7 @@
   <div class="modal">
     <h3 id="review-editor-title">Review and publish assessment</h3>
     <input id="review-edit-id" type="hidden">
+    <div id="review-reports" hidden></div>
     <div class="field"><label for="review-edit-severity">Severity</label><select id="review-edit-severity"><option>HIGH</option><option selected>MEDIUM</option><option>LOW</option><option>NOT_APPLICABLE</option></select></div>
     <div class="field"><label for="review-edit-confidence">Confidence (0–100)</label><input id="review-edit-confidence" type="number" min="0" max="100" value="80"></div>
     <div class="field"><label for="review-edit-summary">Summary</label><input id="review-edit-summary" maxlength="1500" required></div>
@@ -567,6 +568,7 @@
     </div>
     <div class="form-actions">
       <button class="btn ghost small" onclick="closeQueueEditor()">Cancel</button>
+      <button class="btn ghost small" id="review-dismiss" hidden onclick="dismissQueueReports()">Dismiss report — assessment is correct</button>
       <button class="btn small" onclick="publishEditedQueue()">Publish correction</button>
     </div>
   </div>
@@ -1801,10 +1803,11 @@ function renderImpactFeed(){
   </section>`;
 }
 async function openImpact(id){
-  state.impactDetail=null; state.impactChat=null; state.impactRecommendationReport={text:'',sending:false,sent:false,error:null}; state.impactDetailError=null; state.impactDetailLoading=true;
+  state.impactDetail=null; state.impactChat=null; state.impactRecommendationReport={category:'',text:'',sending:false,open:null,error:null}; state.impactDetailError=null; state.impactDetailLoading=true;
   goto('impactDetail'); render();
   try{
     state.impactDetail=await parseApiResponse(await apiFetch(`/api/v1/impacts/${id}`));
+    await loadImpactRecommendationReport(state.impactDetail);
     state.policyChats=state.policyChats || {};
     const policyId=state.impactDetail.policyId;
     state.impactChat={id:policyId,chat:state.policyChats[policyId]
@@ -1880,25 +1883,64 @@ function setImpactPolicyChatQuestion(question){
   if(input){input.value=question;input.focus();}
 }
 
+/* CS203-97: categories match the backend ReportCategory enum. */
+const REPORT_CATEGORIES=[
+  ['WRONG_SEVERITY','The severity is wrong'],
+  ['INCORRECT_INFORMATION','Something stated is incorrect'],
+  ['DOES_NOT_APPLY_TO_ME','This does not apply to my situation'],
+  ['MISSING_INFORMATION','Important information is missing'],
+  ['UNCLEAR','It is hard to understand'],
+  ['OTHER','Something else']];
+function reportCategoryLabel(category){
+  return (REPORT_CATEGORIES.find(([value])=>value===category) || [category,category || 'Other'])[1];
+}
+
 function renderImpactRecommendationReport(impact){
   const report=state.impactRecommendationReport;
   if(!report) return '';
+  const open=report.open;
+  const body=open
+    ? `<p role="status">Report sent on ${escapeHtml(formatTimestamp(open.createdAt))} for version ${open.assessmentVersion} of this assessment: <strong>${escapeHtml(reportCategoryLabel(open.category))}</strong>. A reviewer will check it and publish a correction if needed. You can keep using this assessment meanwhile.</p>`
+    : `<form onsubmit="reportImpactRecommendation(event)">
+        <label for="impact-recommendation-category">What kind of problem is it?</label>
+        <select id="impact-recommendation-category" required style="display:block;width:100%;margin:8px 0 12px;" onchange="state.impactRecommendationReport.category=this.value">
+          <option value="" ${report.category?'':'selected'} disabled>Choose a category</option>
+          ${REPORT_CATEGORIES.map(([value,label])=>`<option value="${value}" ${report.category===value?'selected':''}>${escapeHtml(label)}</option>`).join('')}
+        </select>
+        <label for="impact-recommendation-report">What needs correcting?</label>
+        <textarea id="impact-recommendation-report" required maxlength="900" rows="4" style="display:block;width:100%;margin:12px 0;" oninput="state.impactRecommendationReport.text=this.value">${escapeHtml(report.text)}</textarea>
+        ${report.error?`<p class="rag-error" role="alert">${escapeHtml(report.error)}</p>`:''}
+        <button class="btn small" type="submit" ${report.sending?'disabled':''}>${report.sending?'Sending…':'Send report'}</button>
+      </form>`;
   return `<section class="detail-card" aria-labelledby="impact-recommendation-report-heading">
     <h2 id="impact-recommendation-report-heading">Report a recommendation</h2>
-    <p>Tell the myGRANT team what seems incorrect or missing. Your feedback is linked to this policy assessment.</p>
-    ${report.sent?'<p role="status">Report sent. The team can follow up through Feedback.</p><button class="btn ghost small" type="button" onclick="openFeedback()">Open feedback</button>':`<form onsubmit="reportImpactRecommendation(event)"><label for="impact-recommendation-report">What needs correcting?</label><textarea id="impact-recommendation-report" required maxlength="900" rows="4" style="display:block;width:100%;margin:12px 0;" oninput="state.impactRecommendationReport.text=this.value">${escapeHtml(report.text)}</textarea>${report.error?`<p class="rag-error" role="alert">${escapeHtml(report.error)}</p>`:''}<button class="btn small" type="submit" ${report.sending?'disabled':''}>${report.sending?'Sending…':'Send report'}</button></form>`}
+    <p>Tell a reviewer what seems incorrect or missing. Your report is linked to this exact assessment and goes to the review queue.</p>
+    ${body}
   </section>`;
+}
+
+/** The signed-in user's open report on this assessment, if any, so the form is not offered twice. */
+async function loadImpactRecommendationReport(impact){
+  const report=state.impactRecommendationReport;
+  if(!report || !impact) return;
+  try{
+    const reports=await parseApiResponse(await apiFetch(`/api/v1/impacts/${impact.id}/reports`));
+    report.open=(reports || []).find(item=>item.status==='OPEN') || null;
+  }catch(error){report.open=null;}
 }
 
 async function reportImpactRecommendation(event){
   event.preventDefault();
   const report=state.impactRecommendationReport,impact=state.impactDetail;
-  if(!report || !impact || report.sending || report.sent || !report.text.trim()) return;
+  if(!report || !impact || report.sending || report.open) return;
+  if(!report.category){report.error='Choose what kind of problem it is.';render();return;}
+  if(!report.text.trim()){report.error='Describe what needs correcting.';render();return;}
   report.sending=true;report.error=null;render();
-  const message=`Recommendation report | Policy ${impact.policyId}\n${impact.policyTitle}\nUser report: ${report.text.trim().slice(0,900)}\nAssessment: ${JSON.stringify({urgency:impact.urgency,summary:impact.summary,actions:(impact.actionItems || []).map(item=>item.text || item.title)}).slice(0,650)}`;
   try{
-    await parseApiResponse(await apiFetch('/api/v1/feedback/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:message.slice(0,2000)})}));
-    report.sent=true;
+    report.open=await parseApiResponse(await apiFetch(`/api/v1/impacts/${impact.id}/reports`,{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({category:report.category,details:report.text.trim().slice(0,900),version:impact.version})}));
+    report.text='';
   }catch(error){report.error=error.message;}
   finally{report.sending=false;if(state.view==='impactDetail')render();}
 }
@@ -3129,22 +3171,46 @@ function renderQueue(){
   if(!state.reviewQueue.length) return `${title}<div class="empty"><div class="big">Queue is clear</div>No reports are waiting for review for your linked applicants.</div>`;
   const rows = state.reviewQueue.map(report=>`
     <tr><th scope="row">${escapeHtml(report.policyTitle || 'Policy report')}</th>
-      <td>${escapeHtml(report.draftSummary || '')}</td><td>${report.userId}</td>
+      <td>${escapeHtml(report.draftSummary || '')}</td>
+      <td>${queueReason(report)}</td><td>${report.userId}</td>
       <td><button class="btn small" type="button" onclick="openQueueEditor(${report.id})">Review</button></td></tr>
   `).join('');
-  return `${title}<table><thead><tr><th scope="col">Policy</th><th scope="col">Draft summary</th><th scope="col">Applicant ID</th><th scope="col">Action</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return `${title}<table><thead><tr><th scope="col">Policy</th><th scope="col">Draft summary</th><th scope="col">Why queued</th><th scope="col">Applicant ID</th><th scope="col">Action</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+/** CS203-97: applicant reports name their category; other items are drafts held for review. */
+function queueReason(item){
+  const reports=item.reports || [];
+  if(!reports.length) return escapeHtml(item.reviewType==='Policy extractor' ? 'Extraction check' : 'Draft awaiting review');
+  return reports.map(report=>`<span class="tag action">Reported: ${escapeHtml(reportCategoryLabel(report.category))}</span>`).join(' ');
+}
+
+function renderQueueReports(item){
+  const reports=item.reports || [];
+  if(!reports.length) return '';
+  return `<div class="block-label">Applicant report${reports.length>1?'s':''}</div>` + reports.map(report=>`
+    <div class="detail-card" style="margin:8px 0;">
+      <p><strong>${escapeHtml(reportCategoryLabel(report.category))}</strong> · version ${report.assessmentVersion}${report.assessmentVersion!==item.version?` (current version ${item.version})`:''} · ${escapeHtml(formatTimestamp(report.createdAt))}</p>
+      <p style="white-space:pre-wrap">${escapeHtml(report.details)}</p>
+    </div>`).join('');
 }
 
 function openQueueEditor(id){
   const item = state.reviewQueue.find(report=>Number(report.id)===Number(id));
   if(!item) return;
+  // A reported assessment is already published, so start from what the applicant saw.
+  const reported = (item.reports || []).length > 0;
+  const reportsPanel = document.getElementById('review-reports');
+  reportsPanel.innerHTML = renderQueueReports(item);
+  reportsPanel.hidden = !reported;
+  document.getElementById('review-dismiss').hidden = !reported;
   document.getElementById('review-edit-id').value = item.id;
-  document.getElementById('review-edit-severity').value = 'MEDIUM';
-  document.getElementById('review-edit-confidence').value = 80;
+  document.getElementById('review-edit-severity').value = reported && item.draftUrgency ? item.draftUrgency : 'MEDIUM';
+  document.getElementById('review-edit-confidence').value = reported ? item.draftConfidence : 80;
   document.getElementById('review-edit-summary').value = item.draftSummary || '';
-  document.getElementById('review-edit-analysis').value = '';
-  document.getElementById('review-edit-actions').value = '';
-  document.getElementById('review-edit-missing').value = '';
+  document.getElementById('review-edit-analysis').value = reported ? (item.draftAnalysis || []).join('\n') : '';
+  document.getElementById('review-edit-actions').value = reported ? (item.draftActionItems || []).join('\n') : '';
+  document.getElementById('review-edit-missing').value = reported ? (item.draftMissingInformation || []).join('\n') : '';
   const extractionReview = item.reviewType === 'Policy extractor';
   document.getElementById('review-editor-title').textContent = extractionReview
     ? 'Review policy extraction' : 'Review and publish assessment';
@@ -3155,6 +3221,17 @@ function openQueueEditor(id){
   document.getElementById('review-modal-bg').classList.add('show');
 }
 function closeQueueEditor(){ document.getElementById('review-modal-bg').classList.remove('show'); }
+async function dismissQueueReports(){
+  const id = document.getElementById('review-edit-id').value;
+  if(!confirm('Dismiss this report and keep the assessment as published?')) return;
+  try{
+    await parseApiResponse(await apiFetch(`/api/v1/review/impacts/${id}/reports/dismiss`,{method:'POST'}));
+    closeQueueEditor();
+    showToast('Report dismissed. The assessment stays as published.');
+    await loadReviewQueue();
+    if(state.view==='manager') await loadManagerDashboard();
+  }catch(error){ showToast(error.message); }
+}
 async function publishEditedQueue(){
   const id = document.getElementById('review-edit-id').value;
   const lines = fieldId=>document.getElementById(fieldId).value.split('\n').map(value=>value.trim()).filter(Boolean);
