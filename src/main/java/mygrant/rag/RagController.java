@@ -19,10 +19,13 @@ public class RagController {
 
     private final RagService ragService;
     private final mygrant.policies.PolicyQuestionHistory history;
+    private final mygrant.common.QuestionRateLimiter rateLimiter;
 
-    public RagController(RagService ragService,mygrant.policies.PolicyQuestionHistory history) {
+    public RagController(RagService ragService,mygrant.policies.PolicyQuestionHistory history,
+            mygrant.common.QuestionRateLimiter rateLimiter) {
         this.ragService = ragService;
         this.history=history;
+        this.rateLimiter=rateLimiter;
     }
 
     @PostMapping("/query")
@@ -32,8 +35,10 @@ public class RagController {
                     + "Generated answers must pass independent review; check `evaluation`, `confidence`, `requiresReview` and `warnings`.")
     @ApiResponse(responseCode = "200", description = "The answer and its evidence")
     @ApiResponse(responseCode = "400", description = "The question is missing or too long")
+    @ApiResponse(responseCode = "429", description = "Too many questions in a short time; wait for the Retry-After seconds")
     @ApiResponse(responseCode = "503", description = "The embedding or AI service is unavailable")
     public RagQueryResponse query(@Valid @RequestBody RagQueryRequest request,java.security.Principal principal) {
+        rateLimiter.acquire(principal.getName());
         return ragService.queryForUser(principal.getName(),request.question());
     }
 

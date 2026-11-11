@@ -179,6 +179,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return response(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), Map.of());
     }
 
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ApiError> handleRateLimited(RateLimitExceededException exception) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.RETRY_AFTER, Long.toString(exception.getRetryAfterSeconds()));
+        return errorResponse(HttpStatus.TOO_MANY_REQUESTS, headers)
+                .body(ApiError.of(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage(), Map.of()));
+    }
+
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ApiError> handleAuthentication(AuthenticationException exception) {
         return response(HttpStatus.UNAUTHORIZED, "Please sign in to continue", Map.of());
