@@ -13,16 +13,21 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 public class PolicyChatController {
     private final PolicyChatService service;
     private final PolicyQuestionHistory history;
-    public PolicyChatController(PolicyChatService service,PolicyQuestionHistory history) { this.service=service;this.history=history; }
+    private final mygrant.common.QuestionRateLimiter rateLimiter;
+    public PolicyChatController(PolicyChatService service,PolicyQuestionHistory history,mygrant.common.QuestionRateLimiter rateLimiter) {
+        this.service=service;this.history=history;this.rateLimiter=rateLimiter;
+    }
 
     @PostMapping("/{id}/questions")
     @Operation(summary="Ask a follow-up question about a policy",description="Retrieves evidence filtered by your saved visa category and this policy. Uses your current profile, saved recommendation and last five saved exchanges. Client-supplied history is ignored. Approved answers include citations, evidence confidence and independent evaluation. Saves the returned response to your history. Not legal advice.")
     @ApiResponse(responseCode="200",description="Answer grounded in the selected policy, or an explanation that evidence is missing")
     @ApiResponse(responseCode="400",description="Invalid policy id, empty or oversized question, or invalid conversation history")
     @ApiResponse(responseCode="404",description="Policy not found")
+    @ApiResponse(responseCode="429",description="Too many questions in a short time; wait for the Retry-After seconds")
     @ApiResponse(responseCode="503",description="Policy assistant temporarily unavailable")
     public PolicyChatService.Answer ask(@PathVariable Long id,Principal principal,
             @Valid @RequestBody PolicyChatService.Question request) {
+        rateLimiter.acquire(principal.getName());
         var answer=service.ask(id,principal.getName(),request);
         history.record(principal.getName(),id,request.question(),answer);
         return answer;
