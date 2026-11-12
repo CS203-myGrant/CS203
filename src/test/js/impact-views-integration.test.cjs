@@ -75,6 +75,26 @@ test('empty and filtered-empty states explain availability without offering gene
   readOnly(view.calls);
 });
 
+test('late applicant explicitly requests a matching official policy while feed reads stay safe',async()=>{
+  const view=browser(async(path,options)=>options?.method==='POST'
+    ?response({message:'Assessment request processed. It will appear after any required review.'})
+    :result([]));
+  view.state.policyRecords=[
+    {id:52,title:'F-1 policy',visaType:'F-1',sourceType:'PRIMARY'},
+    {id:53,title:'J-1 policy',visaType:'J-1',sourceType:'PRIMARY'},
+    {id:54,title:'Secondary article',visaType:'F-1',sourceType:'SECONDARY'}];
+  await view.loadImpacts();
+  view.render();
+  assert.match(view.screen,/Request an assessment for an imported policy/);
+  assert.match(view.screen,/F-1 policy/);
+  assert.doesNotMatch(view.screen,/J-1 policy|Secondary article/);
+  await click(view,'See how this impacts me');
+  assert.equal(view.calls[1][0],'/api/v1/impact-assessments/policy/52/request');
+  assert.equal(view.calls[1][1].method,'POST');
+  assert.match(view.screen,/after any required review/);
+  assert.doesNotMatch(view.screen,/Your saved summary/);
+});
+
 test('feed retry repeats the failed page and urgency filter rather than an earlier page',async()=>{
   let failed=true;
   const view=browser(async()=>failed?response({message:'Feed is temporarily unavailable'},503):result([assessment()]));

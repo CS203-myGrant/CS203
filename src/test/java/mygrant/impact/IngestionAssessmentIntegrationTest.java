@@ -311,6 +311,30 @@ class IngestionAssessmentIntegrationTest extends PgvectorIntegrationTestBase {
         verify(generator, times(2)).generateJson(anyString(), anyString(), any(), anyString());
     }
 
+    @Test
+    void lateApplicantCanRequestOnlyTheirMatchingPolicyAndRepeatIsIdempotent() {
+        var request = request("F-1");
+        var policy = policies.saveAndFlush(new PolicyDocument(request.externalId(), request.title(), request.agency(),
+                request.visaType(), request.status(), request.sourceType(), request.publicationDate(),
+                request.effectiveDate(), request.sourceUrl(), request.content(), "0".repeat(64)));
+        Long policyId = policy.getId();
+        createdPolicies.add(policyId);
+        var late = profile("F-1", "2028-12-01", 1);
+        var other = profile("J-1", "2028-12-01", 1);
+        String lateEmail = users.findById(late.getUserId()).orElseThrow().getEmail();
+        String otherEmail = users.findById(other.getUserId()).orElseThrow().getEmail();
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> worker.requestForProfile(policyId, otherEmail));
+        worker.requestForProfile(policyId, lateEmail);
+        worker.requestForProfile(policyId, lateEmail);
+
+        assertThat(rows(policyId)).hasSize(1);
+        assertThat(results.findVisibleByUserId(late.getUserId())).hasSize(1);
+        assertThat(results.findVisibleByUserId(other.getUserId())).isEmpty();
+        verify(generator, times(1)).generateJson(anyString(), anyString(), any(), anyString());
+    }
+
     private UserProfile profile(String visaType, String expiry, int version) {
         User user = users.saveAndFlush(new User("Secret Applicant", UUID.randomUUID() + "@example.org", "unused"));
         createdUsers.add(user.getId());

@@ -799,6 +799,9 @@ const initialState = () => ({
   impactsPage: 0,
   impactsRequestedPage: 0,
   impactsTotalPages: 0,
+  impactRequestBusy: null,
+  impactRequestMessage: null,
+  impactRequestError: null,
   archivedPolicyIds: new Set(),
   impactDetail: null,
   impactDetailId: null,
@@ -2049,6 +2052,13 @@ function renderImpactFeed(){
   const empty=state.impactsUrgency?'No assessments match this urgency filter.'
     :state.user?.profileComplete===false?'No assessments are available yet. Complete your profile to see how policy changes affect you.'
     :'No assessments are available yet. New assessments appear after processing and any required review.';
+  const visaType=state.user?.visaType || '';
+  const matchingPolicies=visaType ? (state.policyRecords || []).filter(policy=>policy.sourceType==='PRIMARY'
+    && String(policy.visaType || '').toUpperCase().includes(visaType.toUpperCase())) : [];
+  const policyChoices=matchingPolicies.map(policy=>`<li style="margin:10px 0;">
+    ${escapeHtml(policy.title)}
+    <button class="btn ghost small" type="button" onclick="requestPolicyImpact(${Number(policy.id)})" ${state.impactRequestBusy?'disabled':''}>See how this impacts me</button>
+  </li>`).join('');
   return `<section aria-label="Your impact assessments">
     <div class="block-label">What this means for you</div>
     ${state.impactsLoading || state.impactsError?'':staleSourcesBanner(state.impactSourceFreshness)}
@@ -2061,12 +2071,28 @@ function renderImpactFeed(){
     </div>
     ${state.impactsError?`<div class="rag-error" role="alert">${escapeHtml(state.impactsError)} <button class="btn ghost small" type="button" onclick="retryImpacts()">Try again</button></div>`:''}
     ${state.impactsLoading || state.impacts===null?'<div class="empty" role="status">Loading your assessments...</div>':state.impactsError?'':rows || `<div class="empty">${empty}</div>`}
+    ${state.impactRequestMessage?`<p role="status">${escapeHtml(state.impactRequestMessage)}</p>`:''}
+    ${state.impactRequestError?`<div class="rag-error" role="alert">${escapeHtml(state.impactRequestError)}</div>`:''}
+    ${matchingPolicies.length?`<details><summary>Request an assessment for an imported policy</summary><p>Choose a matching official policy. Results needing human review will appear only after approval.</p><ul>${policyChoices}</ul></details>`:''}
     ${!state.impactsLoading && !state.impactsError && state.impactsTotalPages>1?`<nav aria-label="Assessment pages">
       <button class="btn ghost small" type="button" onclick="loadImpacts(${state.impactsPage-1})" ${state.impactsPage===0?'disabled':''}>Previous</button>
       <span>Page ${state.impactsPage+1} of ${state.impactsTotalPages}</span>
       <button class="btn ghost small" type="button" onclick="loadMoreImpacts()" ${state.impactsPage+1>=state.impactsTotalPages?'disabled':''}>Next</button>
     </nav>`:''}
   </section>`;
+}
+async function requestPolicyImpact(policyId){
+  if(state.impactRequestBusy) return;
+  const owner=state.user;
+  state.impactRequestBusy=policyId; state.impactRequestMessage=null; state.impactRequestError=null;
+  if(state.view==='dashboard') render();
+  try{
+    const result=await parseApiResponse(await apiFetch(`/api/v1/impact-assessments/policy/${policyId}/request`,{method:'POST'}));
+    if(state.user!==owner) return;
+    state.impactRequestMessage=result.message;
+    await loadImpacts();
+  }catch(error){if(state.user===owner) state.impactRequestError=error.message;}
+  finally{if(state.user===owner){state.impactRequestBusy=null;if(state.view==='dashboard') render();}}
 }
 async function openSavedImpact(id){
   const request={};

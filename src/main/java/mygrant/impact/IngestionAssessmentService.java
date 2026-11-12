@@ -23,6 +23,7 @@ import mygrant.policies.PolicyRecommendationStore;
 import mygrant.policies.SourceType;
 import mygrant.user.UserProfile;
 import mygrant.user.UserProfileRepository;
+import mygrant.user.UserRepository;
 
 /**
  * Fan out per captured profile; no transaction or DB connection is held during provider calls.
@@ -39,6 +40,7 @@ public class IngestionAssessmentService {
     private static final Logger log = LoggerFactory.getLogger(IngestionAssessmentService.class);
     private final PolicyDocumentRepository policies;
     private final UserProfileRepository profiles;
+    private final UserRepository users;
     private final ImpactAssessmentRepository results;
     private final ProfileImpactAssessmentService generator;
     private final PolicyRecommendationStore recommendations;
@@ -47,11 +49,13 @@ public class IngestionAssessmentService {
     private final TransactionTemplate write;
 
     public IngestionAssessmentService(PolicyDocumentRepository policies, UserProfileRepository profiles,
+            UserRepository users,
             ImpactAssessmentRepository results, ProfileImpactAssessmentService generator,
             PolicyRecommendationStore recommendations, ImpactReviewPolicy reviewPolicy,
             PlatformTransactionManager transactions) {
         this.policies = policies;
         this.profiles = profiles;
+        this.users = users;
         this.results = results;
         this.generator = generator;
         this.recommendations = recommendations;
@@ -91,6 +95,30 @@ public class IngestionAssessmentService {
                         failure.getClass().getSimpleName());
             }
         }
+    }
+
+    /** Backfill one applicant who joined after an official policy was imported. */
+    public void requestForProfile(Long policyId, String email) {
+        Inputs inputs = read.execute(tx -> {
+            var policy = policies.findById(policyId)
+                    .orElseThrow(() -> new IllegalArgumentException("Policy was not found."));
+            if (policy.getSourceType() != SourceType.PRIMARY) {
+                throw new IllegalArgumentException("Only official policies can be requested here.");
+            }
+            Long userId = users.findByEmail(email)
+                    .orElseThrow(() -> new IllegalArgumentException("Account was not found."))
+                    .getId();
+            UserProfile profile = profiles.findById(userId)
+                    .orElseThrow(() -> new IllegalArgumentException("Complete your profile first."));
+            var classification = PolicyAssessmentInputs.classification(policy);
+            boolean matching = classification.visaTypes().stream()
+                    .anyMatch(visa -> visa.trim().equalsIgnoreCase(profile.getVisaType()));
+            if (!matching) throw new IllegalArgumentException("This policy does not match your visa category.");
+            return new Inputs(PolicyAssessmentInputs.document(policy), policy.getAgency(), policy.getContent(),
+                    classification, PolicyAssessmentInputs.restrictionContext(policy), List.of(profile), true,
+                    Map.of(userId, recommendations.fingerprint(profile, policy)));
+        });
+        assessOne(policyId, inputs.profiles().get(0), inputs);
     }
 
     private void assessOne(Long policyId, UserProfile profile, Inputs inputs) {

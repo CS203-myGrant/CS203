@@ -36,6 +36,16 @@ override that ordering. Filtering and ownership apply before pagination and coun
 For example: `GET /api/v1/impact-assessments?urgency=HIGH&page=0&size=10`.
 Reading either endpoint never triggers generation.
 
+Applicants who created a profile after an official policy was imported can explicitly
+request an assessment with `POST /api/v1/impact-assessments/policy/{policyId}/request`.
+The server uses the authenticated account and its current profile, requires a matching
+visa category and a primary policy, and applies the recommendation rate limit. The
+request is idempotent for the same policy and profile version. The result enters the
+same review workflow as ingestion: pending, rejected and unavailable results remain
+absent from the owner-facing GET endpoints. The dashboard offers this action under
+matching imported policies; clicking it is the only dashboard path that may call
+the model. Refreshing or opening saved assessments remains read-only.
+
 These endpoints expose saved records and their recommended actions. The dashboard
 reads these saved records directly, preserving the API ordering and
 using its urgency filter and pagination. Confidence labels use HIGH at 80% or above,
@@ -90,7 +100,8 @@ clear the previous content and display the same unavailable message as missing I
 Frontend integration tests exercise the actual dashboard/detail render functions,
 response parsing and button handlers with mocked HTTP responses. They cover loading,
 empty states, retry URLs, review markers, hidden content, and the dashboard-to-detail
-flow, asserting that all requests are saved-assessment reads. These tests do not
+flow, asserting that feed and detail reads stay read-only and only the explicit
+request button sends a POST. These tests do not
 replace the PostgreSQL-backed server ownership/visibility tests or a browser check.
 
 V56 derives legacy review metadata from the central publication decisions and
