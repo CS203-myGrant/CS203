@@ -109,12 +109,9 @@ assessment and answer before it is exposed. `NO` and `UNAVAILABLE` both hold the
 candidate for the existing CS203-6/42 review workflow; applicants receive a notice,
 never the raw rejected draft. Generator failures without a candidate remain retryable.
 A database/persistence failure aborts the request rather than publishing unchecked output.
-Federal Register and manual imports save per-profile results asynchronously in
-`impact_assessments`. On-demand and rule-triggered reassessments use
-`PolicyRecommendationStore`; both assessment paths apply the shared review policy.
-Both Q&A paths bind their evaluated candidates when saving history. The configured
-confidence threshold and a model review request can require human approval even
-when the independent evaluator passes. See [review visibility](assessment-review-visibility.md).
+The Federal Register import, per-policy assessments, and rule-triggered reassessments
+use `PolicyRecommendationStore`; both Q&A paths bind their evaluated candidates when
+saving history. CS203-87/91 can reuse these same generation and publication paths.
 
 Admin endpoint (CS203-77 roles):
 

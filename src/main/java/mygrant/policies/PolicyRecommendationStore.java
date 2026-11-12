@@ -39,22 +39,6 @@ public class PolicyRecommendationStore {
     private final ActionItemService actionItems;
     private final ImpactReviewPolicy reviewPolicy;
     private mygrant.impact.EvaluationStore evaluations;
-    @Autowired(required = false)
-    private mygrant.impact.ImpactAssessmentRepository processingResults;
-
-    private Optional<ProfileImpactAssessment> unlinkedResult(long userId, long policyId, int version) {
-        if (processingResults == null) return Optional.empty();
-        return processingResults.findByUserIdAndPolicyIdAndProfileVersion(userId, policyId, version)
-                .filter(a -> a.getRecommendationId() == null)
-                .map(a -> {
-                    boolean visible = a.getStatus() == AssessmentStatus.COMPLETED
-                            && (a.getReviewStatus() == mygrant.impact.AssessmentReviewStatus.APPROVED
-                            || (a.getReviewStatus() == mygrant.impact.AssessmentReviewStatus.NOT_REQUIRED && !a.isRequiresReview()));
-                    if (!visible) return awaitingReview(0);
-                    return new ProfileImpactAssessment(a.getUrgency(), a.getConfidence(), a.getSummary(), a.getReasons(),
-                            a.getRecommendedActions(), List.of(), false, a.getProvider(), a.getModel(), null, 1);
-                });
-    }
 
     /** What to do when the fingerprint already has a row that no human has reviewed. */
     public enum OnConflict {
@@ -102,8 +86,6 @@ public class PolicyRecommendationStore {
             Supplier<ProfileImpactAssessment> generate, boolean refresh) {
         var user = users.findByEmail(email).orElseThrow(() -> new IllegalStateException("User not found"));
         var profile = profiles.findById(user.getId()).orElseGet(() -> UserProfile.empty(user.getId()));
-        var captured = unlinkedResult(user.getId(), policy.getId(), profile.getVersion());
-        if (captured.isPresent()) return captured.get();
         String hash = fingerprint(profile, policy);
         // Serialize concurrent clicks, including requests handled by different app instances.
         lock(user.getId(), policy.getId());
@@ -201,11 +183,11 @@ public class PolicyRecommendationStore {
     private record Row(long id, String json, boolean published, boolean reviewedByHuman) {}
 
     private List<Row> rows(long userId, long policyId, String inputHash, String lock) {
-        return jdbc.query("SELECT r.id, r.assessment_json, r.publication_status, r.reviewed_by_human, ("
-                + mygrant.impact.ImpactVisibility.VISIBLE + ") AS eligible FROM policy_recommendations r "
-                + "WHERE r.user_id = ? AND r.policy_id = ? AND r.input_hash = ? "
-                + lock, (rs, row) -> new Row(rs.getLong("id"), rs.getString("assessment_json"),
-                        rs.getBoolean("eligible"), rs.getBoolean("reviewed_by_human")),
+        return jdbc.query("""
+                SELECT id, assessment_json, publication_status, reviewed_by_human FROM policy_recommendations
+                WHERE user_id = ? AND policy_id = ? AND input_hash = ?
+                """ + lock, (rs, row) -> new Row(rs.getLong("id"), rs.getString("assessment_json"),
+                        "PUBLISHED".equals(rs.getString("publication_status")), rs.getBoolean("reviewed_by_human")),
                 userId, policyId, inputHash);
     }
 
@@ -254,12 +236,11 @@ public class PolicyRecommendationStore {
     public java.util.Optional<ProfileImpactAssessment> findCurrent(String email, PolicyDocument policy) {
         var user = users.findByEmail(email).orElseThrow(() -> new IllegalStateException("User not found"));
         var profile = profiles.findById(user.getId()).orElseGet(() -> UserProfile.empty(user.getId()));
-        var captured = unlinkedResult(user.getId(), policy.getId(), profile.getVersion());
-        if (captured.isPresent()) return captured.filter(a -> a.status() == AssessmentStatus.COMPLETED);
-        List<String> saved = jdbc.queryForList("SELECT assessment_json FROM policy_recommendations r "
-                + "WHERE user_id = ? AND policy_id = ? AND input_hash = ? AND "
-                + mygrant.impact.ImpactVisibility.VISIBLE,
-                String.class, user.getId(), policy.getId(), fingerprint(profile, policy));
+        List<String> saved = jdbc.queryForList("""
+                SELECT assessment_json FROM policy_recommendations
+                WHERE user_id = ? AND policy_id = ? AND input_hash = ?
+                  AND publication_status = 'PUBLISHED'
+                """, String.class, user.getId(), policy.getId(), fingerprint(profile, policy));
         if (saved.isEmpty()) return java.util.Optional.empty();
         return read(saved.getFirst());
     }

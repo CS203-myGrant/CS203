@@ -135,7 +135,7 @@ public class ActionItemService {
         }
         long userId = userId(email);
         MapSqlParameterSource params = new MapSqlParameterSource("userId", userId);
-        String where = " WHERE a.user_id = :userId AND r.user_id = :userId AND " + ImpactVisibility.VISIBLE;
+        String where = " WHERE a.user_id = :userId AND " + ImpactVisibility.VISIBLE;
         boolean archivedItems = Boolean.TRUE.equals(archived);
         List<String> statusNames = names(statuses);
         if (archivedItems) {
@@ -218,8 +218,8 @@ public class ActionItemService {
             return Map.of();
         }
         LocalDate today = clock.today(userId);
-        return jdbc.query(SELECT + " WHERE a.user_id = :userId AND r.user_id = :userId AND a.assessment_id IN (:ids) AND "
-                        + ImpactVisibility.VISIBLE + " ORDER BY a.assessment_id, a.position, a.id",
+        return jdbc.query(SELECT + " WHERE a.user_id = :userId AND a.assessment_id IN (:ids)"
+                        + " ORDER BY a.assessment_id, a.position, a.id",
                 new MapSqlParameterSource("userId", userId).addValue("ids", List.copyOf(assessmentIds)),
                 (rs, row) -> map(rs, today)).stream()
                 .collect(Collectors.groupingBy(ActionItemView::assessmentId, LinkedHashMap::new, Collectors.toList()));

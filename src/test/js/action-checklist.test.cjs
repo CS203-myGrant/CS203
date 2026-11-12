@@ -4,7 +4,7 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 
 const html=fs.readFileSync('app/mygrant-prototype.html','utf8');
-const source=html.slice(html.indexOf('async function loadImpacts('),
+const source=html.slice(html.indexOf('async function loadImpacts(){'),
   html.indexOf("window.addEventListener('beforeunload'"));
 // The app's own escaping, so the escaping test checks what the page really does.
 const escaping=html.slice(html.indexOf('function escapeHtml(value){'),html.indexOf('function formatDate(value){'));
@@ -90,7 +90,7 @@ test('a status change PATCHes the item then refetches the checklist, feed and op
   assert.equal(JSON.parse(calls[0][1].body).status,'COMPLETED');
   const refetched=calls.slice(1).map(call=>call[0]);
   assert.ok(refetched.includes('/api/v1/actions?page=0&size=50'));
-  assert.ok(refetched.some(path=>path.startsWith('/api/v1/impact-assessments?')));
+  assert.ok(refetched.some(path=>path.startsWith('/api/v1/impacts?')));
   assert.ok(refetched.includes('/api/v1/impacts/4'));
   assert.equal(view.state.impactDetail.actionItems[0].status,'COMPLETED');
   assert.equal(view.state.actionUpdating,null);
@@ -112,13 +112,13 @@ test('a failed status change is reported and the views are still refetched',asyn
 
 test('impact cards keep checklist items inside the detail view',()=>{
   const view=page(async()=>({}));
-  view.state.impacts=[{id:4,status:'COMPLETED',reviewStatus:'NOT_REQUIRED',requiresReview:false,urgency:'HIGH',summary:'Act soon',policyTitle:'Policy 4',confidence:85,
+  view.state.impacts=[{id:4,severity:'HIGH',summary:'Act soon',policyTitle:'Policy 4',confidence:85,
     confidenceLabel:'HIGH',createdAt:'2026-10-30T00:00:00Z',archived:false,reviewedByHuman:false,
     actionItems:[item(1,{status:'COMPLETED',title:'Finished step'}),item(2,{title:'First open step',urgent:true}),
       item(3,{status:'IN_PROGRESS',title:'Second open step'}),item(4,{title:'Third open step'})]}];
   const rendered=view.renderImpactFeed();
   assert.doesNotMatch(rendered,/Finished step|First open step|Second open step|Third open step/);
-  assert.match(rendered,/View assessment/);
+  assert.match(rendered,/View details and checklist/);
 });
 
 test('impact detail keeps the task completion and dismiss controls available',()=>{
