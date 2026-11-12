@@ -72,6 +72,15 @@ public class ImpactController {
         return service.get(principal.getName(), id);
     }
 
+    @GetMapping("/policy/{policyId}/latest")
+    @Operation(summary = "Find your latest published assessment for a policy",
+            description = "Lets the policy detail screen attach a report to the exact saved assessment version.")
+    @ApiResponse(responseCode = "200", description = "Your latest published assessment for this policy")
+    @ApiResponse(responseCode = "404", description = "No published assessment for this user and policy")
+    public ImpactFeedService.ImpactView latestForPolicy(Principal principal, @PathVariable long policyId) {
+        return service.latestForPolicy(principal.getName(), policyId);
+    }
+
     @PatchMapping("/{id}")
     @Operation(summary = "Archive or unarchive one of your published assessments")
     @ApiResponse(responseCode = "200", description = "The assessment with its new archive state")

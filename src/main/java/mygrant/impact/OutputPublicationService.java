@@ -160,6 +160,27 @@ public class OutputPublicationService {
         }
     }
 
+    /** Keep a rejected Policy Q&A draft hidden and its applicant-facing answer safely withheld. */
+    @Transactional
+    public void rejectHumanAnswer(long reviewId) {
+        var ids = jdbc.queryForList("SELECT id FROM stored_ai_outputs WHERE review_id = ?", UUID.class, reviewId);
+        for (UUID id : ids) {
+            var output = load(id);
+            if (output.historyId() == null) continue;
+            String response = jdbc.queryForObject("SELECT response_json FROM policy_question_history WHERE id = ?",
+                    String.class, output.historyId());
+            ObjectNode node = (ObjectNode) read(response, JsonNode.class);
+            node.put("answer", "A human reviewer could not verify this answer. Check the official source or contact support.");
+            node.put("requiresReview", true);
+            node.put("reviewedByHuman", true);
+            node.put("confidence", "LOW");
+            node.set("evaluation", mapper.valueToTree(new JudgeEvaluation(JudgeEvaluation.Verdict.NO,
+                    "Rejected by a human reviewer", "Human")));
+            jdbc.update("UPDATE policy_question_history SET response_json = ? WHERE id = ?",
+                    json(node), output.historyId());
+        }
+    }
+
     private void updateAnswer(Stored output, String answer, JudgeEvaluation evaluation, boolean held, boolean human) {
         if (output.historyId() == null) return;
         String response = jdbc.queryForObject("SELECT response_json FROM policy_question_history WHERE id = ?",

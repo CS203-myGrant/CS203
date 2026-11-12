@@ -3,6 +3,7 @@ package mygrant.impact;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -150,6 +151,88 @@ class ImpactFeedIntegrationTest extends mygrant.support.PgvectorIntegrationTestB
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM impact_assessment_revisions WHERE assessment_id = ?",
                 Long.class, id)).isEqualTo(2L);
+    }
+
+    @Test
+    void linkedManagerVerifiesUnchangedDraftWithAuditedNoteAndAccountScope() throws Exception {
+        User owner = account(UserRole.APPLICANT);
+        User manager = account(UserRole.MANAGER);
+        User unrelated = account(UserRole.MANAGER);
+        link(manager, owner);
+        long id = insert(owner, policy(), "MEDIUM", "PENDING_REVIEW",
+                pending(ImpactUrgency.MEDIUM, "Original AI summary"));
+        String decision = "{\"decision\":\"VERIFY\",\"version\":1,\"note\":\"Checked the official rule and profile.\"}";
+
+        decide(owner, id, decision).andExpect(status().isForbidden());
+        decide(unrelated, id, decision).andExpect(status().isNotFound());
+        decide(manager, id, "{\"decision\":\"VERIFY\",\"version\":1,\"note\":\" \"}")
+                .andExpect(status().isBadRequest());
+        decide(manager, id, "{\"decision\":\"VERIFY\",\"version\":2,\"note\":\"Checked source.\"}")
+                .andExpect(status().isConflict());
+        decide(manager, id, decision).andExpect(status().isOk())
+                .andExpect(jsonPath("$.publicationStatus").value("PUBLISHED"))
+                .andExpect(jsonPath("$.reviewedByHuman").value(true))
+                .andExpect(jsonPath("$.version").value(2));
+        mvc.perform(get("/api/v1/impacts/" + id).header("Authorization", token(owner)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary").value("Original AI summary"))
+                .andExpect(jsonPath("$.reviewedByHuman").value(true));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM action_items WHERE assessment_id = ?",
+                Long.class, id)).isEqualTo(1L);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM impact_assessment_revisions WHERE assessment_id = ?",
+                Long.class, id)).isEqualTo(2L);
+        assertThat(jdbc.queryForObject("SELECT note FROM impact_review_decisions WHERE assessment_id = ?",
+                String.class, id)).isEqualTo("Checked the official rule and profile.");
+        decide(manager, id, decision).andExpect(status().isConflict());
+    }
+
+    @Test
+    void adminRejectsPendingDraftWithoutExposingItToApplicant() throws Exception {
+        User owner = account(UserRole.APPLICANT);
+        User admin = account(UserRole.ADMIN);
+        long id = insert(owner, policy(), "HIGH", "PENDING_REVIEW",
+                pending(ImpactUrgency.HIGH, "Unsafe draft"));
+        decide(admin, id, "{\"decision\":\"REJECT\",\"version\":1,\"note\":\"This claim is unsupported by the source.\"}")
+                .andExpect(status().isOk()).andExpect(jsonPath("$.publicationStatus").value("REJECTED"));
+        mvc.perform(get("/api/v1/impacts/" + id).header("Authorization", token(owner)))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/review/impacts").header("Authorization", token(admin)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
+        assertThat(jdbc.queryForObject("SELECT decision FROM impact_review_decisions WHERE assessment_id = ?",
+                String.class, id)).isEqualTo("REJECT");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM impact_assessment_revisions WHERE assessment_id = ?",
+                Long.class, id)).isEqualTo(2L);
+        mvc.perform(patch("/api/v1/review/impacts/" + id).header("Authorization", token(admin))
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"severity":"LOW","confidence":90,"summary":"Trying to republish",
+                                 "analysis":[],"actionItems":[],"missingInformation":[]}
+                                """))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void policyDetailFindsOnlyTheOwnersNewestPublishedAssessment() throws Exception {
+        User owner = account(UserRole.APPLICANT);
+        User stranger = account(UserRole.APPLICANT);
+        PolicyDocument policy = policy();
+        long first = insert(owner, policy, "LOW", "PUBLISHED", approved(ImpactUrgency.LOW, "First advice"));
+        insert(owner, policy, "HIGH", "PENDING_REVIEW", pending(ImpactUrgency.HIGH, "Hidden draft"));
+        String path = "/api/v1/impacts/policy/" + policy.getId() + "/latest";
+        mvc.perform(get(path).header("Authorization", token(owner)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(first));
+        mvc.perform(get(path).header("Authorization", token(stranger))).andExpect(status().isNotFound());
+        long newest = insert(owner, policy, "MEDIUM", "PUBLISHED",
+                approved(ImpactUrgency.MEDIUM, "Newest advice"));
+        mvc.perform(get(path).header("Authorization", token(owner)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(newest))
+                .andExpect(jsonPath("$.version").value(1));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions decide(User reviewer, long id, String body)
+            throws Exception {
+        return mvc.perform(post("/api/v1/review/impacts/" + id + "/decision")
+                .header("Authorization", token(reviewer)).contentType(MediaType.APPLICATION_JSON)
+                .content(body));
     }
 
     @Test

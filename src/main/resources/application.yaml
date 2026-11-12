@@ -130,6 +130,13 @@ mygrant:
   impact:
     assessments-enabled: ${IMPACT_ASSESSMENTS_ENABLED:true}
     review-confidence-threshold: ${IMPACT_REVIEW_CONFIDENCE_THRESHOLD:60}
+  demo:
+    enabled: ${MYGRANT_DEMO_ENABLED:false}
+    evaluate: ${MYGRANT_DEMO_EVALUATE:false}
+    applicant-password: ${DEMO_APPLICANT_PASSWORD:}
+    manager-password: ${DEMO_MANAGER_PASSWORD:}
+    admin-password: ${DEMO_ADMIN_PASSWORD:}
+    report-directory: ${MYGRANT_DEMO_REPORT_DIRECTORY:demo-reports}
   # TEMPORARY testing aid: lets admins and applicants move the app's "today" to when a
   # policy is published, from the admin page and profile settings. Set to false to hide it.
   test-clock:
