@@ -61,6 +61,7 @@ public class SecurityConfig {
                 .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                 .requestMatchers("/", "/mygrant-prototype.html", "/favicon.ico",
                         "/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh",
+                        "/api/v1/auth/verify-email",
                         "/api/v1/auth/workos/login", "/api/v1/auth/workos/callback",
                         "/api/v1/webhooks/workos").permitAll()
                 // Unsubscribe links in alert emails carry their own signed token.
