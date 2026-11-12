@@ -161,19 +161,43 @@ test('card metadata and summaries are escaped',()=>{
 });
 
 // CS203-175: a banner when the sources behind the assessments have stopped updating.
-test('the feed warns when a policy source has not updated since a date',async()=>{
-  const stale={stale:true,staleSince:'2026-11-01T08:00:00Z',sources:[{name:'Federal Register',stale:true}]};
-  const view=page(async()=>({content:[{...impact(1,'HIGH','Act now'),sourceFreshness:stale}],totalPages:1}));
+const staleSources={stale:true,staleSince:'2026-11-01T08:00:00Z',sources:[{name:'Federal Register',stale:true}]};
+const freshSources={stale:false,staleSince:null,sources:[{name:'Federal Register',stale:false}]};
+test('the feed warns from the page-level freshness, even when it is empty',async()=>{
+  const view=page(async()=>({content:[],totalPages:0,sourceFreshness:staleSources}));
   await view.loadImpacts();
-  assert.match(view.renderImpactFeed(),/Some sources haven't updated since 2026-11-01; information may be out of date\./);
-  view.state.impactDetail={...impact(1,'HIGH','Act now'),sourceFreshness:stale};
-  view.state.impactRecommendationReport={category:'',text:'',sending:false,justSent:false,error:null,history:[]};
-  assert.match(view.renderImpactDetail(),/Some sources haven't updated since 2026-11-01/);
+  const rendered=view.renderImpactFeed();
+  assert.match(rendered,/Some sources haven't updated since 2026-11-01; information may be out of date\./);
+  assert.match(rendered,/No assessments are available yet/);
 });
 
-test('no banner while every source is fresh, and a never-synced source is still flagged',async()=>{
-  const view=page(async()=>({content:[{...impact(1,'LOW','Fine'),sourceFreshness:{stale:false,staleSince:null,sources:[]}}],totalPages:1}));
+test('no feed banner while sources are fresh, while loading, or after an error',async()=>{
+  const view=page(async()=>({content:[impact(1,'LOW','Fine')],totalPages:1,sourceFreshness:freshSources}));
   await view.loadImpacts();
   assert.doesNotMatch(view.renderImpactFeed(),/haven't updated/);
+  let release;
+  const slow=page(()=>new Promise(resolve=>{release=resolve;}));
+  slow.state.impactSourceFreshness=staleSources;
+  const loading=slow.loadImpacts();
+  assert.equal(slow.state.impactSourceFreshness,null,'a new load forgets the previous page');
+  assert.doesNotMatch(slow.renderImpactFeed(),/haven't updated/);
+  release({content:[],totalPages:0,sourceFreshness:staleSources});
+  await loading;
+  const failed=page(async()=>{throw new Error('Server unavailable');});
+  failed.state.impactSourceFreshness=staleSources;
+  await failed.loadImpacts();
+  assert.doesNotMatch(failed.renderImpactFeed(),/haven't updated/);
+});
+
+test('saved and legacy assessment details warn about their own stale sources',()=>{
+  const view=page(async()=>({}));
+  assert.match(view.renderSavedImpactDetail({...impact(1,'HIGH','Act now'),sourceFreshness:staleSources}),
+    /Some sources haven't updated since 2026-11-01/);
+  assert.doesNotMatch(view.renderSavedImpactDetail({...impact(1,'HIGH','Act now'),sourceFreshness:freshSources}),
+    /haven't updated/);
+  view.state.impactDetailSource='legacy';
+  view.state.impactDetail={...impact(1,'HIGH','Act now'),severity:'HIGH',sourceFreshness:staleSources};
+  view.state.impactRecommendationReport={category:'',text:'',sending:false,justSent:false,error:null,history:[]};
+  assert.match(view.renderImpactDetail(),/Some sources haven't updated since 2026-11-01/);
   assert.match(view.staleSourcesBanner({stale:true,staleSince:null,sources:[]}),/haven't updated recently/);
 });

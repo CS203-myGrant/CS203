@@ -12,6 +12,8 @@ import java.util.UUID;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import mygrant.auth.JwtService;
 import mygrant.policies.*;
+import mygrant.sources.PolicySource;
+import mygrant.sources.PolicySourceType;
 import mygrant.support.PgvectorIntegrationTestBase;
 import mygrant.user.*;
 import org.junit.jupiter.api.Test;
@@ -39,6 +41,7 @@ class SavedImpactAssessmentReadIntegrationTest extends PgvectorIntegrationTestBa
     @Autowired JwtService jwt;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper mapper;
+    @Autowired mygrant.sources.PolicySourceRepository sources;
     @MockBean VectorStore vectors;
     @MockBean ProfileImpactAssessmentService generator;
 
@@ -148,6 +151,39 @@ class SavedImpactAssessmentReadIntegrationTest extends PgvectorIntegrationTestBa
         mvc.perform(get("/api/v1/impact-assessments").param("policyId", visible.getPolicyId().toString())
                         .param("urgency", "LOW").header("Authorization", token(owner)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
+        verifyNoInteractions(generator, vectors);
+    }
+
+    /** CS203-175: the feed and each assessment say whether the sources behind them still update. */
+    @Test
+    void pagesAndItemsReportTheFreshnessOfTheirSources() throws Exception {
+        String suffix = UUID.randomUUID().toString();
+        // Never synced, so stale; its host matches the policies' https://example.org/rule.
+        sources.saveAndFlush(new PolicySource("Example feed " + suffix, PolicySourceType.RSS,
+                "https://www.example.org/feed", 3600));
+        var fresh = new PolicySource("Other feed " + suffix, PolicySourceType.NEWS, "https://news.example.com/feed", 3600);
+        fresh.recordSuccess(java.time.Instant.now());
+        sources.saveAndFlush(fresh);
+        var owner = user();
+        var saved = save(owner, ImpactUrgency.HIGH, AssessmentReviewStatus.NOT_REQUIRED);
+
+        mvc.perform(get("/api/v1/impact-assessments").header("Authorization", token(owner)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sourceFreshness.stale").value(true))
+                .andExpect(jsonPath("$.sourceFreshness.sources[*].name").value(org.hamcrest.Matchers.hasItems(
+                        "Example feed " + suffix, "Other feed " + suffix)))
+                .andExpect(jsonPath("$.content[0].sourceFreshness.stale").value(true))
+                .andExpect(jsonPath("$.content[0].sourceFreshness.staleSince").doesNotExist())
+                .andExpect(jsonPath("$.content[0].sourceFreshness.sources[*].name")
+                        .value(org.hamcrest.Matchers.contains("Example feed " + suffix)));
+        mvc.perform(get("/api/v1/impact-assessments/" + saved.getId()).header("Authorization", token(owner)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sourceFreshness.sources[*].name")
+                        .value(org.hamcrest.Matchers.contains("Example feed " + suffix)));
+        // An empty feed still warns: it may be empty because the sources stopped updating.
+        mvc.perform(get("/api/v1/impact-assessments").header("Authorization", token(user())))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(jsonPath("$.sourceFreshness.stale").value(true));
         verifyNoInteractions(generator, vectors);
     }
 

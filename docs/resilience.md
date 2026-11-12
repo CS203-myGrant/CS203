@@ -110,9 +110,15 @@ These tests use a local stub server, never the real APIs:
 
 ## Source freshness (CS203-175)
 
-The impact feed (`GET /api/v1/impacts`), one assessment (`GET /api/v1/impacts/{id}`, also from
-`PATCH`) and the consolidated view (`GET /api/v1/impacts/consolidated`) include
-`sourceFreshness`:
+These responses include `sourceFreshness`:
+
+- the saved-assessment feed the dashboard uses (`GET /api/v1/impact-assessments`) and one saved
+  assessment (`GET /api/v1/impact-assessments/{id}`), which the policy page also shows;
+- the older impact feed (`GET /api/v1/impacts`), one assessment (`GET /api/v1/impacts/{id}`, also
+  from `PATCH`, and opened from alert emails) and the consolidated view
+  (`GET /api/v1/impacts/consolidated`).
+
+The shape is:
 
 ```json
 "sourceFreshness": {
@@ -143,8 +149,11 @@ The impact feed (`GET /api/v1/impacts`), one assessment (`GET /api/v1/impacts/{i
 - **What the page shows:** "Some sources haven't updated since <date>; information may be out of
   date." Sources are read once per request, never once per assessment.
 
-Tests: `SourceFreshnessServiceTest` (staleness, host matching), `ImpactFeedIntegrationTest`, and
-the node tests in `impact-feed.test.cjs`.
+Tests: `SourceFreshnessServiceTest` (staleness, host matching),
+`SavedImpactAssessmentReadIntegrationTest` and `ImpactFeedIntegrationTest` (page and item
+freshness, including an empty feed), and the node tests in `impact-feed.test.cjs` (the banner on
+the feed, an empty feed, the saved and legacy detail pages, and not while loading or after an
+error).
 
 ## Rate limits (CS203-176)
 

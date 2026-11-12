@@ -76,8 +76,13 @@ without generation. Legacy reports, review decisions, action items and severity
 emails retain their recommendation IDs. V56 synchronizes linked saved records when
 the recommendation is corrected, approved, rejected or re-evaluated, so both views
 show the same content and visibility. See [review visibility](assessment-review-visibility.md).
+Each saved record, and each page of them, also carries `sourceFreshness`, so the app can
+warn when the sources behind an assessment have stopped updating (CS203-175; see
+[resilience](resilience.md#source-freshness-cs203-175)).
 
-Provider failures persist as `UNAVAILABLE` without interrupting other profiles.
+Provider failures persist as `UNAVAILABLE` without interrupting other profiles. Each AI
+call has connect and read timeouts and a bounded retry first (CS203-174), so one slow
+provider cannot hold the background queue indefinitely.
 Reprocessing skips existing rows, including unavailable results; retry execution
 remains follow-up work (CS203-186). Profile changes do not automatically generate
 new results. The background queue is in memory, not a durable job queue; restart

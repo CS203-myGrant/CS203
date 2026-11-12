@@ -1977,13 +1977,15 @@ async function loadImpacts(pageNumber=0){
   const request={};
   const owner=state.user;
   state.impactsRequest=request; state.impactsRequestedPage=pageNumber;
-  state.impactsLoading=true; state.impactsError=null; state.impacts=null;
+  state.impactsLoading=true; state.impactsError=null; state.impacts=null; state.impactSourceFreshness=null;
   const urgency=state.impactsUrgency || '';
   if(state.view==='dashboard') render();
   try{
     const page=await parseApiResponse(await apiFetch(`/api/v1/impact-assessments?page=${pageNumber}&size=20${urgency?`&urgency=${encodeURIComponent(urgency)}`:''}`));
     if(state.impactsRequest!==request || state.user!==owner) return;
     state.impacts=(page.content || []).filter(isSavedImpactVisible);
+    // CS203-175: page-level, so an empty feed can still say the sources stopped updating.
+    state.impactSourceFreshness=page.sourceFreshness || null;
     state.impactsPage=pageNumber;
     state.impactsTotalPages=page.totalPages || 0;
   }catch(error){
@@ -2049,7 +2051,7 @@ function renderImpactFeed(){
     :'No assessments are available yet. New assessments appear after processing and any required review.';
   return `<section aria-label="Your impact assessments">
     <div class="block-label">What this means for you</div>
-    ${staleSourcesBanner((state.impacts || [])[0]?.sourceFreshness)}
+    ${state.impactsLoading || state.impactsError?'':staleSourcesBanner(state.impactSourceFreshness)}
     <div class="tag-row" style="margin-bottom:12px;">
       <label for="impact-urgency">Urgency</label>
       <select id="impact-urgency" onchange="showImpactUrgency(this.value)">
@@ -2093,6 +2095,7 @@ async function openSavedImpact(id){
 function renderSavedImpactDetail(impact){
   if(!isSavedImpactVisible(impact)) return '<div class="empty">Assessment unavailable.</div>';
   return `<article class="detail-card ${impactSeverityClass(impact.urgency)}">
+    ${staleSourcesBanner(impact.sourceFreshness)}
     <h1>${escapeHtml(impact.policyTitle)}</h1>
     <div class="tag-row"><span class="tag ${impact.urgency==='HIGH'?'action':''}">${escapeHtml(impact.urgency)}</span>
       <span class="tag">${impactConfidenceLabel(impact.confidence)} confidence (${Number(impact.confidence)}%)</span>
