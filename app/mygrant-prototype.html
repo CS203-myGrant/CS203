@@ -700,11 +700,11 @@
         </div>
         <div id="review-note-wrap" class="review-note" hidden>
           <div class="field">
-            <label for="review-edit-note">Note to the applicant <span class="review-note__required">(required)</span></label>
-            <textarea id="review-edit-note" rows="3" maxlength="1000" placeholder="Publishing a correction: say what you changed and why. Dismissing: explain why the assessment is already correct."></textarea>
+            <label for="review-edit-note">Review note <span class="review-note__required">(required for decisions)</span></label>
+            <textarea id="review-edit-note" rows="3" maxlength="1000" placeholder="Explain what you checked against the official source and why you made this decision."></textarea>
           </div>
-          <p class="review-note__hint">You must write a note whichever button you use — the applicant sees it next to their report.</p>
-          <ul class="review-note__rules">
+          <p class="review-note__hint">For applicant reports, your note is shown to the applicant. For draft decisions, it is kept in the review audit.</p>
+          <ul class="review-note__rules" id="review-report-rules">
             <li><strong>Publish correction:</strong> change the assessment, and tell the applicant what you changed and why.</li>
             <li><strong>Dismiss report:</strong> leave the assessment as it is, and tell the applicant why it is already correct.</li>
           </ul>
@@ -715,7 +715,9 @@
     <div class="review-modal__actions">
       <button class="btn ghost small" type="button" onclick="closeQueueEditor()">Cancel</button>
       <span class="review-modal__spacer"></span>
-      <button class="btn ghost small" type="button" id="review-dismiss" hidden onclick="dismissQueueReports()">Dismiss report — assessment is correct</button>
+      <button class="btn ghost small" type="button" id="review-dismiss" hidden onclick="dismissQueueReports()">Verify as correct and close report</button>
+      <button class="btn ghost small" type="button" id="review-reject" hidden onclick="decideQueueDraft('REJECT')">Reject draft</button>
+      <button class="btn small" type="button" id="review-verify" hidden onclick="decideQueueDraft('VERIFY')">Verify and publish</button>
       <button class="btn small" type="button" onclick="publishEditedQueue()">Publish correction</button>
     </div>
   </div>
@@ -2574,7 +2576,8 @@ async function saveApplicationProgress(event){
 }
 
 async function openPolicyDetail(id,refresh=false){
-  const detail={id, policy:null, assessment:null, loading:true, error:null, reportText:'', reporting:false, reported:false, reportError:null};
+  const detail={id, policy:null, assessment:null, impact:null, loading:true, error:null,
+    reportText:'',reportCategory:'',reporting:false,reported:false,reportError:null};
   state.policyChats=state.policyChats || {};
   detail.chat=state.policyChats[id] || (state.policyChats[id]={messages:[],draft:'',sending:false,error:null,historyLoaded:false,historyLoading:false});
   state.policyDetail=detail;
@@ -2587,6 +2590,16 @@ async function openPolicyDetail(id,refresh=false){
       throw new Error('Personalized recommendations are not available on this server yet. Please try again after the latest backend has been deployed. You can still read the policy summary and original source.');
     }
     detail.assessment=await parseApiResponse(response);
+    if(detail.assessment.status!=='UNAVAILABLE'){
+      try{
+        const linked=await apiFetch(`/api/v1/impacts/policy/${id}/latest`);
+        if(linked.ok){
+          const saved=await parseApiResponse(linked);
+          if(saved.summary===detail.assessment.summary && saved.urgency===detail.assessment.urgency)
+            detail.impact=saved;
+        }else if(linked.status!==404) await parseApiResponse(linked);
+      }catch(error){detail.reportError=error.message;}
+    }
     await loadPolicyChatHistory(detail);
   }catch(error){ detail.error=error.message; }
   finally{ detail.loading=false; if(state.policyDetail===detail && state.view==='policyDetail') render(); }
@@ -2646,12 +2659,24 @@ function renderPolicyDetail(){
     ${detail.loading?'<p role="status">Reviewing this policy against your profile. This may take a moment...</p>':''}
     ${detail.error?`<div class="rag-error" role="alert">${escapeHtml(detail.error)}</div><button class="btn ghost small" onclick="openPolicyDetail(${Number(detail.id)})">Try again</button>`:''}
     ${detail.assessment?`${renderPolicyRecommendation(detail.assessment)}${renderPolicyChat(detail)}
-      <div class="detail-card"><h2>Report a recommendation</h2><p>Tell the team what seems incorrect or missing. The policy and assessment will be included.</p>
-      ${detail.reported?'<p role="status">Report sent. You can follow up in Feedback.</p><button class="btn ghost small" onclick="openFeedback()">Open feedback</button>':`
-      <form onsubmit="reportPolicyRecommendation(event)"><label for="recommendation-report">What needs correcting?</label>
+      <div class="detail-card"><h2>Report a recommendation</h2>
+      ${detail.impact?`<p>Your report is linked to this saved assessment and goes to the review queue.</p>
+      ${detail.reported?'<p role="status">Report sent to the review queue. You can follow its status in the assessment details.</p>':`
+      <form onsubmit="reportPolicyRecommendation(event)">
+      <label for="recommendation-report-category">What kind of problem is it?</label>
+      <select id="recommendation-report-category" required onchange="state.policyDetail.reportCategory=this.value">
+        <option value="">Choose a reason</option>
+        ${['WRONG_SEVERITY','INCORRECT_INFORMATION','DOES_NOT_APPLY_TO_ME','MISSING_INFORMATION','UNCLEAR','OTHER'].map(value=>`<option value="${value}" ${detail.reportCategory===value?'selected':''}>${escapeHtml(reportCategoryLabel(value))}</option>`).join('')}
+      </select>
+      <label for="recommendation-report">What needs correcting?</label>
       <textarea id="recommendation-report" required maxlength="900" rows="4" style="display:block;width:100%;margin:12px 0;" oninput="state.policyDetail.reportText=this.value">${escapeHtml(detail.reportText)}</textarea>
       ${detail.reportError?`<p class="rag-error" role="alert">${escapeHtml(detail.reportError)}</p>`:''}
-      <button class="btn" type="submit" ${detail.reporting?'disabled':''}>${detail.reporting?'Sending...':'Report recommendation'}</button></form>`}</div>`:''}`;
+      <button class="btn" type="submit" ${detail.reporting?'disabled':''}>${detail.reporting?'Sending...':'Report recommendation'}</button></form>`}
+      <button class="btn ghost small" type="button" onclick="openImpact(${Number(detail.impact.id)})">View assessment and report history</button>`
+      :`${detail.reportError?`<p class="rag-error" role="alert">${escapeHtml(detail.reportError)}</p>`:''}
+      <p>This policy has no matching published assessment to report yet. You can contact support about the policy.</p>
+      <button class="btn ghost small" type="button" onclick="openFeedback()">Contact support</button>`}
+      </div>`:''}`;
 }
 
 async function loadPolicyChatHistory(detail){
@@ -2738,13 +2763,15 @@ async function sendPolicyQuestion(event){
 async function reportPolicyRecommendation(event){
   event.preventDefault();
   const detail=state.policyDetail;
-  if(!detail || detail.reporting || detail.reported || !detail.reportText.trim()) return;
+  if(!detail || !detail.impact || detail.reporting || detail.reported) return;
+  if(!detail.reportCategory || !detail.reportText.trim()){
+    detail.reportError='Choose a reason and describe what needs correcting.';render();return;
+  }
   detail.reporting=true; detail.reportError=null; render();
-  const assessment=detail.assessment;
-  const context=JSON.stringify({urgency:assessment.urgency,summary:assessment.summary,actions:assessment.recommendedActions,provider:assessment.provider,model:assessment.model});
-  const message=`Recommendation report | Policy ${detail.id} (${detail.policy.externalId})\n${detail.policy.title.slice(0,180)}\nUser report: ${detail.reportText.trim().slice(0,900)}\nAssessment: ${context.slice(0,650)}`;
   try{
-    await parseApiResponse(await apiFetch('/api/v1/feedback/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:message.slice(0,2000)})}));
+    await parseApiResponse(await apiFetch(`/api/v1/impacts/${detail.impact.id}/reports`,{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({category:detail.reportCategory,details:detail.reportText.trim().slice(0,900),version:detail.impact.version})}));
     detail.reported=true;
   }catch(error){ detail.reportError=error.message; }
   finally{ detail.reporting=false; if(state.policyDetail===detail && state.view==='policyDetail') render(); }
@@ -3591,6 +3618,11 @@ function openQueueEditor(id){
   reportsPanel.innerHTML = renderQueueReports(item);
   reportsPanel.hidden = !reported;
   document.getElementById('review-dismiss').hidden = !reported;
+  const extractionReview = item.reviewType === 'Policy extractor';
+  document.getElementById('review-verify').hidden = reported || extractionReview
+    || (item.outputType==='ANSWER' && item.citationsValid!==true);
+  document.getElementById('review-reject').hidden = reported || extractionReview;
+  document.getElementById('review-report-rules').hidden = !reported;
   document.getElementById('review-edit-id').value = item.id;
   document.getElementById('review-edit-severity').value = prefill && item.draftUrgency ? item.draftUrgency : 'MEDIUM';
   document.getElementById('review-edit-confidence').value = prefill ? item.draftConfidence : 80;
@@ -3598,7 +3630,6 @@ function openQueueEditor(id){
   document.getElementById('review-edit-analysis').value = prefill ? (item.draftAnalysis || []).join('\n') : '';
   document.getElementById('review-edit-actions').value = prefill ? (item.draftActionItems || []).join('\n') : '';
   document.getElementById('review-edit-missing').value = prefill ? (item.draftMissingInformation || []).join('\n') : '';
-  const extractionReview = item.reviewType === 'Policy extractor';
   document.getElementById('review-editor-title').textContent = extractionReview
     ? 'Review policy extraction' : reported ? 'Review reported assessment' : 'Review and publish assessment';
   document.getElementById('review-editor-policy').textContent = item.policyTitle || 'Policy';
@@ -3610,14 +3641,17 @@ function openQueueEditor(id){
     + fact('Applicant', item.applicantName || 'Applicant')
     + fact('Email', item.applicantEmail)
     + fact('Applicant ID', item.userId)
+    + fact('Citation check', item.outputType==='ANSWER'
+      ? (item.citationsValid===true ? 'Citation references valid; verify the claims against the source.'
+        : 'Citation references invalid or unknown; publish a corrected answer or reject this draft.') : null)
     + fact('Current version', item.version)
     + fact('Created', item.createdAt ? formatTimestamp(item.createdAt) : '');
-  document.getElementById('review-extraction-context').hidden = !extractionReview;
+  document.getElementById('review-extraction-context').hidden = !item.sourceUrl;
   document.getElementById('review-extraction-fields').hidden = !extractionReview;
   document.getElementById('review-extraction-source').href = item.sourceUrl || '#';
   document.getElementById('review-extraction-excerpt').textContent = item.sourceExcerpt || '';
   document.getElementById('review-edit-country-rules').value = '';
-  document.getElementById('review-note-wrap').hidden = !reported;
+  document.getElementById('review-note-wrap').hidden = extractionReview;
   document.getElementById('review-edit-note').value = '';
   showReviewError('');
   state.reviewEditing = item;
@@ -3680,6 +3714,24 @@ async function dismissQueueReports(){
       headers:{'Content-Type':'application/json'},body:JSON.stringify({note})}));
     closeQueueEditor();
     showToast('Report dismissed. The applicant can see your note.');
+    await loadReviewQueue();
+    if(state.view==='manager') await loadManagerDashboard();
+  }catch(error){ showReviewError(error.message); }
+}
+async function decideQueueDraft(decision){
+  const item = state.reviewEditing;
+  if(!item || (item.reports || []).length || item.reviewType==='Policy extractor') return;
+  const note = reviewNoteOrError('Write what you checked and why you chose '+decision.toLowerCase()+'.');
+  if(!note) return;
+  if(!confirm(decision==='REJECT' ? 'Reject this draft and keep it hidden from the applicant?'
+    : 'Verify this draft and publish it to the applicant?')) return;
+  try{
+    await parseApiResponse(await apiFetch(`/api/v1/review/impacts/${item.id}/decision`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({decision,version:item.version,note})
+    }));
+    closeQueueEditor();
+    showToast(decision==='VERIFY' ? 'Draft verified and published.' : 'Draft rejected and kept hidden.');
     await loadReviewQueue();
     if(state.view==='manager') await loadManagerDashboard();
   }catch(error){ showReviewError(error.message); }

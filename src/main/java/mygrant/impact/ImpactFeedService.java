@@ -123,6 +123,18 @@ public class ImpactFeedService {
         return withActionItems(userId, List.of(visible(userId, id))).getFirst();
     }
 
+    /** Locate the applicant's newest published assessment for the policy detail report form. */
+    @Transactional(readOnly = true)
+    public ImpactView latestForPolicy(String email, long policyId) {
+        long userId = userId(email);
+        var params = new MapSqlParameterSource("userId", userId).addValue("policyId", policyId);
+        ImpactView latest = jdbc.query("SELECT r.*, p.title AS policy_title, p.agency AS policy_agency, "
+                + "p.source_url AS policy_source_url, " + citationSql() + " " + VISIBLE
+                + " AND r.policy_id = :policyId ORDER BY r.generated_at DESC, r.id DESC LIMIT 1",
+                params, (rs, row) -> map(rs)).stream().findFirst().orElseThrow(ImpactNotFoundException::new);
+        return withActionItems(userId, List.of(latest)).getFirst();
+    }
+
     @Transactional
     public ImpactView archive(String email, long id, boolean archived) {
         long userId = userId(email);

@@ -17,6 +17,7 @@ test('loads stored policy and personalized recommendation',async()=>{
   assert.equal(calls[0][0],'/api/v1/policies/7');
   assert.equal(calls[1][0],'/api/v1/policies/7/recommendation');
   assert.equal(calls[1][1].method,'POST');
+  assert.equal(calls[2][0],'/api/v1/impacts/policy/7/latest');
   assert.equal(context.state.policyDetail.assessment.summary,'Impact');
   assert.equal(context.state.policyDetail.loading,false);
 });
@@ -27,16 +28,26 @@ test('retains source details when recommendation fails',async()=>{
   assert.equal(context.state.policyDetail.error,'Unavailable');
   assert.equal(context.state.policyDetail.loading,false);
 });
-test('report includes policy, issue, and recommendation',async()=>{
+test('policy detail report is linked to the saved assessment and review queue',async()=>{
   let sent;
   const context=setup(async(path,options)=>{sent={path,body:JSON.parse(options.body)};return {};});
-  context.state.policyDetail={id:7,policy:{externalId:'2026-1',title:'Policy'},assessment:{summary:'Summary',recommendedActions:['Check source']},reportText:'Wrong deadline'};
+  context.state.policyDetail={id:7,policy:{externalId:'2026-1',title:'Policy'},
+    assessment:{summary:'Summary'},impact:{id:42,version:2},
+    reportCategory:'WRONG_SEVERITY',reportText:'Wrong deadline'};
   await context.reportPolicyRecommendation({preventDefault(){}});
-  assert.equal(sent.path,'/api/v1/feedback/messages');
-  assert.match(sent.body.message,/2026-1/);
-  assert.match(sent.body.message,/Wrong deadline/);
-  assert.match(sent.body.message,/Check source/);
+  assert.equal(sent.path,'/api/v1/impacts/42/reports');
+  assert.deepEqual(sent.body,{category:'WRONG_SEVERITY',details:'Wrong deadline',version:2});
   assert.equal(context.state.policyDetail.reported,true);
+});
+
+test('only the displayed saved assessment may be linked for reporting',async()=>{
+  const context=setup(async path=>path.endsWith('recommendation')
+    ? {summary:'Current advice',urgency:'MEDIUM',status:'COMPLETED'}
+    : path.includes('/impacts/policy/')
+      ? {ok:true,summary:'Older advice',urgency:'LOW',id:42,version:1}
+      : {id:7});
+  await context.openPolicyDetail(7);
+  assert.equal(context.state.policyDetail.impact,null);
 });
 test('extracts official summary from HTML Federal Register fixture',()=>{
   const context=setup(async()=>({}));
