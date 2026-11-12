@@ -21,13 +21,14 @@ public class SavedImpactAssessmentController {
     @GetMapping
     @Operation(summary = "List your visible saved ingestion assessments",
             description = "Excludes pending, rejected and unavailable results. 20 per page by default; maximum 100. "
-                    + "Ordered HIGH, MEDIUM, LOW, NOT_APPLICABLE, then newest first. Ordering is fixed.")
+                    + "Ordered HIGH, MEDIUM, LOW, NOT_APPLICABLE, then newest first. Ordering is fixed. Optionally filter by policyId.")
     @ApiResponse(responseCode = "200", description = "A page of your visible assessments")
     @ApiResponse(responseCode = "400", description = "Invalid page size or urgency")
     public Page<SavedImpactAssessmentResponse> list(Principal principal,
             @ParameterObject @PageableDefault(size = 20) Pageable pageable,
-            @RequestParam(required = false) ImpactUrgency urgency) {
-        return service.list(principal.getName(), pageable, urgency);
+            @RequestParam(required = false) ImpactUrgency urgency,
+            @RequestParam(required = false) Long policyId) {
+        return service.list(principal.getName(), pageable, urgency, policyId);
     }
 
     @GetMapping("/{id}")

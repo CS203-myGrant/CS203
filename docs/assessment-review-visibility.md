@@ -29,7 +29,7 @@ Existing assessment metadata such as profile version and review status is retain
 Policy text and identifying profile fields are not included.
 
 The list accepts zero-based `page` (default 0), `size` (default 20, maximum 100),
-and optional `urgency=HIGH|MEDIUM|LOW|NOT_APPLICABLE`. Unsupported urgency values
+and optional `urgency=HIGH|MEDIUM|LOW|NOT_APPLICABLE` and `policyId` filters. Unsupported urgency values
 return 400. Ordering is fixed: HIGH, MEDIUM, LOW, NOT_APPLICABLE, then creation date
 descending and assessment ID descending for stable ties. A `sort` parameter cannot
 override that ordering. Filtering and ownership apply before pagination and counts.
@@ -61,6 +61,37 @@ items, archive records or approve reviews. Missing and inaccessible records shar
 an unavailable message, and previous detail content is cleared before loading.
 Late responses cannot replace a newer selection or populate another account.
 Persistent checklist completion remains CS203-4; review actions remain CS203-42.
+
+The existing policy-detail page also reads this saved store, using
+`GET /api/v1/impact-assessments?policyId={id}&page=0&size=1`, then the shared saved
+assessment renderer. When multiple profile versions exist, it selects the first
+visible assessment in the same urgency/date order as the dashboard. It does not
+call the legacy recommendation-generation endpoint. If no visible assessment
+exists, the policy source remains readable alongside a no-assessment message.
+The policy filter applies before pagination and counts, together with owner and
+review visibility constraints. Dashboard cards link directly to the original
+policy source, with an unavailable label when a valid source link is missing.
+
+## Frontend states and visibility
+
+Dashboard and saved-detail views show loading indicators while reading. Empty feeds
+explain that assessments are not yet available; filtered empty pages describe the
+selected filter. Request failures show an error and a retry button. Feed retries
+repeat the requested page with the selected urgency; detail retries repeat the same
+saved-assessment ID. Both use GET without generating or mutating AI output.
+
+The server remains authoritative for authentication, ownership and review visibility.
+The frontend additionally withholds incomplete processing, pending/rejected review,
+and records missing explicit eligibility metadata. Only COMPLETED records that are
+APPROVED or NOT_REQUIRED with no review flag render. APPROVED records show
+“Reviewed by a human”; NOT_REQUIRED records do not. Rejected/hidden detail responses
+clear the previous content and display the same unavailable message as missing IDs.
+
+Frontend integration tests exercise the actual dashboard/detail render functions,
+response parsing and button handlers with mocked HTTP responses. They cover loading,
+empty states, retry URLs, review markers, hidden content, and the dashboard-to-detail
+flow, asserting that all requests are saved-assessment reads. These tests do not
+replace the PostgreSQL-backed server ownership/visibility tests or a browser check.
 
 ## Existing recommendation/feed/checklist paths
 

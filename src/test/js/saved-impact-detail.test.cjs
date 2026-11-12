@@ -9,6 +9,7 @@ const detailSource=html.slice(html.indexOf('async function loadImpacts('),
 const escaping=html.slice(html.indexOf('function escapeHtml(value){'),html.indexOf('function formatDate(value){'));
 const parsing=html.slice(html.indexOf('async function parseApiResponse('),html.indexOf('async function loadImmigrationDocuments('));
 const saved=(overrides={})=>({id:17,policyId:91,policyTitle:'Student status rule',urgency:'MEDIUM',
+  status:'COMPLETED',reviewStatus:'NOT_REQUIRED',requiresReview:false,
   summary:'Your program ends after the transition.',confidence:85,reasons:['Your program end date matches.',
     'Your travel date is outside the change.'],recommendedActions:['Read the official rule.','Check your program end date.'],
   createdAt:'2026-11-10T10:30:00Z',sourceUrl:'https://example.org/policy',reviewedByHuman:false,...overrides});

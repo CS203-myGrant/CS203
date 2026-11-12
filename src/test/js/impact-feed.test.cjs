@@ -10,7 +10,7 @@ const item=(id,assessmentId,title,status='PENDING')=>({id,assessmentId,policyId:
   policyTitle:`Policy ${assessmentId}`,title,description:null,priority:'HIGH',status,
   deadline:'2026-11-05',urgent:false,overdue:false,completedAt:null,dismissedAt:null,text:title});
 const impact=(id,severity,summary)=>({id,urgency:severity,summary,policyTitle:`Policy ${id}`,
-  status:'COMPLETED',confidence:85,confidenceLabel:'HIGH',createdAt:'2026-10-30T00:00:00Z',
+  status:'COMPLETED',reviewStatus:'NOT_REQUIRED',requiresReview:false,confidence:85,confidenceLabel:'HIGH',createdAt:'2026-10-30T00:00:00Z',
   actionItems:[item(id*10,id,'Check the official source')],citations:[],archived:false,
   reviewedByHuman:false});
 function page(fetch){

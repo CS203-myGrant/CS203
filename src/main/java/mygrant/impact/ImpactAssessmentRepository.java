@@ -34,7 +34,8 @@ public interface ImpactAssessmentRepository extends JpaRepository<ImpactAssessme
     String READ_SELECT = "select new mygrant.impact.SavedImpactAssessmentResponse(a, p.title, p.sourceUrl) "
             + "from ImpactAssessment a join PolicyDocument p on p.id = a.policyId ";
     String READ_WHERE = "where a.userId = :userId and " + SAVED_VISIBLE
-            + " and (:urgency is null or a.urgency = :urgency) ";
+            + " and (:urgency is null or a.urgency = :urgency) "
+            + "and (:policyId is null or a.policyId = :policyId) ";
 
     @org.springframework.data.jpa.repository.Query(value = READ_SELECT + READ_WHERE
             + "order by case a.urgency when mygrant.impact.ImpactUrgency.HIGH then 0 "
@@ -44,6 +45,7 @@ public interface ImpactAssessmentRepository extends JpaRepository<ImpactAssessme
     org.springframework.data.domain.Page<SavedImpactAssessmentResponse> findVisibleResponses(
             @org.springframework.data.repository.query.Param("userId") Long userId,
             @org.springframework.data.repository.query.Param("urgency") ImpactUrgency urgency,
+            @org.springframework.data.repository.query.Param("policyId") Long policyId,
             org.springframework.data.domain.Pageable pageable);
 
     @org.springframework.data.jpa.repository.Query(READ_SELECT

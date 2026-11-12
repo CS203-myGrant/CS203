@@ -126,6 +126,32 @@ class SavedImpactAssessmentReadIntegrationTest extends PgvectorIntegrationTestBa
     }
 
     @Test
+    void policyFilterRetainsOwnerVisibilityAndPaginationRules() throws Exception {
+        var owner = user();
+        var stranger = user();
+        var visible = save(owner, ImpactUrgency.HIGH, AssessmentReviewStatus.NOT_REQUIRED);
+        save(owner, ImpactUrgency.MEDIUM, AssessmentReviewStatus.NOT_REQUIRED);
+        var hidden = save(owner, ImpactUrgency.HIGH, AssessmentReviewStatus.PENDING_REVIEW);
+        // A foreign approved row on the same policy must not enter the owner's page or count.
+        assessments.saveAndFlush(new ImpactAssessment(stranger.getId(), visible.getPolicyId(), 1,
+                AssessmentStatus.COMPLETED, ImpactUrgency.HIGH, 85, "Foreign summary", List.of(), List.of(),
+                true, AssessmentReviewStatus.APPROVED, "Test", "test"));
+        mvc.perform(get("/api/v1/impact-assessments").param("policyId", visible.getPolicyId().toString())
+                        .param("size", "1").param("urgency", "HIGH").header("Authorization", token(owner)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(visible.getId()));
+        for (String policyId : List.of(hidden.getPolicyId().toString(), "9223372036854775807")) {
+            mvc.perform(get("/api/v1/impact-assessments").param("policyId", policyId)
+                            .header("Authorization", token(owner)))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
+        }
+        mvc.perform(get("/api/v1/impact-assessments").param("policyId", visible.getPolicyId().toString())
+                        .param("urgency", "LOW").header("Authorization", token(owner)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
+        verifyNoInteractions(generator, vectors);
+    }
+
+    @Test
     void authenticationAndInvalidParametersAreEnforced() throws Exception {
         var owner = user();
         mvc.perform(get("/api/v1/impact-assessments")).andExpect(status().isUnauthorized());

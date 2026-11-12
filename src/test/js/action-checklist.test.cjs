@@ -112,7 +112,7 @@ test('a failed status change is reported and the views are still refetched',asyn
 
 test('impact cards keep checklist items inside the detail view',()=>{
   const view=page(async()=>({}));
-  view.state.impacts=[{id:4,urgency:'HIGH',summary:'Act soon',policyTitle:'Policy 4',confidence:85,
+  view.state.impacts=[{id:4,status:'COMPLETED',reviewStatus:'NOT_REQUIRED',requiresReview:false,urgency:'HIGH',summary:'Act soon',policyTitle:'Policy 4',confidence:85,
     confidenceLabel:'HIGH',createdAt:'2026-10-30T00:00:00Z',archived:false,reviewedByHuman:false,
     actionItems:[item(1,{status:'COMPLETED',title:'Finished step'}),item(2,{title:'First open step',urgent:true}),
       item(3,{status:'IN_PROGRESS',title:'Second open step'}),item(4,{title:'Third open step'})]}];

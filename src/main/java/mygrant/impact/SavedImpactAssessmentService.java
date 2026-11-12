@@ -19,12 +19,12 @@ public class SavedImpactAssessmentService {
         this.users = users;
     }
 
-    public Page<SavedImpactAssessmentResponse> list(String email, Pageable pageable, ImpactUrgency urgency) {
+    public Page<SavedImpactAssessmentResponse> list(String email, Pageable pageable, ImpactUrgency urgency, Long policyId) {
         if (pageable.getPageSize() < 1 || pageable.getPageSize() > 100) {
             throw new IllegalArgumentException("Page size must be between 1 and 100");
         }
         // The contract fixes ordering; caller-supplied Spring sort parameters cannot override it.
-        return assessments.findVisibleResponses(userId(email), urgency,
+        return assessments.findVisibleResponses(userId(email), urgency, policyId,
                 PageRequest.of(pageable.getPageNumber(), pageable.getPageSize()));
     }
 

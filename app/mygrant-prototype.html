@@ -644,9 +644,11 @@ const initialState = () => ({
   impactsArchived: false,
   impactsUrgency: '',
   impactsPage: 0,
+  impactsRequestedPage: 0,
   impactsTotalPages: 0,
   archivedPolicyIds: new Set(),
   impactDetail: null,
+  impactDetailId: null,
   impactDetailLoading: false,
   impactDetailError: null,
   actions: null,
@@ -1596,14 +1598,14 @@ function renderProcessingTimeline(){
 async function loadImpacts(pageNumber=0){
   const request={};
   const owner=state.user;
-  state.impactsRequest=request;
+  state.impactsRequest=request; state.impactsRequestedPage=pageNumber;
   state.impactsLoading=true; state.impactsError=null; state.impacts=null;
   const urgency=state.impactsUrgency || '';
   if(state.view==='dashboard') render();
   try{
     const page=await parseApiResponse(await apiFetch(`/api/v1/impact-assessments?page=${pageNumber}&size=20${urgency?`&urgency=${encodeURIComponent(urgency)}`:''}`));
     if(state.impactsRequest!==request || state.user!==owner) return;
-    state.impacts=page.content || [];
+    state.impacts=(page.content || []).filter(isSavedImpactVisible);
     state.impactsPage=pageNumber;
     state.impactsTotalPages=page.totalPages || 0;
   }catch(error){
@@ -1624,6 +1626,13 @@ function showImpactUrgency(urgency){
   state.impactsPage=0;
   return loadImpacts();
 }
+function isSavedImpactVisible(impact){
+  return impact?.status==='COMPLETED' && (impact.reviewStatus==='APPROVED'
+    || (impact.reviewStatus==='NOT_REQUIRED' && impact.requiresReview===false));
+}
+function retryImpacts(){
+  return loadImpacts(state.impactsRequestedPage || 0);
+}
 function impactConfidenceLabel(confidence){
   return confidence>=80?'HIGH':confidence>=60?'MEDIUM':'LOW';
 }
@@ -1632,7 +1641,7 @@ function impactSeverityClass(severity){
     : severity==='MEDIUM' ? 'impact-medium' : 'impact-low';
 }
 function renderImpactFeed(){
-  const rows=(state.impacts || []).map(impact=>{
+  const rows=(state.impacts || []).filter(isSavedImpactVisible).map(impact=>{
     const urgency=impact.urgency;
     const confidenceLabel=impactConfidenceLabel(impact.confidence);
     return `<article class="entry impact-entry ${impactSeverityClass(urgency)}" aria-label="${escapeAttribute(urgency)} impact">
@@ -1640,10 +1649,11 @@ function renderImpactFeed(){
       <div class="entry-case">${escapeHtml(formatTimestamp(impact.createdAt))}<br>${escapeHtml(urgency)}</div>
       <div class="entry-body">
         <h3>${escapeHtml(impact.policyTitle)}</h3>
+        ${/^https?:\/\//i.test(impact.sourceUrl || '')?`<p><a href="${escapeAttribute(impact.sourceUrl)}" target="_blank" rel="noopener noreferrer">Original policy source</a></p>`:'<p class="sub">Source link unavailable.</p>'}
         <p>${escapeHtml(impact.summary)}</p>
         <div class="tag-row"><span class="tag ${urgency==='HIGH'?'action':''}">${escapeHtml(urgency)}</span>
           <span class="tag confidence-${confidenceLabel.toLowerCase()}">${confidenceLabel} confidence</span>
-          ${impact.reviewedByHuman?'<span class="tag">Reviewed by a human</span>':''}</div>
+          ${impact.reviewStatus==='APPROVED'?'<span class="tag">Reviewed by a human</span>':''}</div>
       </div>
       <div class="entry-action">
         <button class="btn small" type="button" onclick="openSavedImpact(${Number(impact.id)})">View assessment</button>
@@ -1651,7 +1661,7 @@ function renderImpactFeed(){
     </article>`;
   }).join('');
   const empty=state.impactsUrgency?'No assessments match this urgency filter.'
-    :state.user?.profileComplete===false?'Complete your profile to see how policy changes affect you.'
+    :state.user?.profileComplete===false?'No assessments are available yet. Complete your profile to see how policy changes affect you.'
     :'No assessments are available yet. New assessments appear after processing and any required review.';
   return `<section aria-label="Your impact assessments">
     <div class="block-label">What this means for you</div>
@@ -1662,8 +1672,8 @@ function renderImpactFeed(){
       </select>
       <button class="btn ghost small" type="button" onclick="loadImpacts()" ${state.impactsLoading?'disabled':''}>Refresh</button>
     </div>
-    ${state.impactsError?`<div class="rag-error" role="alert">${escapeHtml(state.impactsError)} <button class="btn ghost small" type="button" onclick="loadImpacts(${state.impactsPage || 0})">Try again</button></div>`:''}
-    ${state.impactsLoading?'<div class="empty" role="status">Loading your assessments...</div>':state.impactsError?'':rows || `<div class="empty">${empty}</div>`}
+    ${state.impactsError?`<div class="rag-error" role="alert">${escapeHtml(state.impactsError)} <button class="btn ghost small" type="button" onclick="retryImpacts()">Try again</button></div>`:''}
+    ${state.impactsLoading || state.impacts===null?'<div class="empty" role="status">Loading your assessments...</div>':state.impactsError?'':rows || `<div class="empty">${empty}</div>`}
     ${!state.impactsLoading && !state.impactsError && state.impactsTotalPages>1?`<nav aria-label="Assessment pages">
       <button class="btn ghost small" type="button" onclick="loadImpacts(${state.impactsPage-1})" ${state.impactsPage===0?'disabled':''}>Previous</button>
       <span>Page ${state.impactsPage+1} of ${state.impactsTotalPages}</span>
@@ -1674,7 +1684,7 @@ function renderImpactFeed(){
 async function openSavedImpact(id){
   const request={};
   const owner=state.user;
-  state.impactDetailRequest=request; state.impactDetailSource='saved';
+  state.impactDetailRequest=request; state.impactDetailSource='saved'; state.impactDetailId=id;
   state.impactDetail=null; state.impactDetailError=null; state.impactDetailLoading=true;
   goto('impactDetail'); render();
   try{
@@ -1683,6 +1693,9 @@ async function openSavedImpact(id){
       throw new Error('This assessment is unavailable or you do not have access to it.');
     }
     const detail=await parseApiResponse(response);
+    if(!isSavedImpactVisible(detail)){
+      throw new Error('This assessment is unavailable or you do not have access to it.');
+    }
     if(state.impactDetailRequest===request && state.user===owner) state.impactDetail=detail;
   }catch(error){
     if(state.impactDetailRequest===request && state.user===owner) state.impactDetailError=error.message;
@@ -1693,11 +1706,12 @@ async function openSavedImpact(id){
   }
 }
 function renderSavedImpactDetail(impact){
+  if(!isSavedImpactVisible(impact)) return '<div class="empty">Assessment unavailable.</div>';
   return `<article class="detail-card ${impactSeverityClass(impact.urgency)}">
     <h1>${escapeHtml(impact.policyTitle)}</h1>
     <div class="tag-row"><span class="tag ${impact.urgency==='HIGH'?'action':''}">${escapeHtml(impact.urgency)}</span>
       <span class="tag">${impactConfidenceLabel(impact.confidence)} confidence (${Number(impact.confidence)}%)</span>
-      ${impact.reviewedByHuman?'<span class="tag">Reviewed by a human</span>':''}</div>
+      ${impact.reviewStatus==='APPROVED'?'<span class="tag">Reviewed by a human</span>':''}</div>
     <p>${escapeHtml(impact.summary)}</p><p>Assessed ${escapeHtml(formatTimestamp(impact.createdAt))}</p>
     <div class="block-label">Why this affects you</div>
     ${(impact.reasons || []).length?`<ul>${impact.reasons.map(reason=>`<li>${escapeHtml(reason)}</li>`).join('')}</ul>`:'<p>No further reasons were supplied.</p>'}
@@ -1719,7 +1733,11 @@ async function openImpact(id){
 function renderImpactDetail(){
   const back='<button class="back-link" type="button" onclick="goto(\'dashboard\')">&larr; Back to your impacts</button>';
   if(state.impactDetailLoading) return back+'<p role="status">Loading assessment...</p>';
-  if(state.impactDetailError) return back+`<div class="rag-error" role="alert">${escapeHtml(state.impactDetailError)}</div>`;
+  if(state.impactDetailError){
+    const retry=state.impactDetailSource==='saved' && Number.isSafeInteger(state.impactDetailId)
+      ? `<button class="btn ghost small" type="button" onclick="openSavedImpact(${state.impactDetailId})">Try again</button>`:'';
+    return back+`<div class="rag-error" role="alert">${escapeHtml(state.impactDetailError)} ${retry}</div>`;
+  }
   const impact=state.impactDetail;
   if(!impact) return back+'<div class="empty">Assessment unavailable.</div>';
   if(state.impactDetailSource==='saved') return back+renderSavedImpactDetail(impact);
@@ -2004,22 +2022,24 @@ async function saveApplicationProgress(event){
 }
 
 async function openPolicyDetail(id){
-  const detail={id, policy:null, assessment:null, loading:true, error:null, reportText:'', reporting:false, reported:false, reportError:null};
+  const owner=state.user;
+  const detail={id, policy:null, assessment:null, assessmentUnavailable:false, loading:true, error:null, reportText:'', reporting:false, reported:false, reportError:null};
   state.policyChats=state.policyChats || {};
   detail.chat=state.policyChats[id] || (state.policyChats[id]={messages:[],draft:'',sending:false,error:null,historyLoaded:false,historyLoading:false});
   state.policyDetail=detail;
   goto('policyDetail');
   try{
-    detail.policy=await parseApiResponse(await apiFetch(`/api/v1/policies/${id}`));
-    if(state.policyDetail===detail && state.view==='policyDetail') render();
-    const response=await apiFetch(`/api/v1/policies/${id}/recommendation`,{method:'POST'});
-    if(response.status===404){
-      throw new Error('Personalized recommendations are not available on this server yet. Please try again after the latest backend has been deployed. You can still read the policy summary and original source.');
-    }
-    detail.assessment=await parseApiResponse(response);
-    await loadPolicyChatHistory(detail);
+    const policy=await parseApiResponse(await apiFetch(`/api/v1/policies/${id}`));
+    if(state.policyDetail!==detail || state.user!==owner) return;
+    detail.policy=policy;
+    if(state.view==='policyDetail') render();
+    const page=await parseApiResponse(await apiFetch(`/api/v1/impact-assessments?policyId=${id}&page=0&size=1`));
+    if(state.policyDetail!==detail || state.user!==owner) return;
+    detail.assessment=(page.content || []).find(isSavedImpactVisible) || null;
+    detail.assessmentUnavailable=!detail.assessment;
+    if(detail.assessment) await loadPolicyChatHistory(detail);
   }catch(error){ detail.error=error.message; }
-  finally{ detail.loading=false; if(state.policyDetail===detail && state.view==='policyDetail') render(); }
+  finally{ detail.loading=false; if(state.policyDetail===detail && state.user===owner && state.view==='policyDetail') render(); }
 }
 
 function policySummary(content){
@@ -2059,9 +2079,10 @@ function renderPolicyDetail(){
       <p>Published ${escapeHtml(formatDate(policy.publicationDate))}${policy.effectiveDate?`; effective ${escapeHtml(formatDate(policy.effectiveDate))}`:''}.</p>
       ${policy.sourceUrl?`<a class="btn ghost small" href="${escapeAttribute(policy.sourceUrl)}" target="_blank" rel="noopener noreferrer">Read original source</a>`:''}
       <section style="margin-top:24px;" aria-labelledby="policy-summary-heading"><h2 id="policy-summary-heading">Policy summary</h2><p style="line-height:1.75;max-width:80ch;">${escapeHtml(policySummary(policy.content))}</p><p class="rag-status">From the official source summary.</p></section></div>`:''}
-    ${detail.loading?'<p role="status">Reviewing this policy against your profile. This may take a moment...</p>':''}
+    ${detail.loading?'<p role="status">Loading your saved assessment...</p>':''}
     ${detail.error?`<div class="rag-error" role="alert">${escapeHtml(detail.error)}</div><button class="btn ghost small" onclick="openPolicyDetail(${Number(detail.id)})">Try again</button>`:''}
-    ${detail.assessment?`${renderPolicyRecommendation(detail.assessment)}${renderPolicyChat(detail)}
+    ${detail.assessmentUnavailable?'<div class="empty">No saved assessment is currently available for this policy. It may still be processing or awaiting review.</div>':''}
+    ${detail.assessment?`${renderSavedImpactDetail(detail.assessment)}${renderPolicyChat(detail)}
       <div class="detail-card"><h2>Report a recommendation</h2><p>Tell the team what seems incorrect or missing. The policy and assessment will be included.</p>
       ${detail.reported?'<p role="status">Report sent. You can follow up in Feedback.</p><button class="btn ghost small" onclick="openFeedback()">Open feedback</button>':`
       <form onsubmit="reportPolicyRecommendation(event)"><label for="recommendation-report">What needs correcting?</label>
