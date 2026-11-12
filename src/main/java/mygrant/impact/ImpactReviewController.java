@@ -11,6 +11,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -46,12 +47,37 @@ public class ImpactReviewController {
     @Operation(summary = "Publish a human-corrected assessment or answer",
             description = "For Policy Q&A drafts, summary supplies the corrected answer. Existing manager membership scope applies.")
     @ApiResponse(responseCode = "200", description = "Published correction and new version")
-    @ApiResponse(responseCode = "400", description = "Invalid correction details")
+    @ApiResponse(responseCode = "400", description = "Invalid correction details, or, for a reported assessment, "
+            + "a missing review note or a correction that changes nothing")
     @ApiResponse(responseCode = "404", description = "Assessment not found")
     public ImpactReviewService.ReviewResult publish(@PathVariable long id, Principal principal,
             @Valid @RequestBody Correction correction) {
         return service.publishCorrection(id, principal.getName(), correction);
     }
+
+    @PostMapping("/{id}/reports/dismiss")
+    @Operation(summary = "Dismiss applicant reports on an assessment that is correct as published",
+            description = "Closes the open reports without changing the assessment. To fix the assessment, "
+                    + "publish a correction instead, which also resolves the reports.")
+    @ApiResponse(responseCode = "200", description = "How many open reports were dismissed")
+    @ApiResponse(responseCode = "400", description = "The explanation to the applicant is missing")
+    @ApiResponse(responseCode = "404", description = "Assessment not found, outside your scope, or without open reports")
+    public ImpactReviewService.ReportDismissal dismissReports(@PathVariable long id, Principal principal,
+            @Valid @RequestBody Dismissal dismissal) {
+        return service.dismissReports(id, principal.getName(), dismissal.note());
+    }
+
+    @GetMapping("/reports/count")
+    @Operation(summary = "Count open applicant reports in your review queue",
+            description = "For the queue badge. Managers count only their linked applicants' reports.")
+    @ApiResponse(responseCode = "200", description = "Open reports and how many assessments they are on")
+    public RecommendationReportService.OpenCount openReportCount(Principal principal) {
+        return service.openReportCount(principal.getName());
+    }
+
+    public record Dismissal(
+            @io.swagger.v3.oas.annotations.media.Schema(description = "Why the assessment is correct; shown to the applicant")
+            @NotBlank @Size(max = 1000) String note) {}
 
     public record Correction(@NotBlank
             @jakarta.validation.constraints.Pattern(regexp = "HIGH|MEDIUM|LOW|NOT_APPLICABLE")
@@ -60,10 +86,18 @@ public class ImpactReviewController {
             @NotNull List<@NotBlank String> analysis,
             @NotNull List<@NotBlank String> actionItems,
             @NotNull List<@NotBlank String> missingInformation,
-            List<@Valid CountryRuleCorrection> countryRestrictions) {
+            List<@Valid CountryRuleCorrection> countryRestrictions,
+            @io.swagger.v3.oas.annotations.media.Schema(description = "Required when the assessment has open "
+                    + "applicant reports: what was corrected and why. Shown to the applicant.")
+            @Size(max = 1000) String reviewNote) {
         public Correction(String severity, int confidence, String summary, List<String> analysis,
                 List<String> actionItems, List<String> missingInformation) {
-            this(severity, confidence, summary, analysis, actionItems, missingInformation, null);
+            this(severity, confidence, summary, analysis, actionItems, missingInformation, null, null);
+        }
+        public Correction(String severity, int confidence, String summary, List<String> analysis,
+                List<String> actionItems, List<String> missingInformation,
+                List<CountryRuleCorrection> countryRestrictions) {
+            this(severity, confidence, summary, analysis, actionItems, missingInformation, countryRestrictions, null);
         }
     }
     public record CountryRuleCorrection(@NotBlank String countryCode, @NotNull RestrictionScope scope) {}

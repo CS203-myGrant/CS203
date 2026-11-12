@@ -32,6 +32,7 @@ import mygrant.actions.ActionItemAccessDeniedException;
 import mygrant.actions.ActionItemNotFoundException;
 import mygrant.email.EmailNotConfiguredException;
 import mygrant.impact.ImpactNotFoundException;
+import mygrant.impact.RecommendationReportConflictException;
 import mygrant.ingestion.PolicyAlreadyExistsException;
 import mygrant.feedback.FeedbackAccessDeniedException;
 import mygrant.feedback.FeedbackNotFoundException;
@@ -92,6 +93,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(ImpactNotFoundException.class)
     public ResponseEntity<ApiError> handleImpactNotFound(ImpactNotFoundException exception) {
         return response(HttpStatus.NOT_FOUND, exception.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(RecommendationReportConflictException.class)
+    public ResponseEntity<ApiError> handleReportConflict(RecommendationReportConflictException exception) {
+        return response(HttpStatus.CONFLICT, exception.getMessage(), Map.of());
     }
 
     @ExceptionHandler(ActionItemNotFoundException.class)
