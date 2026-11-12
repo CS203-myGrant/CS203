@@ -56,6 +56,15 @@ public record EmailProperties(
         return appBaseUrl + "/mygrant-prototype.html#notification=" + notificationId;
     }
 
+    /** Opens one of the user's published impact assessments after sign-in (CS203-91). */
+    public String impactUrl(Long assessmentId) {
+        return appBaseUrl + "/mygrant-prototype.html#impact=" + assessmentId;
+    }
+
+    public String dashboardUrl() {
+        return appBaseUrl + "/mygrant-prototype.html";
+    }
+
     public String unsubscribeUrl(String token) {
         return appBaseUrl + "/api/v1/email/unsubscribe?token=" + token;
     }

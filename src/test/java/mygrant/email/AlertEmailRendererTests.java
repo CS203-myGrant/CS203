@@ -2,6 +2,7 @@ package mygrant.email;
 
 import static mygrant.email.EmailTestData.critical;
 import static mygrant.email.EmailTestData.informational;
+import static mygrant.email.EmailTestData.unassessed;
 import static mygrant.email.EmailTestData.verifiedUser;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -12,7 +13,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import mygrant.notifications.Notification;
+import mygrant.impact.ImpactUrgency;
 import mygrant.user.User;
 
 class AlertEmailRendererTests {
@@ -25,23 +26,40 @@ class AlertEmailRendererTests {
     private final User user = verifiedUser(7L);
 
     @Test
-    void immediateEmailHasTheSummaryALinkAndNothingElse() {
-        Notification notification = critical(42L, 7L, CREATED);
+    void immediateEmailHasThePlainSummaryAndALinkToTheAssessmentAndNothingElse() {
+        ImpactEmailAlert alert = critical(42L, 7L, CREATED);
 
-        EmailMessage message = render(notification);
+        EmailMessage message = render(alert);
 
         assertThat(message.to()).isEqualTo("student7@example.com");
-        assertThat(message.subject()).isEqualTo("Action needed: New policy affecting F-1: Alert 42");
+        assertThat(message.subject()).isEqualTo("High impact: F-1 rule 42");
         assertThat(message.idempotencyKey()).isEqualTo(DELIVERY.toString());
         assertThat(message.html())
                 .contains("New policy affecting F-1: Alert 42")
-                .contains("href=\"http://localhost:8080/mygrant-prototype.html#notification=42\"")
+                .contains("F-1 rule 42")
+                .contains("href=\"http://localhost:8080/mygrant-prototype.html#impact=142\"")
                 .contains("View in myGRANT")
                 .contains("24 Oct 2026, 10:05 AM EDT")
-                .contains("critical alerts are set to arrive right away");
+                .contains("critical alerts are set to arrive right away")
+                .contains("not legal advice");
         assertThat(message.text())
                 .contains("New policy affecting F-1: Alert 42")
-                .contains("View in myGRANT: http://localhost:8080/mygrant-prototype.html#notification=42");
+                .contains("View in myGRANT: http://localhost:8080/mygrant-prototype.html#impact=142");
+    }
+
+    @Test
+    void noFullAnalysisReachesTheEmail() {
+        // Items carry only a title and the plain-English summary; there is nowhere for reasons,
+        // actions or missing information to come from.
+        assertThat(ImpactEmailAlert.class.getDeclaredFields()).extracting(java.lang.reflect.Field::getName)
+                .doesNotContain("reasons", "analysis", "recommendedActions", "missingInformation");
+    }
+
+    @Test
+    void anEscalationSaysTheChangeIsNowHighImpact() {
+        ImpactEmailAlert alert = EmailTestData.alert(42L, 7L, ImpactUrgency.HIGH, ImpactEmailAlert.Kind.ESCALATION, CREATED);
+
+        assertThat(render(alert).subject()).isEqualTo("Now high impact: F-1 rule 42");
     }
 
     @Test
@@ -55,92 +73,98 @@ class AlertEmailRendererTests {
         assertThat(message.headers())
                 .containsEntry("List-Unsubscribe", "<" + unsubscribe + ">")
                 .containsEntry("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
-        assertThat(message.subject()).startsWith("Policy alert: ");
+        assertThat(message.subject()).isEqualTo("Medium impact: F-1 rule 42");
     }
 
     @Test
-    void escapesPolicyTextInTheHtmlPart() {
-        Notification notification = critical(42L, 7L, CREATED);
-        ReflectionTestUtils.setField(notification, "message", "Rule <script>alert(1)</script> & \"quotes\"");
+    void immediateEmailEscapesStoredText() {
+        ImpactEmailAlert alert = critical(42L, 7L, CREATED);
+        ReflectionTestUtils.setField(alert, "summary", "Rule <script>alert(1)</script> & \"quotes\"");
 
-        EmailMessage message = render(notification);
+        EmailMessage message = render(alert);
 
-        assertThat(message.html()).doesNotContain("<script>")
-                .contains("Rule &lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;quotes&quot;");
-        assertThat(message.text()).contains("Rule <script>alert(1)</script> & \"quotes\"");
+        assertThat(message.html()).contains("&lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;quotes&quot;")
+                .doesNotContain("<script>");
     }
 
     @Test
-    void longOrMultiLineMessagesMakeAOneLineSubject() {
-        Notification notification = critical(42L, 7L, CREATED);
-        ReflectionTestUtils.setField(notification, "message",
-                "New policy affecting F-1, J-1:\r\nFixed Time Period of Admission and Extension of Stay Procedures "
-                        + "for Nonimmigrant Academic Students (effective 2026-10-01). Action needed: review your dates.");
+    void longTitlesAreCutAtAWordForTheSubject() {
+        ImpactEmailAlert alert = critical(42L, 7L, CREATED);
+        ReflectionTestUtils.setField(alert, "policyTitle", "Establishing a Fixed Time Period of Admission and an "
+                + "Extension of Stay Procedure for Nonimmigrant Academic Students, Exchange Visitors, and "
+                + "Representatives of Foreign Information Media");
 
-        String subject = render(notification).subject();
+        String subject = render(alert).subject();
 
-        assertThat(subject).doesNotContain("\r").doesNotContain("\n").endsWith("…");
-        assertThat(subject.length()).isLessThanOrEqualTo("Action needed: ".length() + 91);
+        assertThat(subject).startsWith("High impact: Establishing").endsWith("…");
+        assertThat(subject.length()).isLessThanOrEqualTo("High impact: ".length() + 91);
     }
 
     @Test
-    void renderingTheSameDeliveryTwiceGivesTheSameRequest() {
-        // A retry reuses the idempotency key, and Resend refuses a key reused with other contents.
-        Notification notification = critical(42L, 7L, CREATED);
+    void aRetryRendersExactlyTheSameEmail() {
+        ImpactEmailAlert alert = critical(42L, 7L, CREATED);
 
-        assertThat(render(notification)).isEqualTo(render(notification));
+        assertThat(render(alert)).isEqualTo(render(alert));
     }
 
     @Test
-    void digestListsEachAlertWithItsDateAndLink() {
-        List<Notification> items = List.of(informational(41L, 7L, CREATED), informational(43L, 7L, CREATED.plusSeconds(3600)));
+    void digestListsEachItemWithItsImpactSummaryAndLink() {
+        List<ImpactEmailAlert> items = List.of(informational(41L, 7L, CREATED),
+                EmailTestData.alert(43L, 7L, ImpactUrgency.LOW, ImpactEmailAlert.Kind.FIRST, CREATED.plusSeconds(3600)));
 
         EmailMessage message = renderDigest(items);
 
         assertThat(message.subject()).isEqualTo("Your myGRANT digest for 24 Oct 2026: 2 new alerts");
-        assertThat(message.idempotencyKey()).isEqualTo(DELIVERY.toString());
         assertThat(message.html())
-                .contains("2 new alerts for you.")
-                .contains("New policy affecting F-1: Alert 41", "New policy affecting F-1: Alert 43")
-                .contains("href=\"http://localhost:8080/mygrant-prototype.html#notification=41\"")
-                .contains("href=\"http://localhost:8080/mygrant-prototype.html#notification=43\"")
-                .contains("24 Oct 2026, 10:05 AM EDT", "24 Oct 2026, 11:05 AM EDT")
+                .contains("href=\"http://localhost:8080/mygrant-prototype.html#impact=141\"")
+                .contains("href=\"http://localhost:8080/mygrant-prototype.html#impact=143\"")
+                .contains("Medium impact").contains("Low impact")
                 .contains("other alerts are set to the daily digest");
         assertThat(message.text())
-                .contains("For information - 24 Oct 2026, 10:05 AM EDT\nNew policy affecting F-1: Alert 41")
-                .contains("View in myGRANT: http://localhost:8080/mygrant-prototype.html#notification=43");
+                .contains("Medium impact - 24 Oct 2026, 10:05 AM EDT\nF-1 rule 41\nNew policy affecting F-1: Alert 41")
+                .contains("View in myGRANT: http://localhost:8080/mygrant-prototype.html#impact=143");
         assertThat(message.headers()).containsKeys("List-Unsubscribe", "List-Unsubscribe-Post");
         assertThat(message.html().indexOf("Alert 41")).isLessThan(message.html().indexOf("Alert 43"));
     }
 
     @Test
-    void digestWithACriticalAlertSaysBothSettingsSentIt() {
+    void aChangeWeCouldNotAssessSaysSoAndLinksToItsAlert() {
+        EmailMessage message = renderDigest(List.of(unassessed(41L, 7L, CREATED)));
+
+        assertThat(message.text())
+                .contains("Not assessed yet")
+                .contains("We couldn't assess this one yet. New policy affecting F-1: Alert 41")
+                .contains("View in myGRANT: http://localhost:8080/mygrant-prototype.html#notification=241");
+    }
+
+    @Test
+    void digestWithAHighImpactItemSaysBothSettingsSentIt() {
         EmailMessage message = renderDigest(List.of(critical(42L, 7L, CREATED)));
 
         assertThat(message.subject()).endsWith(": 1 new alert");
-        assertThat(message.html()).contains("Action needed").contains("critical alerts are set to the daily digest");
+        assertThat(message.html()).contains("High impact").contains("critical alerts are set to the daily digest");
         assertThat(renderDigest(List.of(critical(42L, 7L, CREATED), informational(43L, 7L, CREATED))).text())
                 .contains("critical and other alerts are set to the daily digest");
     }
 
     @Test
-    void digestEscapesPolicyTextAndRendersTheSameEachTime() {
-        Notification notification = informational(41L, 7L, CREATED);
-        ReflectionTestUtils.setField(notification, "message", "<b>Fee</b> & more");
+    void digestEscapesStoredTextAndRendersTheSameEachTime() {
+        ImpactEmailAlert alert = informational(41L, 7L, CREATED);
+        ReflectionTestUtils.setField(alert, "summary", "<b>Fee</b> & more");
 
-        EmailMessage message = renderDigest(List.of(notification));
+        EmailMessage message = renderDigest(List.of(alert));
 
         assertThat(message.html()).contains("&lt;b&gt;Fee&lt;/b&gt; &amp; more").doesNotContain("<b>Fee</b>");
-        assertThat(renderDigest(List.of(notification))).isEqualTo(message);
+        assertThat(renderDigest(List.of(alert))).isEqualTo(message);
     }
 
-    private EmailMessage renderDigest(List<Notification> items) {
+    private EmailMessage renderDigest(List<ImpactEmailAlert> items) {
         return renderer.render(EmailTestData.claimed(DELIVERY, 7L, DeliveryKind.DIGEST,
                 java.time.LocalDate.parse("2026-10-24"), 1), user, items);
     }
 
-    private EmailMessage render(Notification notification) {
+    private EmailMessage render(ImpactEmailAlert alert) {
         return renderer.render(EmailTestData.claimed(DELIVERY, 7L, DeliveryKind.IMMEDIATE, null, 1), user,
-                List.of(notification));
+                List.of(alert));
     }
 }

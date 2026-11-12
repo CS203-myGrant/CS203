@@ -659,7 +659,7 @@ class RuleLifecycleIntegrationTest {
 
     private int emailsCarrying(User user, long policyId) {
         return jdbc.queryForObject("""
-                SELECT count(DISTINCT email_delivery_id) FROM notifications
+                SELECT count(DISTINCT email_delivery_id) FROM impact_email_alerts
                 WHERE user_id = :user AND policy_id = :policy AND email_delivery_id IS NOT NULL
                 """, Map.of("user", user.getId(), "policy", policyId), Integer.class);
     }

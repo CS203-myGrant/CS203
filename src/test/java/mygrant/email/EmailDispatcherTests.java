@@ -26,8 +26,6 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.data.domain.PageRequest;
 
 import mygrant.email.EmailDispatcher.Outcome;
-import mygrant.notifications.Notification;
-import mygrant.notifications.NotificationRepository;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
 
@@ -41,7 +39,7 @@ class EmailDispatcherTests {
     private EmailDeliveryRepository deliveryRepository;
 
     @Mock
-    private NotificationRepository notificationRepository;
+    private ImpactEmailAlertRepository alertRepository;
 
     @Mock
     private UserRepository userRepository;
@@ -50,7 +48,7 @@ class EmailDispatcherTests {
     private EmailPreferenceRepository preferenceRepository;
 
     private final FakeEmailSender sender = new FakeEmailSender();
-    private final Notification alert = critical(42L, 7L, NOW.minusSeconds(30));
+    private final ImpactEmailAlert alert = critical(42L, 7L, NOW.minusSeconds(30));
 
     @Test
     void sendsAClaimedEmailUnderItsDeliveryIdAndRecordsIt() {
@@ -139,7 +137,7 @@ class EmailDispatcherTests {
         assertThat(dispatcher().dispatch(ID, NOW)).isEqualTo(Outcome.FAILED);
 
         verify(deliveryRepository, never()).markRetry(any(), any(), anyString());
-        verify(notificationRepository, never()).releaseFromDelivery(any(), any());
+        verify(alertRepository, never()).releaseFromDelivery(any(), any());
     }
 
     @Test
@@ -152,7 +150,7 @@ class EmailDispatcherTests {
         assertThat(dispatcher().dispatch(ID, NOW)).isEqualTo(Outcome.SKIPPED);
 
         assertThat(sender.requests).isEmpty();
-        verify(notificationRepository).releaseFromDelivery(ID, List.of(42L));
+        verify(alertRepository).releaseFromDelivery(ID, List.of(42L));
         verify(deliveryRepository).markFinished(ID, DeliveryStatus.SKIPPED, "Recipient can no longer receive email");
     }
 
@@ -176,7 +174,7 @@ class EmailDispatcherTests {
         assertThat(dispatcher().dispatch(ID, NOW)).isEqualTo(Outcome.SKIPPED);
 
         assertThat(sender.requests).isEmpty();
-        verify(notificationRepository).releaseFromDelivery(ID, List.of(42L));
+        verify(alertRepository).releaseFromDelivery(ID, List.of(42L));
     }
 
     @Test
@@ -189,7 +187,7 @@ class EmailDispatcherTests {
         assertThat(dispatcher().dispatch(ID, NOW)).isEqualTo(Outcome.SKIPPED);
 
         assertThat(sender.requests).isEmpty();
-        verify(notificationRepository, never()).releaseFromDelivery(any(), any());
+        verify(alertRepository, never()).releaseFromDelivery(any(), any());
         verify(deliveryRepository).markFinished(ID, DeliveryStatus.SKIPPED, "Turned off by the user before a retry");
     }
 
@@ -198,7 +196,7 @@ class EmailDispatcherTests {
         when(deliveryRepository.claim(ID, NOW)).thenReturn(1);
         when(deliveryRepository.findById(ID)).thenReturn(Optional.of(claimed(ID, 7L, DeliveryKind.IMMEDIATE, null, 1)));
         when(userRepository.findById(7L)).thenReturn(Optional.of(verifiedUser(7L)));
-        when(notificationRepository.findByEmailDeliveryIdOrderByCreatedAtAscIdAsc(ID))
+        when(alertRepository.findByEmailDeliveryIdOrderByCreatedAtAscIdAsc(ID))
                 .thenThrow(new DataAccessResourceFailureException("connection reset"));
 
         assertThat(dispatcher().dispatch(ID, NOW)).isEqualTo(Outcome.RETRYING);
@@ -230,14 +228,14 @@ class EmailDispatcherTests {
         when(deliveryRepository.findById(second))
                 .thenReturn(Optional.of(claimed(second, 7L, DeliveryKind.IMMEDIATE, null, 1)));
         when(userRepository.findById(7L)).thenReturn(Optional.of(verifiedUser(7L)));
-        when(notificationRepository.findByEmailDeliveryIdOrderByCreatedAtAscIdAsc(second)).thenReturn(List.of(alert));
+        when(alertRepository.findByEmailDeliveryIdOrderByCreatedAtAscIdAsc(second)).thenReturn(List.of(alert));
 
         assertThat(dispatcher().dispatchDue(NOW).sent()).isEqualTo(1);
     }
 
     @Test
     void firstDigestAttemptDropsAlertsTheUserNoLongerWantsInTheDigest() {
-        Notification info = EmailTestData.informational(41L, 7L, NOW);
+        ImpactEmailAlert info = EmailTestData.informational(41L, 7L, NOW);
         digestClaimed(1, info, alert);
         // The critical alert was digest-bound when queued; the user has since moved critical to OFF.
         when(preferenceRepository.findById(7L))
@@ -245,7 +243,7 @@ class EmailDispatcherTests {
 
         assertThat(dispatcher().dispatch(ID, NOW)).isEqualTo(Outcome.SENT);
 
-        verify(notificationRepository).releaseFromDelivery(ID, List.of(42L));
+        verify(alertRepository).releaseFromDelivery(ID, List.of(42L));
         assertThat(sender.delivered).singleElement().satisfies(message -> {
             assertThat(message.text()).contains("Alert 41").doesNotContain("Alert 42");
             assertThat(message.subject()).endsWith("1 new alert");
@@ -261,7 +259,7 @@ class EmailDispatcherTests {
         assertThat(dispatcher().dispatch(ID, NOW)).isEqualTo(Outcome.SKIPPED);
 
         assertThat(sender.requests).isEmpty();
-        verify(notificationRepository).releaseFromDelivery(ID, List.of(41L));
+        verify(alertRepository).releaseFromDelivery(ID, List.of(41L));
     }
 
     @Test
@@ -275,7 +273,7 @@ class EmailDispatcherTests {
         assertThat(dispatcher().dispatch(ID, NOW)).isEqualTo(Outcome.SKIPPED);
 
         assertThat(sender.requests).isEmpty();
-        verify(notificationRepository, never()).releaseFromDelivery(any(), any());
+        verify(alertRepository, never()).releaseFromDelivery(any(), any());
     }
 
     @Test
@@ -286,15 +284,15 @@ class EmailDispatcherTests {
 
         assertThat(sender.delivered).singleElement()
                 .satisfies(message -> assertThat(message.text()).contains("Alert 41", "Alert 43"));
-        verify(notificationRepository, never()).releaseFromDelivery(any(), any());
+        verify(alertRepository, never()).releaseFromDelivery(any(), any());
     }
 
-    private void digestClaimed(int attempts, Notification... items) {
+    private void digestClaimed(int attempts, ImpactEmailAlert... items) {
         when(deliveryRepository.claim(ID, NOW)).thenReturn(1);
         when(deliveryRepository.findById(ID)).thenReturn(Optional.of(
                 claimed(ID, 7L, DeliveryKind.DIGEST, java.time.LocalDate.parse("2026-10-24"), attempts)));
         when(userRepository.findById(7L)).thenReturn(Optional.of(verifiedUser(7L)));
-        when(notificationRepository.findByEmailDeliveryIdOrderByCreatedAtAscIdAsc(ID)).thenReturn(List.of(items));
+        when(alertRepository.findByEmailDeliveryIdOrderByCreatedAtAscIdAsc(ID)).thenReturn(List.of(items));
     }
 
     /** Each dispatch call sees the row as claimed with the next attempt count. */
@@ -307,12 +305,12 @@ class EmailDispatcherTests {
                 .toArray(Optional[]::new);
         when(deliveryRepository.findById(ID)).thenReturn(firstRow, laterRows);
         org.mockito.Mockito.lenient().when(userRepository.findById(7L)).thenReturn(Optional.of(verifiedUser(7L)));
-        when(notificationRepository.findByEmailDeliveryIdOrderByCreatedAtAscIdAsc(ID)).thenReturn(List.of(alert));
+        when(alertRepository.findByEmailDeliveryIdOrderByCreatedAtAscIdAsc(ID)).thenReturn(List.of(alert));
     }
 
     private EmailDispatcher dispatcher() {
         EmailProperties properties = EmailTestData.properties();
-        return new EmailDispatcher(deliveryRepository, notificationRepository, userRepository, preferenceRepository,
+        return new EmailDispatcher(deliveryRepository, alertRepository, userRepository, preferenceRepository,
                 new EmailEligibility(properties),
                 new AlertEmailRenderer(properties, new UnsubscribeTokens(EmailTestData.JWT_SECRET)),
                 sender, properties);

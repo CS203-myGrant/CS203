@@ -1,5 +1,6 @@
 package mygrant.email;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,6 +22,10 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import mygrant.impact.ImpactUrgency;
+import mygrant.impact.JudgeEvaluation;
+import mygrant.impact.ProfileImpactAssessment;
 import mygrant.notifications.Notification;
 import mygrant.notifications.NotificationRepository;
 import mygrant.notifications.NotificationService;
@@ -67,6 +72,9 @@ abstract class EmailIntegrationTestBase {
     @Autowired protected EmailOutbox outbox;
     @Autowired protected EmailDispatcher dispatcher;
     @Autowired protected JdbcTemplate jdbc;
+    @Autowired protected ImpactEmailAlertRepository items;
+    @Autowired protected ImpactEmailPlanner planner;
+    @Autowired protected ObjectMapper mapper;
     @MockBean protected VectorStore vectors;
     @SpyBean protected NotificationStreamRegistry streams;
 
@@ -125,13 +133,53 @@ abstract class EmailIntegrationTestBase {
         return created;
     }
 
-    /** Makes an alert require action so it uses the critical email setting. */
+    /** Sets the in-app keyword flag; since CS203-91 it no longer decides how an alert is emailed. */
     protected void requireAction(Notification notification) {
         jdbc.update("UPDATE notifications SET action_required = TRUE WHERE id = ?", notification.getId());
     }
 
+    /** Publishes the owner's assessment of the alerted policy, as the review policy would. */
+    protected long assess(Notification alert, ImpactUrgency urgency, String summary) {
+        return insertAssessment(alert, urgency, summary, "PUBLISHED");
+    }
+
+    /** Saves the owner's assessment held for review, hidden from them. */
+    protected long hold(Notification alert, ImpactUrgency urgency, String summary) {
+        return insertAssessment(alert, urgency, summary, "PENDING_REVIEW");
+    }
+
+    private long insertAssessment(Notification alert, ImpactUrgency urgency, String summary, String status) {
+        try {
+            String json = mapper.writeValueAsString(new ProfileImpactAssessment(urgency, 90, summary,
+                    List.of("Why it applies"), List.of("Check the official source"), List.of(), false, "OpenAI",
+                    "test", new JudgeEvaluation(JudgeEvaluation.Verdict.YES, "Supported", "test"), 1));
+            return jdbc.queryForObject("""
+                    INSERT INTO policy_recommendations
+                        (user_id, policy_id, input_hash, assessment_json, publication_status, severity)
+                    VALUES (?, ?, ?, ?, ?, ?) RETURNING id
+                    """, Long.class, alert.getUserId(), alert.getPolicyId(), UUID.randomUUID().toString(), json,
+                    status, urgency.name());
+        } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
+            throw new IllegalStateException(exception);
+        }
+    }
+
+    /** The planned email item of that kind about the alerted change, if any. */
+    protected java.util.Optional<ImpactEmailAlert> item(Notification alert, ImpactEmailAlert.Kind kind) {
+        return items.findAll().stream().filter(item -> item.getUserId().equals(alert.getUserId())
+                && item.getPolicyId().equals(alert.getPolicyId()) && item.getKind() == kind).findFirst();
+    }
+
+    /** A planned HIGH item about the alerted change, ready to queue. */
+    protected long highItem(Notification alert, Instant now) {
+        assess(alert, ImpactUrgency.HIGH, "High impact summary");
+        planner.planVisibleFor(alert.getUserId(), now.minus(java.time.Duration.ofHours(1)));
+        return item(alert, ImpactEmailAlert.Kind.FIRST).orElseThrow().getId();
+    }
+
+    /** The email that holds the first item about the alerted change, or null. */
     protected UUID emailOf(Notification notification) {
-        return notifications.findById(notification.getId()).orElseThrow().getEmailDeliveryId();
+        return item(notification, ImpactEmailAlert.Kind.FIRST).map(ImpactEmailAlert::getEmailDeliveryId).orElse(null);
     }
 
     protected EmailDelivery delivery(UUID id) {

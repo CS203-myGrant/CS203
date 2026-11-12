@@ -19,7 +19,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import mygrant.notifications.NotificationRepository;
 
 @ExtendWith(MockitoExtension.class)
 class EmailOutboxTests {
@@ -31,26 +30,26 @@ class EmailOutboxTests {
     private EmailDeliveryRepository deliveryRepository;
 
     @Mock
-    private NotificationRepository notificationRepository;
+    private ImpactEmailAlertRepository alertRepository;
 
     @Test
     void queuesOneEmailHoldingTheAlert() {
-        when(notificationRepository.claimForDelivery(any(), eq(List.of(42L)))).thenReturn(1);
+        when(alertRepository.claimForDelivery(any(), eq(List.of(42L)))).thenReturn(1);
 
-        Optional<UUID> queued = new EmailOutbox(deliveryRepository, notificationRepository).queueImmediate(7L, 42L, NOW);
+        Optional<UUID> queued = new EmailOutbox(deliveryRepository, alertRepository).queueImmediate(7L, 42L, NOW);
 
         ArgumentCaptor<UUID> inserted = ArgumentCaptor.forClass(UUID.class);
         verify(deliveryRepository).insertImmediate(inserted.capture(), eq(7L), eq(NOW));
-        verify(notificationRepository).claimForDelivery(inserted.getValue(), List.of(42L));
+        verify(alertRepository).claimForDelivery(inserted.getValue(), List.of(42L));
         assertThat(queued).contains(inserted.getValue());
         verify(deliveryRepository, never()).deleteById(any());
     }
 
     @Test
     void dropsItsEmailWhenAnotherRunAlreadyClaimedTheAlert() {
-        when(notificationRepository.claimForDelivery(any(), eq(List.of(42L)))).thenReturn(0);
+        when(alertRepository.claimForDelivery(any(), eq(List.of(42L)))).thenReturn(0);
 
-        Optional<UUID> queued = new EmailOutbox(deliveryRepository, notificationRepository).queueImmediate(7L, 42L, NOW);
+        Optional<UUID> queued = new EmailOutbox(deliveryRepository, alertRepository).queueImmediate(7L, 42L, NOW);
 
         ArgumentCaptor<UUID> inserted = ArgumentCaptor.forClass(UUID.class);
         verify(deliveryRepository).insertImmediate(inserted.capture(), eq(7L), eq(NOW));
@@ -61,13 +60,13 @@ class EmailOutboxTests {
     @Test
     void queuesADigestHoldingTheFreeAlerts() {
         when(deliveryRepository.insertDigest(any(), eq(7L), eq(DAY), eq(NOW))).thenReturn(1);
-        when(notificationRepository.claimForDelivery(any(), eq(List.of(41L, 42L)))).thenReturn(2);
+        when(alertRepository.claimForDelivery(any(), eq(List.of(41L, 42L)))).thenReturn(2);
 
         Optional<UUID> queued = outbox().queueDigest(7L, DAY, List.of(41L, 42L), NOW);
 
         ArgumentCaptor<UUID> inserted = ArgumentCaptor.forClass(UUID.class);
         verify(deliveryRepository).insertDigest(inserted.capture(), eq(7L), eq(DAY), eq(NOW));
-        verify(notificationRepository).claimForDelivery(inserted.getValue(), List.of(41L, 42L));
+        verify(alertRepository).claimForDelivery(inserted.getValue(), List.of(41L, 42L));
         assertThat(queued).contains(inserted.getValue());
     }
 
@@ -77,13 +76,13 @@ class EmailOutboxTests {
 
         assertThat(outbox().queueDigest(7L, DAY, List.of(42L), NOW)).isEmpty();
 
-        verify(notificationRepository, never()).claimForDelivery(any(), any());
+        verify(alertRepository, never()).claimForDelivery(any(), any());
     }
 
     @Test
     void aDigestWhoseAlertsWereAllTakenIsDropped() {
         when(deliveryRepository.insertDigest(any(), eq(7L), eq(DAY), eq(NOW))).thenReturn(1);
-        when(notificationRepository.claimForDelivery(any(), eq(List.of(42L)))).thenReturn(0);
+        when(alertRepository.claimForDelivery(any(), eq(List.of(42L)))).thenReturn(0);
 
         assertThat(outbox().queueDigest(7L, DAY, List.of(42L), NOW)).isEmpty();
 
@@ -91,6 +90,6 @@ class EmailOutboxTests {
     }
 
     private EmailOutbox outbox() {
-        return new EmailOutbox(deliveryRepository, notificationRepository);
+        return new EmailOutbox(deliveryRepository, alertRepository);
     }
 }
