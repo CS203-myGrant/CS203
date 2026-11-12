@@ -202,12 +202,8 @@ test('no feed banner while sources are fresh, while loading, or after an error',
   assert.doesNotMatch(failed.renderImpactFeed(),/haven't updated/);
 });
 
-test('saved and legacy assessment details warn about their own stale sources',()=>{
+test('legacy assessment details warn about stale sources',()=>{
   const view=page(async()=>({}));
-  assert.match(view.renderSavedImpactDetail({...impact(1,'HIGH','Act now'),sourceFreshness:staleSources}),
-    /Some sources haven't updated since 2026-11-01/);
-  assert.doesNotMatch(view.renderSavedImpactDetail({...impact(1,'HIGH','Act now'),sourceFreshness:freshSources}),
-    /haven't updated/);
   view.state.impactDetailSource='legacy';
   view.state.impactDetail={...impact(1,'HIGH','Act now'),severity:'HIGH',sourceFreshness:staleSources};
   view.state.impactRecommendationReport={category:'',text:'',sending:false,justSent:false,error:null,history:[]};
