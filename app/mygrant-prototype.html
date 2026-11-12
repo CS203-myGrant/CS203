@@ -2617,6 +2617,15 @@ function policySummary(content){
 }
 
 function renderPolicyRecommendation(assessment){
+  // CS203-153: a draft held by the review policy is not shown until a reviewer approves it.
+  if(assessment.status==='AWAITING_REVIEW'){
+    return `<section class="detail-card" aria-labelledby="policy-impact-heading">
+    <h2 id="policy-impact-heading">How this affects you</h2>
+    <div class="tag-row"><span class="tag">Awaiting review</span></div>
+    <p style="line-height:1.7;">A reviewer is checking your personalised assessment before it is shown to you. It will appear here and in your impact feed once it has been approved.</p>
+    <p class="rag-status">In the meantime, read the policy summary and the original source above.</p>
+    </section>`;
+  }
   const unavailable=assessment.status==='UNAVAILABLE';
   const independentlyChecked=assessment.evaluation?.verdict==='YES';
   const unverifiedNotice=!unavailable && !independentlyChecked
@@ -3577,7 +3586,9 @@ function queueApplicant(item){
 /** CS203-97: applicant reports name their category; other items are drafts held for review. */
 function queueReason(item){
   const reports=item.reports || [];
-  if(!reports.length) return `<div class="queue-reason"><strong>${escapeHtml(item.reviewType==='Policy extractor' ? 'Extraction check' : 'Draft')}</strong><span>Awaiting review</span></div>`;
+  // CS203-153: an AI draft says why the review policy held it, e.g. low confidence.
+  const held=(item.holdReasons || []).join(' · ');
+  if(!reports.length) return `<div class="queue-reason"><strong>${escapeHtml(item.reviewType==='Policy extractor' ? 'Extraction check' : 'Draft')}</strong><span>${escapeHtml(held || 'Awaiting review')}</span></div>`;
   return reports.map(report=>`<div class="queue-reason queue-reason--report"><strong>Reported</strong><span>${escapeHtml(reportCategoryLabel(report.category))}</span></div>`).join('');
 }
 
@@ -3595,8 +3606,11 @@ function renderQueueReports(item){
 function openQueueEditor(id){
   const item = state.reviewQueue.find(report=>Number(report.id)===Number(id));
   if(!item) return;
-  // A reported assessment is already published, so start from what the applicant saw.
+  // A reported assessment is already published, so start from what the applicant saw. An AI
+  // draft held by the review policy also starts from the draft, so approving it is one click.
   const reported = (item.reports || []).length > 0;
+  const heldDraft = !reported && (item.holdReasons || []).length > 0;
+  const prefill = reported || heldDraft;
   const reportsPanel = document.getElementById('review-reports');
   reportsPanel.innerHTML = renderQueueReports(item);
   reportsPanel.hidden = !reported;
@@ -3607,19 +3621,20 @@ function openQueueEditor(id){
   document.getElementById('review-reject').hidden = reported || extractionReview;
   document.getElementById('review-report-rules').hidden = !reported;
   document.getElementById('review-edit-id').value = item.id;
-  document.getElementById('review-edit-severity').value = reported && item.draftUrgency ? item.draftUrgency : 'MEDIUM';
-  document.getElementById('review-edit-confidence').value = reported ? item.draftConfidence : 80;
+  document.getElementById('review-edit-severity').value = prefill && item.draftUrgency ? item.draftUrgency : 'MEDIUM';
+  document.getElementById('review-edit-confidence').value = prefill ? item.draftConfidence : 80;
   document.getElementById('review-edit-summary').value = item.draftSummary || '';
-  document.getElementById('review-edit-analysis').value = reported ? (item.draftAnalysis || []).join('\n') : '';
-  document.getElementById('review-edit-actions').value = reported ? (item.draftActionItems || []).join('\n') : '';
-  document.getElementById('review-edit-missing').value = reported ? (item.draftMissingInformation || []).join('\n') : '';
+  document.getElementById('review-edit-analysis').value = prefill ? (item.draftAnalysis || []).join('\n') : '';
+  document.getElementById('review-edit-actions').value = prefill ? (item.draftActionItems || []).join('\n') : '';
+  document.getElementById('review-edit-missing').value = prefill ? (item.draftMissingInformation || []).join('\n') : '';
   document.getElementById('review-editor-title').textContent = extractionReview
     ? 'Review policy extraction' : reported ? 'Review reported assessment' : 'Review and publish assessment';
   document.getElementById('review-editor-policy').textContent = item.policyTitle || 'Policy';
   const fact = (label, value) => value===undefined || value===null || value==='' ? ''
     : `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(String(value))}</dd></div>`;
   document.getElementById('review-editor-facts').innerHTML =
-    fact('Why queued', reported ? 'Reported by the applicant' : extractionReview ? 'Extraction check' : 'Draft awaiting review')
+    fact('Why queued', reported ? 'Reported by the applicant' : extractionReview ? 'Extraction check'
+      : heldDraft ? item.holdReasons.join(' · ') : 'Draft awaiting review')
     + fact('Applicant', item.applicantName || 'Applicant')
     + fact('Email', item.applicantEmail)
     + fact('Applicant ID', item.userId)

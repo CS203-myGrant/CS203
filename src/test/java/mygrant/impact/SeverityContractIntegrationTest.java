@@ -53,8 +53,10 @@ class SeverityContractIntegrationTest extends PgvectorIntegrationTestBase {
         var policy = policies.saveAndFlush(new PolicyDocument(UUID.randomUUID().toString(), "Rule", "DHS", "F-1",
                 PolicyStatus.FINAL, SourceType.PRIMARY, LocalDate.now(), null,
                 "https://example.org/rule", "Policy text", "0".repeat(64)));
+        // Confident and independently verified, so the shared review policy publishes it at any urgency.
         var result = new ProfileImpactAssessment(urgency, 90, "Profile-specific summary", List.of("Reason"),
-                List.of(), List.of(), false, "Test", "test", null, 1);
+                List.of(), List.of(), false, "Test", "test",
+                new JudgeEvaluation(JudgeEvaluation.Verdict.YES, "Supported", "test"), 1);
         var parsed = mapper.readValue(mapper.writeValueAsString(result), ProfileImpactAssessment.class);
         assertThat(parsed).isEqualTo(result);
         var saved = assessments.saveAndFlush(new ImpactAssessment(owner.getId(), policy.getId(), 1,
@@ -102,7 +104,7 @@ class SeverityContractIntegrationTest extends PgvectorIntegrationTestBase {
         assertThat(enumValues(spec, schemas.path("ProfileImpactAssessment").path("properties").path("urgency")))
                 .containsExactlyElementsOf(ImpactUrgency.labels());
         assertThat(enumValues(spec, schemas.path("ProfileImpactAssessment").path("properties").path("status")))
-                .containsExactly("COMPLETED", "UNAVAILABLE");
+                .containsExactly("COMPLETED", "UNAVAILABLE", "AWAITING_REVIEW");
         assertThat(enumValues(spec, schemas.path("ImpactView").path("properties").path("severity")))
                 .containsExactlyElementsOf(ImpactUrgency.labels());
         for (var parameter : spec.path("paths").path("/api/v1/impacts").path("get").path("parameters")) {

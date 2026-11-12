@@ -102,7 +102,9 @@ class DemoScenarioTests {
                     var result = service.assess(scenario.email(), policy, PolicyAssessmentInputs.document(policy),
                             PolicyAssessmentInputs.classification(policy));
                     assertThat(result.urgency()).isEqualTo(scenario.expected());
-                    assertThat(result.requiresHumanReview()).isEqualTo(scenario.expected() == ImpactUrgency.HIGH);
+                    // CS203-153: HIGH no longer forces review; only the model's flag or the judge does,
+                    // and this recording sets neither, so every persona's result is publishable.
+                    assertThat(result.requiresHumanReview()).isFalse();
                     ArgumentCaptor<String> prompt = ArgumentCaptor.forClass(String.class);
                     verify(generator).generateJson(anyString(), prompt.capture(), any(), eq("profile_impact_assessment"));
                     assertThat(prompt.getValue()).contains("visaType: " + profile.getVisaType(),

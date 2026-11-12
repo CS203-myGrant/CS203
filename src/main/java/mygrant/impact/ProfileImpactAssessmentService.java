@@ -156,7 +156,9 @@ public class ProfileImpactAssessmentService {
         return new ProfileImpactAssessment(urgency,
                 Math.max(0, Math.min(100, raw.confidence())), raw.summary(),
                 safeList(raw.reasons()), safeList(raw.recommendedActions()), safeList(raw.missingInformation()),
-                raw.requiresHumanReview() || urgency == ImpactUrgency.HIGH,
+                // Urgency alone never holds a result: ImpactReviewPolicy decides from confidence,
+                // this flag and the independent judge, so confident verified HIGH results go straight out.
+                raw.requiresHumanReview(),
                 provider, providerModel, null, 1);
     }
 
@@ -184,7 +186,7 @@ public class ProfileImpactAssessmentService {
                 missingInformation and ask the user to provide it. Never infer a missing fact.
                 For nationality-based rules, if countryOfCitizenship is unavailable or unconsented,
                 do not guess; list countryOfCitizenship in missingInformation and state the uncertainty.
-                Set requiresHumanReview true for HIGH urgency or material uncertainty.
+                Set requiresHumanReview true only for material uncertainty or conflicting facts, whatever the urgency.
                 """;
     }
 

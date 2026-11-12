@@ -173,8 +173,14 @@ public class PolicyDocument {
     public String getSourceUrl() { return sourceUrl; }
     public String getContent() { return content; }
     public String getContentHash() { return contentHash; }
-    public Set<String> getAffectedCountries() { return Set.copyOf(affectedCountries); }
-    public Set<RestrictionCategory> getRestrictionCategories() { return Set.copyOf(restrictionCategories); }
+    // Sorted, not Set.copyOf: its iteration order changes on every JVM start, and the saved
+    // assessment's fingerprint serialises these sets, so a restart would discard the saved result.
+    public Set<String> getAffectedCountries() {
+        return java.util.Collections.unmodifiableSortedSet(new java.util.TreeSet<>(affectedCountries));
+    }
+    public Set<RestrictionCategory> getRestrictionCategories() {
+        return java.util.Collections.unmodifiableSortedSet(new java.util.TreeSet<>(restrictionCategories));
+    }
     public List<String> getSourceReferences() { return List.copyOf(sourceReferences); }
     public List<PolicyCountryRestriction> getCountryRestrictions() { return List.copyOf(countryRestrictions); }
     public boolean isExtractionReviewRequired() { return extractionReviewRequired; }

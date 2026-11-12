@@ -73,6 +73,10 @@ public class ImpactAssessment {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** The per-user feed row this result was published as; set by the store, never by this entity. */
+    @Column(name = "recommendation_id", insertable = false, updatable = false)
+    private Long recommendationId;
+
     protected ImpactAssessment() {}
 
     public ImpactAssessment(Long userId, Long policyId, int profileVersion,
@@ -80,6 +84,9 @@ public class ImpactAssessment {
             String summary, List<String> reasons, List<String> recommendedActions,
             boolean requiresReview, AssessmentReviewStatus reviewStatus, String provider, String model) {
         if (profileVersion < 1) throw new IllegalArgumentException("Profile version must be positive");
+        if (status == AssessmentStatus.AWAITING_REVIEW) {
+            throw new IllegalArgumentException("Processing records are completed or unavailable");
+        }
         if (confidence != null && (confidence < 0 || confidence > 100)) {
             throw new IllegalArgumentException("Confidence must be between 0 and 100");
         }
@@ -123,4 +130,5 @@ public class ImpactAssessment {
     public String getProvider() { return provider; }
     public String getModel() { return model; }
     public Instant getCreatedAt() { return createdAt; }
+    public Long getRecommendationId() { return recommendationId; }
 }

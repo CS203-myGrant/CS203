@@ -42,6 +42,9 @@ public class ImpactReviewService {
     private RecommendationReportService reports;
     @Autowired
     void setReports(RecommendationReportService reports) { this.reports = reports; }
+    private ImpactReviewPolicy reviewPolicy;
+    @Autowired
+    void setReviewPolicy(ImpactReviewPolicy reviewPolicy) { this.reviewPolicy = reviewPolicy; }
 
     @Autowired
     public ImpactReviewService(JdbcTemplate jdbc, ObjectMapper mapper, UserRepository users,
@@ -74,6 +77,8 @@ public class ImpactReviewService {
         }
         String sql = """
                 SELECT r.id, r.user_id, r.policy_id, p.title, r.assessment_json, r.generated_at,
+                       r.version, p.source_url, p.content, o.id AS output_id, r.output_type,
+                       r.publication_status,
                        r.version, r.output_type, p.source_url, p.content, o.id AS output_id,
                        CAST(o.latest_evaluation_json::jsonb ->> 'citationsValid' AS BOOLEAN) AS citations_valid,
                        applicant.full_name AS applicant_name, applicant.email AS applicant_email
@@ -293,6 +298,9 @@ public class ImpactReviewService {
                 """, json, severity, reviewerId, id);
         // CS203-97: the published correction answers any applicant reports on this assessment.
         if (reported) reports.close(id, reviewerId, RecommendationReportService.Outcome.RESOLVED, correction.reviewNote());
+        // CS203-153: a held background assessment was approved, so its processing record says so.
+        jdbc.update("UPDATE impact_assessments SET review_status = 'APPROVED' "
+                + "WHERE recommendation_id = ? AND review_status = 'PENDING_REVIEW'", id);
         String outputType = jdbc.queryForObject("SELECT output_type FROM policy_recommendations WHERE id = ?", String.class, id);
         if ("ANSWER".equals(outputType)) {
             publication.publishHumanAnswer(id, correction.summary().trim());
@@ -366,10 +374,22 @@ public class ImpactReviewService {
                     reviewExcerpt(rs.getString("content")), assessment.provider(), rs.getString("output_type"),
                     rs.getObject("citations_valid", Boolean.class), rs.getObject("output_id", java.util.UUID.class),
                     rs.getInt("version"), assessment.urgency(), assessment.confidence(), assessment.reasons(),
-                    assessment.recommendedActions(), assessment.missingInformation(), List.of());
+                    assessment.recommendedActions(), assessment.missingInformation(), holdReasons(rs, assessment),
+                    List.of());
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Stored pending impact is unreadable", exception);
         }
+    }
+
+    /** Why an AI assessment draft was held; empty for reported, extraction and answer items. */
+    private List<String> holdReasons(ResultSet rs, ProfileImpactAssessment assessment) throws SQLException {
+        if (reviewPolicy == null || !"PENDING_REVIEW".equals(rs.getString("publication_status"))
+                || !"ASSESSMENT".equals(rs.getString("output_type")) || "Policy extractor".equals(assessment.provider())
+                || assessment.status() != AssessmentStatus.COMPLETED) {
+            return List.of();
+        }
+        return reviewPolicy.holdReasons(assessment).stream().map(reason -> reason == ImpactReviewPolicy.HoldReason.LOW_CONFIDENCE
+                ? reason.label() + " (" + assessment.confidence() + "%)" : reason.label()).toList();
     }
 
     private static String reviewExcerpt(String content) {
@@ -413,12 +433,17 @@ public class ImpactReviewService {
             int version, ImpactUrgency draftUrgency, int draftConfidence, List<String> draftAnalysis,
             List<String> draftActionItems, List<String> draftMissingInformation,
             @io.swagger.v3.oas.annotations.media.Schema(description =
+                    "Why an AI assessment draft was held for review, e.g. a failed independent check or low "
+                    + "confidence; empty for reported, extraction and answer items")
+            List<String> holdReasons,
+            @io.swagger.v3.oas.annotations.media.Schema(description =
                     "Open applicant reports on this assessment; empty when it is queued for another reason")
             List<RecommendationReportService.Report> reports) {
         PendingImpact withReports(List<RecommendationReportService.Report> open) {
-            return new PendingImpact(id, userId, applicantName, applicantEmail, policyId, policyTitle, draftSummary, createdAt, sourceUrl,
-                    sourceExcerpt, reviewType, outputType, citationsValid, outputId, version, draftUrgency, draftConfidence, draftAnalysis,
-                    draftActionItems, draftMissingInformation, List.copyOf(open));
+            return new PendingImpact(id, userId, applicantName, applicantEmail, policyId, policyTitle, draftSummary,
+                    createdAt, sourceUrl, sourceExcerpt, reviewType, outputType, citationsValid, outputId, version,
+                    draftUrgency, draftConfidence, draftAnalysis, draftActionItems, draftMissingInformation,
+                    holdReasons, List.copyOf(open));
         }
     }
     public record ReportDismissal(long id, int dismissedReports, Instant dismissedAt) {}
