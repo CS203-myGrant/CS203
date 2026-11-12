@@ -17,7 +17,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(EvaluationController.class)
-@Import({SecurityConfig.class, JwtAuthenticationFilter.class})
+@Import({SecurityConfig.class, JwtAuthenticationFilter.class, mygrant.common.RateLimiter.class})
 class EvaluationControllerSecurityTest {
     @Autowired MockMvc mvc;
     @MockBean OutputPublicationService service;

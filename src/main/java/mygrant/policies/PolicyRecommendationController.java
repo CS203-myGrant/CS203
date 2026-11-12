@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import mygrant.common.AiUnavailableException;
 import mygrant.common.ApiError;
+import mygrant.common.RateLimiter;
 import mygrant.impact.AssessmentStatus;
 import mygrant.impact.ProfileImpactAssessment;
 import mygrant.impact.ProfileImpactAssessmentService;
@@ -27,12 +28,14 @@ public class PolicyRecommendationController {
     private final PolicyService policies;
     private final ProfileImpactAssessmentService assessments;
     private final PolicyRecommendationStore store;
+    private final RateLimiter rateLimiter;
 
     public PolicyRecommendationController(PolicyService policies, ProfileImpactAssessmentService assessments,
-            PolicyRecommendationStore store) {
+            PolicyRecommendationStore store, RateLimiter rateLimiter) {
         this.policies = policies;
         this.assessments = assessments;
         this.store = store;
+        this.rateLimiter = rateLimiter;
     }
 
     @PostMapping("/{id}/recommendation")
@@ -42,10 +45,14 @@ public class PolicyRecommendationController {
     @ApiResponse(responseCode = "200", description = "Personalized assessment, including availability and review status")
     @ApiResponse(responseCode = "400", description = "The id is not a number")
     @ApiResponse(responseCode = "404", description = "No policy has this id")
+    @ApiResponse(responseCode = "429", description = "Too many assessment requests in a short time; wait for the "
+            + "Retry-After seconds", content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(responseCode = "503", description = "The AI service failed after its retries; try again later "
             + "(Retry-After header)", content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ProfileImpactAssessment recommendation(@PathVariable Long id,
             @RequestParam(defaultValue = "false") boolean refresh, Principal principal) {
+        // CS203-176: every request counts, including ones answered from the stored result.
+        rateLimiter.acquire(RateLimiter.Allowance.RECOMMENDATIONS, principal.getName());
         PolicyDocument policy = policies.findById(id);
         ProfileImpactAssessment result = store.getOrGenerate(principal.getName(), policy,
                 () -> assessments.assess(principal.getName(), policy, PolicyAssessmentInputs.document(policy),

@@ -17,9 +17,9 @@ import mygrant.policies.*;
 import mygrant.user.*;
 
 @WebMvcTest(PolicyChatController.class)
-@Import({SecurityConfig.class,JwtAuthenticationFilter.class,mygrant.common.QuestionRateLimiter.class})
+@Import({SecurityConfig.class,JwtAuthenticationFilter.class,mygrant.common.RateLimiter.class})
 @org.springframework.test.context.TestPropertySource(properties={
-        "mygrant.questions.rate-limit.max-requests=3","mygrant.questions.rate-limit.window=1h"})
+        "mygrant.rate-limits.questions.max-requests=3","mygrant.rate-limits.questions.window=1h"})
 class PolicyChatControllerTest {
     @Autowired MockMvc mvc;
     @MockBean PolicyChatService chat;

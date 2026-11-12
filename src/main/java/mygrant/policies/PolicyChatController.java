@@ -13,8 +13,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 public class PolicyChatController {
     private final PolicyChatService service;
     private final PolicyQuestionHistory history;
-    private final mygrant.common.QuestionRateLimiter rateLimiter;
-    public PolicyChatController(PolicyChatService service,PolicyQuestionHistory history,mygrant.common.QuestionRateLimiter rateLimiter) {
+    private final mygrant.common.RateLimiter rateLimiter;
+    public PolicyChatController(PolicyChatService service,PolicyQuestionHistory history,mygrant.common.RateLimiter rateLimiter) {
         this.service=service;this.history=history;this.rateLimiter=rateLimiter;
     }
 
@@ -27,7 +27,7 @@ public class PolicyChatController {
     @ApiResponse(responseCode="503",description="Policy assistant temporarily unavailable")
     public PolicyChatService.Answer ask(@PathVariable Long id,Principal principal,
             @Valid @RequestBody PolicyChatService.Question request) {
-        rateLimiter.acquire(principal.getName());
+        rateLimiter.acquire(mygrant.common.RateLimiter.Allowance.QUESTIONS, principal.getName());
         var answer=service.ask(id,principal.getName(),request);
         history.record(principal.getName(),id,request.question(),answer);
         return answer;

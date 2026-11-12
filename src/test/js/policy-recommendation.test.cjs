@@ -92,6 +92,19 @@ test('an AI outage shows the server message with a way to try again (CS203-174)'
   assert.match(rendered,/temporarily unavailable\. Please try again later\./);
   assert.match(rendered,/Try again/);
 });
+test('too many assessment requests show the rate limit message (CS203-176)',async()=>{
+  const message='You are requesting assessments too quickly. Please wait a moment and try again.';
+  const context=setup(async path=>path.endsWith('recommendation')
+    ?{status:429,ok:false,json:async()=>({message})}
+    :{id:7,title:'Policy',status:'FINAL',agency:'DHS',visaType:'F-1',content:''});
+  context.parseApiResponse=async response=>{
+    if(response.ok===false) throw new Error((await response.json()).message);
+    return response;
+  };
+  await context.openPolicyDetail(7);
+  assert.equal(context.state.policyDetail.error,message);
+  assert.equal(context.state.policyDetail.policy.id,7);
+});
 test('a draft awaiting review shows no draft content or advice',()=>{
   const context=setup(async()=>({}));
   context.escapeHtml=value=>String(value ?? '');

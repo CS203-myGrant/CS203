@@ -14,7 +14,11 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 @PreAuthorize("hasRole('ADMIN')")
 public class EvaluationController {
     private final OutputPublicationService service;
-    public EvaluationController(OutputPublicationService service) { this.service = service; }
+    private final mygrant.common.RateLimiter rateLimiter;
+    public EvaluationController(OutputPublicationService service, mygrant.common.RateLimiter rateLimiter) {
+        this.service = service;
+        this.rateLimiter = rateLimiter;
+    }
 
     public record Request(@NotNull UUID outputId) {}
 
@@ -25,7 +29,11 @@ public class EvaluationController {
     @ApiResponse(responseCode = "400", description = "Missing or invalid outputId")
     @ApiResponse(responseCode = "403", description = "Admin role required")
     @ApiResponse(responseCode = "404", description = "Stored output not found or predates candidate retention")
-    public OutputPublicationService.Result evaluate(@Valid @RequestBody Request request) {
+    @ApiResponse(responseCode = "429", description = "Too many re-evaluations in a short time; wait for the Retry-After seconds",
+            content = @io.swagger.v3.oas.annotations.media.Content(schema =
+                    @io.swagger.v3.oas.annotations.media.Schema(implementation = mygrant.common.ApiError.class)))
+    public OutputPublicationService.Result evaluate(@Valid @RequestBody Request request, java.security.Principal principal) {
+        rateLimiter.acquire(mygrant.common.RateLimiter.Allowance.EVALUATIONS, principal.getName());
         return service.evaluate(request.outputId());
     }
 }

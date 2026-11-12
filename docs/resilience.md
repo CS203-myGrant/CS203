@@ -88,7 +88,7 @@ the user and policy) while it calls the model. The timeouts above bound how long
 limit on that endpoint bounds how many at once. Moving the call out of the transaction is
 follow-up work.
 
-### Tests
+### Tests (CS203-174)
 
 These tests use a local stub server, never the real APIs:
 
@@ -99,3 +99,25 @@ These tests use a local stub server, never the real APIs:
   - Spring AI embeddings use this rule and the shared timeout.
 - `PolicyRecommendationControllerTest`: the `503` responses.
 - `IngestionAssessmentIntegrationTest`: a timeout is saved as `UNAVAILABLE` and ingestion completes.
+
+## Rate limits (CS203-176)
+
+`RateLimiter` (formerly `QuestionRateLimiter`) is one per-user sliding-window mechanism with a
+separate allowance for each kind of AI-backed request. Over an allowance the API answers
+`429 Too Many Requests` with a `Retry-After` header and a message naming what to slow down. A
+rejected request does not count against the allowance. The frontend shows that message where
+the request was made.
+
+| Allowance | Endpoints | Default | Variables |
+| --- | --- | --- | --- |
+| `questions` | `POST /api/v1/policies/{id}/questions`, `POST /api/v1/rag/query` (shared) | 10 per minute | `QUESTION_RATE_LIMIT_ENABLED`, `QUESTION_RATE_LIMIT_MAX_REQUESTS`, `QUESTION_RATE_LIMIT_WINDOW` |
+| `recommendations` | `POST /api/v1/policies/{id}/recommendation` | 30 per minute | `RECOMMENDATION_RATE_LIMIT_*` |
+| `evaluations` | `POST /api/v1/evaluate` (admins) | 10 per minute | `EVALUATION_RATE_LIMIT_*` |
+
+Opening a policy page counts against `recommendations` even when the stored result is reused,
+so the limit is generous. The properties moved from `mygrant.questions.rate-limit.*` to
+`mygrant.rate-limits.<allowance>.*`. The question variables kept their names.
+
+Tests: `RateLimiterTest` (separate allowances, messages, switching off),
+`PolicyRecommendationControllerTest` (the `429`), `PolicyChatControllerTest` (questions), and
+the node test in `policy-recommendation.test.cjs`.

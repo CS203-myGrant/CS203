@@ -104,13 +104,25 @@ mygrant:
       multiplier: ${AI_RETRY_MULTIPLIER:2.0}
       max-backoff: ${AI_RETRY_MAX_BACKOFF:8s}
       max-retry-after: ${AI_RETRY_MAX_RETRY_AFTER:20s}
-  questions:
-    # CS203-12: per-user cap on policy questions (policy follow-ups and /rag/query combined).
-    # Over the cap the API answers 429 with a Retry-After header.
-    rate-limit:
+  # CS203-12, CS203-176: per-user caps on requests that call the AI services, each with its own
+  # allowance. Over a cap the API answers 429 with a Retry-After header. Counts are in memory,
+  # so each instance limits on its own.
+  rate-limits:
+    # Policy follow-up questions and /rag/query combined.
+    questions:
       enabled: ${QUESTION_RATE_LIMIT_ENABLED:true}
       max-requests: ${QUESTION_RATE_LIMIT_MAX_REQUESTS:10}
       window: ${QUESTION_RATE_LIMIT_WINDOW:1m}
+    # Opening a policy's assessment (POST /policies/{id}/recommendation), stored or not.
+    recommendations:
+      enabled: ${RECOMMENDATION_RATE_LIMIT_ENABLED:true}
+      max-requests: ${RECOMMENDATION_RATE_LIMIT_MAX_REQUESTS:30}
+      window: ${RECOMMENDATION_RATE_LIMIT_WINDOW:1m}
+    # Admin re-evaluation (POST /evaluate).
+    evaluations:
+      enabled: ${EVALUATION_RATE_LIMIT_ENABLED:true}
+      max-requests: ${EVALUATION_RATE_LIMIT_MAX_REQUESTS:10}
+      window: ${EVALUATION_RATE_LIMIT_WINDOW:1m}
   impact:
     assessments-enabled: ${IMPACT_ASSESSMENTS_ENABLED:true}
     review-confidence-threshold: ${IMPACT_REVIEW_CONFIDENCE_THRESHOLD:60}
