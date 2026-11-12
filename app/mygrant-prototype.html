@@ -1678,7 +1678,11 @@ async function openSavedImpact(id){
   state.impactDetail=null; state.impactDetailError=null; state.impactDetailLoading=true;
   goto('impactDetail'); render();
   try{
-    const detail=await parseApiResponse(await apiFetch(`/api/v1/impact-assessments/${id}`));
+    const response=await apiFetch(`/api/v1/impact-assessments/${id}`);
+    if(response.status===404 || response.status===403){
+      throw new Error('This assessment is unavailable or you do not have access to it.');
+    }
+    const detail=await parseApiResponse(response);
     if(state.impactDetailRequest===request && state.user===owner) state.impactDetail=detail;
   }catch(error){
     if(state.impactDetailRequest===request && state.user===owner) state.impactDetailError=error.message;
@@ -1696,10 +1700,11 @@ function renderSavedImpactDetail(impact){
       ${impact.reviewedByHuman?'<span class="tag">Reviewed by a human</span>':''}</div>
     <p>${escapeHtml(impact.summary)}</p><p>Assessed ${escapeHtml(formatTimestamp(impact.createdAt))}</p>
     <div class="block-label">Why this affects you</div>
-    <ul>${(impact.reasons || []).map(reason=>`<li>${escapeHtml(reason)}</li>`).join('')}</ul>
+    ${(impact.reasons || []).length?`<ul>${impact.reasons.map(reason=>`<li>${escapeHtml(reason)}</li>`).join('')}</ul>`:'<p>No further reasons were supplied.</p>'}
     <div class="block-label">Recommended actions</div>
-    <ul>${(impact.recommendedActions || []).map(action=>`<li>${escapeHtml(action)}</li>`).join('')}</ul>
-    ${/^https?:\/\//i.test(impact.sourceUrl || '')?`<a href="${escapeAttribute(impact.sourceUrl)}" target="_blank" rel="noopener noreferrer">Original policy source</a>`:''}
+    ${(impact.recommendedActions || []).length?`<ul>${impact.recommendedActions.map(action=>`<li>${escapeHtml(action)}</li>`).join('')}</ul>`:'<p>No recommended actions were supplied.</p>'}
+    <div class="block-label">Policy source</div>
+    ${/^https?:\/\//i.test(impact.sourceUrl || '')?`<a href="${escapeAttribute(impact.sourceUrl)}" target="_blank" rel="noopener noreferrer">Original policy source</a>`:'<p>The original policy source link is unavailable.</p>'}
   </article>`;
 }
 async function openImpact(id){

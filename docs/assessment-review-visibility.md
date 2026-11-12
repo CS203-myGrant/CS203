@@ -46,6 +46,22 @@ These views do not add approval actions or attach saved records to the legacy
 checklist/archive machinery; those remain separate tasks. Reviewer roles do not
 bypass these owner-facing gates.
 
+## Saved assessment detail
+
+Dashboard cards open the selected assessment ID through
+`GET /api/v1/impact-assessments/{id}`. The detail view uses the same urgency and
+confidence labels as the card and displays its policy title, summary, reasons,
+recommended actions and assessment date. HTTP/HTTPS source URLs open the original
+policy in a separate tab; missing source links and empty reasons/actions have
+explicit placeholders.
+
+Recommended actions are displayed as saved advice. Opening or refreshing a detail
+only reads the assessment; it does not generate recommendations, create checklist
+items, archive records or approve reviews. Missing and inaccessible records share
+an unavailable message, and previous detail content is cleared before loading.
+Late responses cannot replace a newer selection or populate another account.
+Persistent checklist completion remains CS203-4; review actions remain CS203-42.
+
 ## Existing recommendation/feed/checklist paths
 
 V45 adds explicit requires_review and review_status to `policy_recommendations`.
