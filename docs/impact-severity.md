@@ -23,15 +23,19 @@ results also have null confidence; the legacy response DTO retains its existing
 integer confidence field (zero when unavailable).
 
 Review status, `requires_review` / `requiresHumanReview`, publication and action
-item deadlines are separate fields. This change preserves the existing generator
+item deadlines are separate fields. This change preserved the then-existing generator
 rule requesting review for HIGH or material uncertainty, independent judge routing
 and configured confidence threshold. It does not approve or reject any result.
-A human-approved HIGH result can have `requiresHumanReview = false`.
+A human-approved HIGH result can have `requiresHumanReview = false`. Since CS203-153,
+urgency alone no longer requests review; see `docs/impact-assessment-storage.md`.
 
 Action priorities remain HIGH / MEDIUM / LOW: HIGH impacts map to HIGH priority,
 MEDIUM to MEDIUM, and LOW / NOT_APPLICABLE to LOW. That priority is a checklist
-concept. Email's CRITICAL / OTHER buckets are delivery preferences, not assessment
-severity; this migration does not change email routing.
+concept. Email's CRITICAL / OTHER buckets are the user's two delivery preferences.
+Since CS203-91 the assessment's severity picks the bucket: HIGH uses the critical
+setting; MEDIUM, LOW and not-yet-assessed changes use the other setting (unassessed
+ones only ever in the digest); NOT_APPLICABLE is never emailed. In-app alerts keep
+their keyword-based `actionRequired` flag. See the README's Email alerts section.
 
 ## Migration and API contract
 

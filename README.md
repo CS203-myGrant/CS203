@@ -1874,24 +1874,47 @@ Alerts can also arrive by email. Each applicant sets two modes under **Email ale
 defaults are right away for critical alerts and the digest for the rest. In-app alerts are
 never affected.
 
-- **Critical** means the alert asks the reader to act (`actionRequired`), or impact
-  assessment rated it `HIGH`. Nothing rates individual recipients yet, so today this is
-  just `actionRequired`. The rule lives in `AlertBucket.of`.
-- **Right away**: within about 30 seconds, one email per alert. It holds the alert's
-  message, its date and a **View in myGRANT** link that opens the alert after sign-in,
-  WorkOS included.
-- **Daily digest**: at 08:00 America/New_York, one email listing every new alert from the
+Since CS203-91, how an alert is emailed follows the user's own AI impact assessment,
+not the keyword rules behind the in-app alert (those still decide the in-app
+"action needed" flag). The rule lives in `AlertBucket` and `ImpactEmailPlanner`:
+
+| Assessment the user can see | Email setting used | With the default settings |
+| --- | --- | --- |
+| `HIGH` | Critical alerts | Emailed right away |
+| `MEDIUM` or `LOW` | Other alerts | In the daily digest |
+| `NOT_APPLICABLE` | None | Never emailed |
+| None yet, or the AI was unavailable | Other alerts, digest only | In the digest as "We couldn't assess this one yet" |
+| Held for review (not visible yet) | None until a reviewer approves or corrects it | Then as above |
+
+- An assessment counts once its owner can see it: published straight away, or approved
+  or corrected by a reviewer. A held one sends nothing until then.
+- Only changes that also have an in-app alert are emailed, so news never emails anyone
+  and the test clock still applies.
+- **At most one email per user and policy, plus one more** if a later visible version is
+  `HIGH` after the first email went out below `HIGH` (for example after a correction, or
+  after a retry assesses a change that went in the digest unassessed). The database
+  enforces this with a unique (user, policy, kind) key on `impact_email_alerts` (V54). An
+  item not yet in an email follows the latest visible assessment instead, so a correction
+  before the digest replaces it rather than adding an email.
+- **Right away**: within about 30 seconds, one email per item. It holds the policy title,
+  the assessment's plain-English summary, its date and a **View in myGRANT** link that
+  opens the assessment (`#impact=<id>`) after sign-in, WorkOS included. A change we could
+  not assess yet links to its in-app alert instead.
+- **Daily digest**: at 08:00 America/New_York, one email listing every new item from the
   buckets set to the digest. A user with nothing new gets no email.
-- Emails never contain the impact analysis, only the alert's own message.
+- Emails never contain the full analysis, only the summary and the link.
 - Every email has **Manage email settings** and **Unsubscribe** links, plus
   `List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click` headers.
   Unsubscribing turns both modes off. Opening the link only shows a confirm button,
   because mail scanners open links; the button (or a mail client's one-click POST) does
   the change.
-- Only unread alerts are emailed, and each alert goes out in at most one email.
-- Only recent alerts are emailed: the last 24 hours for immediate emails and the last 48
-  hours for the digest. So the first deploy, or turning emails on, does not mail anyone
-  their old inbox, and a digest missed while the app was down rolls into the next one.
+- Each item goes out in at most one email. An unassessed change is emailed only if its
+  in-app alert is still unread when the digest is built.
+- Only recent changes are emailed: assessments that became visible in the last 24 hours
+  (48 for the digest), and unassessed alerts from the last 48 hours. So the first deploy,
+  or turning emails on, does not mail anyone their old inbox, and a digest missed while
+  the app was down rolls into the next one. Emails sent before CS203-91 carried the
+  in-app alerts themselves; `notifications.email_delivery_id` keeps that history.
 
 Endpoints: `GET`/`PUT /api/v1/profiles/me/email-preferences`, the public
 `GET`/`POST /api/v1/email/unsubscribe?token=...` page, `GET /api/v1/notifications/{id}`,
@@ -1938,8 +1961,10 @@ Never enable it on a shared deployment: anyone can register with someone else's 
    sign in with **Continue with Google**, or set `EMAIL_ALLOW_UNVERIFIED_RECIPIENTS=true`
    to use a password account.
 3. Start Spring Boot and import a document as in
-   [Test policy change notifications](#test-policy-change-notifications). Critical alerts
-   are emailed within `EMAIL_DISPATCH_INTERVAL`; check **Emails** in the Resend dashboard.
+   [Test policy change notifications](#test-policy-change-notifications). Once the
+   applicant's assessment of it is visible (see
+   [Published impact feed](#published-impact-feed)), a `HIGH` one is emailed within
+   `EMAIL_DISPATCH_INTERVAL`; check **Emails** in the Resend dashboard.
 4. Build the digest without waiting for 08:00, signed in as the
    [admin account](#admin-account-setup):
 

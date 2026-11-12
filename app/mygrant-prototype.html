@@ -734,15 +734,17 @@ function countryOptions(){
 
 const configuredApiOrigin = window.MYGRANT_CONFIG?.apiBaseUrl?.trim();
 const API_BASE = (configuredApiOrigin || location.origin).replace(/\/$/, '');
-/* Links in alert emails open #notification=<id> or #view=profile. The target waits in
+/* Links in alert emails open #impact=<id>, #notification=<id> or #view=profile. The target waits in
    sessionStorage until the user is in the app, because WorkOS sign-in leaves this page
    and comes back with its own hash. */
 const DEEP_LINK_KEY = 'mygrantDeepLink';
 function captureDeepLink(){
   const params = new URLSearchParams(location.hash.replace(/^#/,''));
   const notification = params.get('notification');
+  const impact = params.get('impact');
   let link = null;
-  if (/^[1-9][0-9]{0,15}$/.test(notification || '')) link = {notification: Number(notification)};
+  if (/^[1-9][0-9]{0,15}$/.test(impact || '')) link = {impact: Number(impact)};
+  else if (/^[1-9][0-9]{0,15}$/.test(notification || '')) link = {notification: Number(notification)};
   else if (params.get('view') === 'profile') link = {view: 'profile'};
   if (!link) return false;
   sessionStorage.setItem(DEEP_LINK_KEY, JSON.stringify(link));
@@ -930,6 +932,7 @@ function openDeepLink(){
   const link = takeDeepLink();
   if(!link || state.role !== 'student') return;
   if(link.view === 'profile') goto('profile');
+  else if(link.impact) openImpact(link.impact);
   else if(link.notification) openNotification(link.notification);
 }
 async function openNotification(id){
@@ -3207,7 +3210,7 @@ function renderEmailPreferences(){
   const prefs = state.emailPreferences;
   const heading = `<div class="page-head" style="margin-top:36px;" id="email-alerts">
       <h2>Email alerts</h2>
-      <p class="sub">Critical alerts are the ones that ask you to act or are rated high urgency; everything else is for information. Alerts always appear in the app as well.</p>
+      <p class="sub">Critical alerts are changes your personalised assessment rates as high impact. Other alerts are medium or low impact, or changes we could not assess yet, which always wait for the daily digest. Changes assessed as not applicable to you are not emailed. Nothing is emailed while a reviewer is still checking an assessment. Alerts always appear in the app as well.</p>
     </div>`;
   if(state.emailPreferencesError && !prefs) return `${heading}<div class="rag-error">${escapeHtml(state.emailPreferencesError)}</div>`;
   if(!prefs) return `${heading}<p class="sub">Loading email settings...</p>`;

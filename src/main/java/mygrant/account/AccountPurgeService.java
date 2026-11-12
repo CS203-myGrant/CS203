@@ -89,6 +89,10 @@ public class AccountPurgeService {
 
         Instant deletedAt = user.getDeletedAt() == null ? Instant.now() : user.getDeletedAt();
 
+        if (forecastJdbc != null) {
+            // CS203-91: the planned alert emails, which quote assessment summaries.
+            forecastJdbc.update("DELETE FROM impact_email_alerts WHERE user_id=?", userId);
+        }
         notificationRepository.deleteAllByUserId(userId);
         // After the notifications, which reference their email.
         emailDeliveryRepository.deleteAllByUserId(userId);
