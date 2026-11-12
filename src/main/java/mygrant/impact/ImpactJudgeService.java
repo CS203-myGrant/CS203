@@ -34,15 +34,30 @@ public class ImpactJudgeService {
 
     private final RestClient client;
     private final ObjectMapper mapper;
+    private final mygrant.ai.AiCallRetry retry;
     private final String apiKey;
     private final String model;
 
-    public ImpactJudgeService(RestClient.Builder builder, ObjectMapper mapper,
+    /** CS203-174: with the configured AI timeouts and bounded retry. */
+    @Autowired
+    public ImpactJudgeService(RestClient.Builder builder, ObjectMapper mapper, mygrant.ai.AiResilience resilience,
             @Value("${anthropic.api-key:}") String apiKey,
             @Value("${anthropic.judge-model:claude-haiku-5-5}") String model,
             @Value("${anthropic.base-url:https://api.anthropic.com}") String baseUrl) {
+        this(resilience.withTimeouts(builder), mapper, resilience.retry(), apiKey, model, baseUrl);
+    }
+
+    /** One attempt on the given builder as it is, for tests that supply their own HTTP client. */
+    public ImpactJudgeService(RestClient.Builder builder, ObjectMapper mapper, String apiKey, String model,
+            String baseUrl) {
+        this(builder, mapper, mygrant.ai.AiCallRetry.once(), apiKey, model, baseUrl);
+    }
+
+    public ImpactJudgeService(RestClient.Builder builder, ObjectMapper mapper, mygrant.ai.AiCallRetry retry,
+            String apiKey, String model, String baseUrl) {
         this.client = builder.baseUrl(baseUrl).build();
         this.mapper = mapper;
+        this.retry = retry;
         this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.model = model;
     }
@@ -143,10 +158,10 @@ public class ImpactJudgeService {
                     "messages", List.of(Map.of("role", "user", "content", "Evidence and profile:\n" + context
                                     + "\nCandidate output (JSON):\n" + mapper.writeValueAsString(candidate))),
                     "output_config", outputConfig(schema));
-            JsonNode response = client.post().uri("/v1/messages")
+            JsonNode response = retry.call("Claude impact judge", () -> client.post().uri("/v1/messages")
                     .header("x-api-key", apiKey)
                     .header("anthropic-version", "2023-06-01")
-                    .contentType(MediaType.APPLICATION_JSON).body(request).retrieve().body(JsonNode.class);
+                    .contentType(MediaType.APPLICATION_JSON).body(request).retrieve().body(JsonNode.class));
             if (response == null) {
                 log.warn("Claude impact judge returned no response body");
                 return unavailable();
@@ -200,10 +215,10 @@ public class ImpactJudgeService {
                             + "do not claim that another model reviewed or approved it.",
                     "messages", List.of(Map.of("role", "user", "content", context)),
                     "output_config", outputConfig(assessmentSchema));
-            JsonNode response = client.post().uri("/v1/messages")
+            JsonNode response = retry.call("Claude fallback assessment", () -> client.post().uri("/v1/messages")
                     .header("x-api-key", apiKey)
                     .header("anthropic-version", "2023-06-01")
-                    .contentType(MediaType.APPLICATION_JSON).body(request).retrieve().body(JsonNode.class);
+                    .contentType(MediaType.APPLICATION_JSON).body(request).retrieve().body(JsonNode.class));
             return completedText(response, "fallback assessment");
         } catch (RestClientResponseException exception) {
             log.warn("Claude fallback assessment failed with HTTP {}: {}", exception.getStatusCode().value(),

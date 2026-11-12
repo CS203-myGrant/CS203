@@ -8,7 +8,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import org.springdoc.core.annotations.ParameterObject;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,6 +26,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import mygrant.sources.FreshnessPage;
 
 /** The signed-in user's published impact feed. */
 @RestController
@@ -46,7 +46,7 @@ public class ImpactController {
             description = "Defaults to current assessments and HIGH-first ordering. Sort by severity or date.")
     @ApiResponse(responseCode = "200", description = "A page of published assessments")
     @ApiResponse(responseCode = "400", description = "Invalid filter, sort or page size")
-    public Page<ImpactFeedService.ImpactView> list(Principal principal,
+    public FreshnessPage<ImpactFeedService.ImpactView> list(Principal principal,
             @ParameterObject @PageableDefault(size = 20) Pageable pageable,
             @io.swagger.v3.oas.annotations.Parameter(schema =
                     @io.swagger.v3.oas.annotations.media.Schema(implementation = ImpactUrgency.class))

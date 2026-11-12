@@ -24,6 +24,16 @@ spring:
       ddl-auto: validate
     open-in-view: false
 
+  # CS203-174: timeouts for every client built from the shared RestClient.Builder: OpenAI
+  # embeddings through Spring AI, and the Federal Register, Visa Bulletin and USCIS imports.
+  # OpenAI chat and the Anthropic judge override the read timeout (mygrant.ai.http below).
+  # The JDK client is named so a new dependency cannot silently switch the HTTP client.
+  http:
+    client:
+      factory: jdk
+      connect-timeout: ${HTTP_CLIENT_CONNECT_TIMEOUT:5s}
+      read-timeout: ${HTTP_CLIENT_READ_TIMEOUT:30s}
+
   ai:
     # Spring AI is used only for embeddings. Chat goes through OpenAiGenerationService,
     # so every other OpenAI model the starter offers is switched off.
@@ -80,13 +90,43 @@ anthropic:
   base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
 
 mygrant:
-  questions:
-    # CS203-12: per-user cap on policy questions (policy follow-ups and /rag/query combined).
-    # Over the cap the API answers 429 with a Retry-After header.
-    rate-limit:
+  # CS203-174: OpenAI chat and the Anthropic judge. A chat completion answers only once it has
+  # finished generating, so its read timeout is longer than other clients'. Only timeouts, 429
+  # and 5xx are retried; a refused connection is not. A Retry-After over max-retry-after fails at once.
+  # The same retry rule replaces Spring AI's for embeddings, so spring.ai.retry.* is not used.
+  ai:
+    http:
+      connect-timeout: ${AI_HTTP_CONNECT_TIMEOUT:5s}
+      read-timeout: ${AI_HTTP_READ_TIMEOUT:90s}
+    retry:
+      max-attempts: ${AI_RETRY_MAX_ATTEMPTS:3}
+      initial-backoff: ${AI_RETRY_INITIAL_BACKOFF:1s}
+      multiplier: ${AI_RETRY_MULTIPLIER:2.0}
+      max-backoff: ${AI_RETRY_MAX_BACKOFF:8s}
+      max-retry-after: ${AI_RETRY_MAX_RETRY_AFTER:20s}
+  # CS203-12, CS203-176: per-user caps on requests that call the AI services, each with its own
+  # allowance. Over a cap the API answers 429 with a Retry-After header. Counts are in memory,
+  # so each instance limits on its own.
+  rate-limits:
+    # Policy follow-up questions and /rag/query combined.
+    questions:
       enabled: ${QUESTION_RATE_LIMIT_ENABLED:true}
       max-requests: ${QUESTION_RATE_LIMIT_MAX_REQUESTS:10}
       window: ${QUESTION_RATE_LIMIT_WINDOW:1m}
+    # Opening a policy's assessment (POST /policies/{id}/recommendation), stored or not.
+    recommendations:
+      enabled: ${RECOMMENDATION_RATE_LIMIT_ENABLED:true}
+      max-requests: ${RECOMMENDATION_RATE_LIMIT_MAX_REQUESTS:30}
+      window: ${RECOMMENDATION_RATE_LIMIT_WINDOW:1m}
+    # Admin re-evaluation (POST /evaluate).
+    evaluations:
+      enabled: ${EVALUATION_RATE_LIMIT_ENABLED:true}
+      max-requests: ${EVALUATION_RATE_LIMIT_MAX_REQUESTS:10}
+      window: ${EVALUATION_RATE_LIMIT_WINDOW:1m}
+  # CS203-175: a policy source is stale (and the app warns users) when it has not synced
+  # successfully within its poll interval times this factor, or has never synced.
+  sources:
+    stale-grace-factor: ${SOURCE_STALE_GRACE_FACTOR:2}
   impact:
     assessments-enabled: ${IMPACT_ASSESSMENTS_ENABLED:true}
     review-confidence-threshold: ${IMPACT_REVIEW_CONFIDENCE_THRESHOLD:60}

@@ -7,8 +7,6 @@ import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -21,6 +19,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import mygrant.actions.ActionItemService;
 import mygrant.actions.ActionItemView;
+import mygrant.sources.FreshnessPage;
+import mygrant.sources.SourceFreshnessService;
+import mygrant.sources.SourceFreshnessService.Freshness;
 import mygrant.user.UserRepository;
 
 /** Published, owner-scoped impact assessments built on existing policy recommendations. */
@@ -41,17 +42,19 @@ public class ImpactFeedService {
     private final ObjectMapper mapper;
     private final UserRepository users;
     private final ActionItemService actionItems;
+    private final SourceFreshnessService freshness;
 
     public ImpactFeedService(NamedParameterJdbcTemplate jdbc, ObjectMapper mapper, UserRepository users,
-            ActionItemService actionItems) {
+            ActionItemService actionItems, SourceFreshnessService freshness) {
         this.jdbc = jdbc;
         this.mapper = mapper;
         this.users = users;
         this.actionItems = actionItems;
+        this.freshness = freshness;
     }
 
     @Transactional(readOnly = true)
-    public Page<ImpactView> list(String email, Pageable pageable, String severity, boolean archived) {
+    public FreshnessPage<ImpactView> list(String email, Pageable pageable, String severity, boolean archived) {
         if (pageable.getPageSize() > 100 || pageable.getPageSize() < 1) {
             throw new IllegalArgumentException("Page size must be between 1 and 100");
         }
@@ -65,12 +68,13 @@ public class ImpactFeedService {
             where += " AND r.severity = :severity";
         }
         Long total = jdbc.queryForObject("SELECT count(*) " + where, params, Long.class);
+        var sources = freshness.snapshot();
         List<ImpactView> rows = withActionItems(userId, jdbc.query(
                 "SELECT r.*, p.title AS policy_title, p.agency AS policy_agency, "
                 + "p.source_url AS policy_source_url, " + citationSql() + " " + where + " ORDER BY " + order
-                + " LIMIT :limit OFFSET :offset", params, (rs, row) -> map(rs)));
-        return new PageImpl<>(rows, PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
-                pageable.getSort()), total == null ? 0 : total);
+                + " LIMIT :limit OFFSET :offset", params, (rs, row) -> map(rs)), sources);
+        return new FreshnessPage<>(rows, PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+                pageable.getSort()), total == null ? 0 : total, sources.all());
     }
 
     /** One current assessment per policy, projected as a combined consumer-facing view. */
@@ -82,8 +86,9 @@ public class ImpactFeedService {
                         + "p.agency AS policy_agency, p.source_url AS policy_source_url, " + citationSql()
                         + " " + CONSOLIDATED + " ORDER BY r.generated_at DESC, r.id DESC", params,
                 (rs, row) -> map(rs));
-        breakdown = withActionItems(userId, breakdown);
-        return aggregate(breakdown);
+        var sources = freshness.snapshot();
+        breakdown = withActionItems(userId, breakdown, sources);
+        return aggregate(breakdown).withSourceFreshness(sources.all());
     }
 
     static ConsolidatedAssessment aggregate(List<ImpactView> breakdown) {
@@ -105,7 +110,7 @@ public class ImpactFeedService {
             }
         }
         return new ConsolidatedAssessment(netStatus, List.copyOf(citations.values()),
-                uncertainty.stream().distinct().toList(), breakdown);
+                uncertainty.stream().distinct().toList(), breakdown, Freshness.UNKNOWN);
     }
 
     private static int urgencyRank(ImpactUrgency urgency) {
@@ -159,10 +164,19 @@ public class ImpactFeedService {
                 (rs, row) -> map(rs)).stream().findFirst().orElseThrow(ImpactNotFoundException::new);
     }
 
-    /** The persisted checklist of every assessment on the page, in one query. */
+    /**
+     * The persisted checklist of every assessment on the page, in one query, and (CS203-175) the
+     * freshness of the sources behind them, read once per request.
+     */
     private List<ImpactView> withActionItems(long userId, List<ImpactView> impacts) {
+        return withActionItems(userId, impacts, freshness.snapshot());
+    }
+
+    private List<ImpactView> withActionItems(long userId, List<ImpactView> impacts,
+            SourceFreshnessService.Snapshot sources) {
         var items = actionItems.itemsForAssessments(userId, impacts.stream().map(ImpactView::id).toList());
-        return impacts.stream().map(impact -> impact.withActionItems(items.getOrDefault(impact.id(), List.of())))
+        return impacts.stream().map(impact -> impact.withActionItems(items.getOrDefault(impact.id(), List.of()))
+                .withSourceFreshness(sources.forUrls(impact.citations().stream().map(Citation::url).toList())))
                 .toList();
     }
 
@@ -182,7 +196,8 @@ public class ImpactFeedService {
                 List.of(), rs.getBoolean("reviewed_by_human"), instant(rs, "reviewed_at"),
                 instant(rs, "archived_at") != null, instant(rs, "generated_at"),
                 instant(rs, "updated_at"), rs.getInt("version"),
-                "This information is not legal advice. Check the original source and a qualified adviser.");
+                "This information is not legal advice. Check the original source and a qualified adviser.",
+                Freshness.UNKNOWN);
     }
 
     private String citationSql() {
@@ -247,18 +262,34 @@ public class ImpactFeedService {
 
     public record Citation(String title, String url) {}
     public record ConsolidatedAssessment(ImpactUrgency netStatus, List<Citation> citations,
-            List<String> uncertaintyNotes, List<ImpactView> breakdown) {}
+            List<String> uncertaintyNotes, List<ImpactView> breakdown,
+            @io.swagger.v3.oas.annotations.media.Schema(description =
+                    "CS203-175: whether the policy sources are still updating") Freshness sourceFreshness) {
+        ConsolidatedAssessment withSourceFreshness(Freshness freshness) {
+            return new ConsolidatedAssessment(netStatus, citations, uncertaintyNotes, breakdown, freshness);
+        }
+    }
     public record ImpactView(long id, long policyId, String policyTitle, String policyAgency,
             @io.swagger.v3.oas.annotations.media.Schema(implementation = ImpactUrgency.class) String severity, ImpactUrgency urgency, boolean requiresHumanReview,
             String summary, int confidence, String confidenceLabel,
             List<String> analysis, List<String> missingInformation, List<Citation> citations,
             List<ActionItemView> actionItems, boolean reviewedByHuman, Instant reviewedAt,
-            boolean archived, Instant createdAt, Instant updatedAt, int version, String disclaimer) {
+            boolean archived, Instant createdAt, Instant updatedAt, int version, String disclaimer,
+            @io.swagger.v3.oas.annotations.media.Schema(description =
+                    "CS203-175: freshness of enabled sources matching this assessment’s cited provider hosts")
+            Freshness sourceFreshness) {
         ImpactView withActionItems(List<ActionItemView> items) {
             return new ImpactView(id, policyId, policyTitle, policyAgency, severity, urgency,
                     requiresHumanReview, summary, confidence,
                     confidenceLabel, analysis, missingInformation, citations, items, reviewedByHuman,
-                    reviewedAt, archived, createdAt, updatedAt, version, disclaimer);
+                    reviewedAt, archived, createdAt, updatedAt, version, disclaimer, sourceFreshness);
+        }
+
+        ImpactView withSourceFreshness(Freshness freshness) {
+            return new ImpactView(id, policyId, policyTitle, policyAgency, severity, urgency,
+                    requiresHumanReview, summary, confidence,
+                    confidenceLabel, analysis, missingInformation, citations, actionItems, reviewedByHuman,
+                    reviewedAt, archived, createdAt, updatedAt, version, disclaimer, freshness);
         }
     }
 }

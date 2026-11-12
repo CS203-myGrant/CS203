@@ -35,6 +35,7 @@ class ConsolidatedImpactAssessmentTests {
             List<ImpactFeedService.Citation> citations) {
         return new ImpactFeedService.ImpactView(id, id, title, "Agency", urgency.name(), urgency, review,
                 title + " assessment", confidence, confidence >= 80 ? "HIGH" : "LOW", List.of("Reason"), missing,
-                citations, List.of(), false, null, false, Instant.EPOCH, Instant.EPOCH, 1, "Disclaimer");
+                citations, List.of(), false, null, false, Instant.EPOCH, Instant.EPOCH, 1, "Disclaimer",
+                mygrant.sources.SourceFreshnessService.Freshness.UNKNOWN);
     }
 }

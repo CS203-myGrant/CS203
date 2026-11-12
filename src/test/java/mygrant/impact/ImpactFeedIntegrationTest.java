@@ -67,7 +67,10 @@ class ImpactFeedIntegrationTest extends mygrant.support.PgvectorIntegrationTestB
 
         mvc.perform(get("/api/v1/impacts?size=1").header("Authorization", token(owner)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(2))
-                .andExpect(jsonPath("$.content[0].id").value(critical));
+                .andExpect(jsonPath("$.content[0].id").value(critical))
+                // CS203-175: every response says whether the policy sources are still updating.
+                .andExpect(jsonPath("$.content[0].sourceFreshness.stale").isBoolean())
+                .andExpect(jsonPath("$.content[0].sourceFreshness.sources").isArray());
         mvc.perform(get("/api/v1/impacts?sort=date,asc&severity=LOW")
                         .header("Authorization", token(owner)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1))
@@ -77,7 +80,8 @@ class ImpactFeedIntegrationTest extends mygrant.support.PgvectorIntegrationTestB
                 .andExpect(jsonPath("$.citations[*].url").value(org.hamcrest.Matchers.containsInAnyOrder(
                         policy.getSourceUrl(), "https://www.whitehouse.gov/proclamation",
                         "https://www.whitehouse.gov/proclamation#section-2")))
-                .andExpect(jsonPath("$.actionItems[0].text").value("Check the official rule"));
+                .andExpect(jsonPath("$.actionItems[0].text").value("Check the official rule"))
+                .andExpect(jsonPath("$.sourceFreshness.stale").isBoolean());
         mvc.perform(get("/api/v1/impacts/" + pending).header("Authorization", token(owner)))
                 .andExpect(status().isNotFound());
         mvc.perform(get("/api/v1/impacts/" + critical).header("Authorization", token(stranger)))
@@ -86,7 +90,11 @@ class ImpactFeedIntegrationTest extends mygrant.support.PgvectorIntegrationTestB
                         .contentType(MediaType.APPLICATION_JSON).content("{\"archived\":true}"))
                 .andExpect(status().isNotFound());
         mvc.perform(get("/api/v1/impacts").header("Authorization", token(stranger)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0))
+                // CS203-175: an empty feed still says whether the sources are updating.
+                .andExpect(jsonPath("$.sourceFreshness.stale").isBoolean())
+                .andExpect(jsonPath("$.sourceFreshness.sources").isArray())
+                .andExpect(jsonPath("$.content").isEmpty());
 
         for (int i = 0; i < 2; i++) {
             mvc.perform(patch("/api/v1/impacts/" + critical).header("Authorization", token(owner))

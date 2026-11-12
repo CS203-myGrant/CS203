@@ -2100,6 +2100,45 @@ The response must **not** cite `2026-14439`. It may cite other H-1B documents if
 have indexed them. Do not judge correctness from answer text alone: inspect `citations`,
 `confidence`, `requiresReview`, and `warnings`.
 
+## Failure and load (CS203-157)
+
+The details are in [docs/resilience.md](docs/resilience.md). In short:
+
+- **Slow or failing AI providers (CS203-174):**
+  - OpenAI chat, the Anthropic judge and OpenAI embeddings all have connect and read timeouts.
+  - Each call is retried a bounded number of times with backoff, but only after a timeout, a
+    `429` or a `5xx`. A `Retry-After` header is honoured.
+  - When a call still fails, the API answers `503` with `Retry-After` and "The AI service is
+    temporarily unavailable. Please try again later." The app shows that message.
+  - Background assessment after ingestion still completes; the affected assessments are saved
+    as `UNAVAILABLE`.
+- **Rate limits (CS203-176):** each user has a separate allowance for policy questions, on-demand
+  assessments and admin re-evaluations. Over an allowance the API answers `429` with
+  `Retry-After`, and the app shows the message.
+- **Stale sources (CS203-175):** the assessment feeds, and each assessment, include
+  `sourceFreshness`. The app warns "Some sources haven't updated since <date>; information may be
+  out of date." when a policy source has not synced within its poll interval × the grace factor.
+- **Load test (CS203-177):** [loadtest/](loadtest/README.md) holds a gentle k6 test of the
+  dashboard's read requests, with no AI calls. Results are in
+  [docs/load-test-results.md](docs/load-test-results.md).
+- **Known limit:** myGRANT runs as a single instance. The rate limiter, the live notification
+  streams (SSE) and the background assessment queue all keep their state in memory. See the
+  table in [docs/resilience.md](docs/resilience.md#known-limits-one-instance-state-in-memory).
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `AI_HTTP_CONNECT_TIMEOUT`, `AI_HTTP_READ_TIMEOUT` | `5s`, `90s` | OpenAI chat and the Anthropic judge |
+| `HTTP_CLIENT_CONNECT_TIMEOUT`, `HTTP_CLIENT_READ_TIMEOUT` | `5s`, `30s` | Clients built from the shared builder: embeddings and the source importers |
+| `AI_RETRY_MAX_ATTEMPTS` | `3` | Attempts per AI call, including the first |
+| `AI_RETRY_INITIAL_BACKOFF`, `AI_RETRY_MULTIPLIER`, `AI_RETRY_MAX_BACKOFF` | `1s`, `2.0`, `8s` | Waits between attempts |
+| `AI_RETRY_MAX_RETRY_AFTER` | `20s` | Longest `Retry-After` honoured; a longer one fails the call at once |
+| `QUESTION_RATE_LIMIT_*` | 10 per minute | Policy questions and `/api/v1/rag/query`, combined |
+| `RECOMMENDATION_RATE_LIMIT_*` | 30 per minute | `POST /api/v1/policies/{id}/recommendation` |
+| `EVALUATION_RATE_LIMIT_*` | 10 per minute | `POST /api/v1/evaluate` (admins) |
+| `SOURCE_STALE_GRACE_FACTOR` | `2` | A source is stale after this many poll intervals without a successful sync |
+
+Each rate limit has `_ENABLED`, `_MAX_REQUESTS` and `_WINDOW` variables.
+
 ## Run automated tests
 
 ### Policy Q&A and saved conversations (CS203-55 through CS203-58)

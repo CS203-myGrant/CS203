@@ -7,7 +7,12 @@ public class RateLimitExceededException extends RuntimeException {
     private final Duration retryAfter;
 
     public RateLimitExceededException(Duration retryAfter) {
-        super("You are asking questions too quickly. Please wait a moment and try again.");
+        this(retryAfter, RateLimiter.Allowance.QUESTIONS.message());
+    }
+
+    /** CS203-176: each allowance tells the caller which kind of request to slow down. */
+    public RateLimitExceededException(Duration retryAfter, String message) {
+        super(message);
         this.retryAfter = retryAfter;
     }
 

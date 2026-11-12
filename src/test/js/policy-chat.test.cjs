@@ -58,3 +58,29 @@ test('reloads persisted question, answer, confidence and citations after refresh
   assert.equal(ctx.state.policyDetail.chat.messages[1].citations[0].sourceUrl,'https://example.org');
   assert.equal(ctx.state.policyDetail.chat.historyLoaded,true);
 });
+
+// CS203-174 and CS203-176: the chat is the AI request the policy page makes, so it shows the
+// server's 503 and 429 messages. These use the page's real parseApiResponse.
+const parser=html.slice(html.indexOf('async function parseApiResponse('),html.indexOf('async function loadImmigrationDocuments('));
+function withServerError(status,message){
+  const ctx=setup(async()=>({status,ok:false,json:async()=>({status,message})}));
+  vm.runInContext(parser,ctx);
+  ctx.escapeHtml=text=>String(text).replace(/</g,'&lt;');
+  ctx.escapeAttribute=ctx.escapeHtml;
+  return ctx;
+}
+for(const [status,message,label] of [
+  [503,'The policy assistant is temporarily unavailable. Please try again or contact support.','an AI outage (CS203-174)'],
+  [429,'You are asking questions too quickly. Please wait a moment and try again.','too many questions (CS203-176)'],
+]){
+  test(`${label} shows the server message and keeps the question to resend`,async()=>{
+    const ctx=withServerError(status,message);
+    await ctx.sendPolicyQuestion({preventDefault(){}});
+    const chat=ctx.state.policyDetail.chat;
+    assert.equal(chat.error,message);
+    assert.equal(chat.draft,'What should I do next?');
+    assert.equal(chat.messages.length,0);
+    assert.equal(chat.sending,false);
+    assert.ok(ctx.renderPolicyChat(ctx.state.policyDetail).includes(message));
+  });
+}

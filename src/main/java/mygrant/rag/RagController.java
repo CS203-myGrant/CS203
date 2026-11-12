@@ -19,10 +19,10 @@ public class RagController {
 
     private final RagService ragService;
     private final mygrant.policies.PolicyQuestionHistory history;
-    private final mygrant.common.QuestionRateLimiter rateLimiter;
+    private final mygrant.common.RateLimiter rateLimiter;
 
     public RagController(RagService ragService,mygrant.policies.PolicyQuestionHistory history,
-            mygrant.common.QuestionRateLimiter rateLimiter) {
+            mygrant.common.RateLimiter rateLimiter) {
         this.ragService = ragService;
         this.history=history;
         this.rateLimiter=rateLimiter;
@@ -38,7 +38,7 @@ public class RagController {
     @ApiResponse(responseCode = "429", description = "Too many questions in a short time; wait for the Retry-After seconds")
     @ApiResponse(responseCode = "503", description = "The embedding or AI service is unavailable")
     public RagQueryResponse query(@Valid @RequestBody RagQueryRequest request,java.security.Principal principal) {
-        rateLimiter.acquire(principal.getName());
+        rateLimiter.acquire(mygrant.common.RateLimiter.Allowance.QUESTIONS, principal.getName());
         return ragService.queryForUser(principal.getName(),request.question());
     }
 
