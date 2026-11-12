@@ -106,7 +106,7 @@ class ProfileImpactAssessmentServiceTests {
         assertThat(result.evaluation().verdict()).isEqualTo(JudgeEvaluation.Verdict.YES);
         assertThat(result.evaluation().model()).isEqualTo("claude-test");
         assertThat(result.attempts()).isEqualTo(1);
-        assertThat(result.requiresHumanReview()).isTrue();
+        assertThat(result.requiresHumanReview()).isFalse(); // HIGH alone no longer holds a verified result
         verify(harness.judge).evaluate(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
         harness.server.verify();
     }

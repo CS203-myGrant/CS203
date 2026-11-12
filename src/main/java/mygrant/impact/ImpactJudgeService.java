@@ -142,9 +142,7 @@ public class ImpactJudgeService {
                                     """),
                     "messages", List.of(Map.of("role", "user", "content", "Evidence and profile:\n" + context
                                     + "\nCandidate output (JSON):\n" + mapper.writeValueAsString(candidate))),
-                    "output_config", Map.of(
-                            "effort", "low",
-                            "format", Map.of("type", "json_schema", "schema", schema)));
+                    "output_config", outputConfig(schema));
             JsonNode response = client.post().uri("/v1/messages")
                     .header("x-api-key", apiKey)
                     .header("anthropic-version", "2023-06-01")
@@ -176,7 +174,8 @@ public class ImpactJudgeService {
             return new JudgeEvaluation(outcome, reason, model, faithfulness, relevance,
                     null, null, null, null, null);
         } catch (RestClientResponseException exception) {
-            log.warn("Claude impact judge failed with HTTP {}", exception.getStatusCode().value());
+            log.warn("Claude impact judge failed with HTTP {}: {}", exception.getStatusCode().value(),
+                    errorDetail(exception));
             return unavailable();
         } catch (Exception exception) {
             log.warn("Impact judge failed; error type: {}", exception.getClass().getSimpleName());
@@ -200,16 +199,15 @@ public class ImpactJudgeService {
                     "system", systemPrompt + "\nThis is a fallback assessment. Return only the requested JSON; "
                             + "do not claim that another model reviewed or approved it.",
                     "messages", List.of(Map.of("role", "user", "content", context)),
-                    "output_config", Map.of(
-                            "effort", "low",
-                            "format", Map.of("type", "json_schema", "schema", assessmentSchema)));
+                    "output_config", outputConfig(assessmentSchema));
             JsonNode response = client.post().uri("/v1/messages")
                     .header("x-api-key", apiKey)
                     .header("anthropic-version", "2023-06-01")
                     .contentType(MediaType.APPLICATION_JSON).body(request).retrieve().body(JsonNode.class);
             return completedText(response, "fallback assessment");
         } catch (RestClientResponseException exception) {
-            log.warn("Claude fallback assessment failed with HTTP {}", exception.getStatusCode().value());
+            log.warn("Claude fallback assessment failed with HTTP {}: {}", exception.getStatusCode().value(),
+                    errorDetail(exception));
             throw exception;
         } catch (Exception exception) {
             log.warn("Claude fallback assessment failed; error type: {}", exception.getClass().getSimpleName());
@@ -220,6 +218,40 @@ public class ImpactJudgeService {
     /** Exposes the configured judge model for fallback-result metadata. */
     public String model() {
         return model;
+    }
+
+    private Map<String, Object> outputConfig(Map<String, Object> schema) {
+        return Map.of("effort", "low",
+                "format", Map.of("type", "json_schema", "schema", claudeSchema(schema)));
+    }
+
+    // Claude's structured outputs reject numeric and length constraints with HTTP 400. The
+    // same schemas go to OpenAI, so the constraints are removed only from Claude's copy; the
+    // ranges are checked again after parsing (judge scores here, confidence on assessment).
+    private static final java.util.Set<String> UNSUPPORTED_SCHEMA_KEYWORDS = java.util.Set.of(
+            "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf",
+            "minLength", "maxLength");
+
+    static Object claudeSchema(Object node) {
+        if (node instanceof Map<?, ?> map) {
+            Map<String, Object> copy = new java.util.LinkedHashMap<>();
+            map.forEach((key, value) -> {
+                if (!UNSUPPORTED_SCHEMA_KEYWORDS.contains(key)) {
+                    copy.put((String) key, claudeSchema(value));
+                }
+            });
+            return copy;
+        }
+        if (node instanceof List<?> list) {
+            return list.stream().map(ImpactJudgeService::claudeSchema).toList();
+        }
+        return node;
+    }
+
+    // Anthropic's error body names the rejected field; it holds no credentials.
+    private static String errorDetail(RestClientResponseException exception) {
+        String body = exception.getResponseBodyAsString();
+        return body.length() > 500 ? body.substring(0, 500) + "..." : body;
     }
 
     private String completedText(JsonNode response, String operation) throws Exception {

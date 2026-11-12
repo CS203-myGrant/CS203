@@ -32,6 +32,7 @@ import mygrant.actions.ActionItemAccessDeniedException;
 import mygrant.actions.ActionItemNotFoundException;
 import mygrant.email.EmailNotConfiguredException;
 import mygrant.impact.ImpactNotFoundException;
+import mygrant.impact.RecommendationReportConflictException;
 import mygrant.ingestion.PolicyAlreadyExistsException;
 import mygrant.feedback.FeedbackAccessDeniedException;
 import mygrant.feedback.FeedbackNotFoundException;
@@ -92,6 +93,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(ImpactNotFoundException.class)
     public ResponseEntity<ApiError> handleImpactNotFound(ImpactNotFoundException exception) {
         return response(HttpStatus.NOT_FOUND, exception.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(RecommendationReportConflictException.class)
+    public ResponseEntity<ApiError> handleReportConflict(RecommendationReportConflictException exception) {
+        return response(HttpStatus.CONFLICT, exception.getMessage(), Map.of());
     }
 
     @ExceptionHandler(ActionItemNotFoundException.class)
@@ -177,6 +183,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(EmailNotConfiguredException.class)
     public ResponseEntity<ApiError> handleEmailNotConfigured(EmailNotConfiguredException exception) {
         return response(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ApiError> handleRateLimited(RateLimitExceededException exception) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.RETRY_AFTER, Long.toString(exception.getRetryAfterSeconds()));
+        return errorResponse(HttpStatus.TOO_MANY_REQUESTS, headers)
+                .body(ApiError.of(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage(), Map.of()));
     }
 
     @ExceptionHandler(AuthenticationException.class)

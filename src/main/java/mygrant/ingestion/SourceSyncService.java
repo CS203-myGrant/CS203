@@ -98,6 +98,7 @@ public class SourceSyncService {
 
     public List<IngestionSyncResponse> syncAll(Principal principal) {
         return sourceRepository.findAllByEnabledTrueOrderByIdAsc().stream()
+                .filter(source -> source.getType() != mygrant.sources.PolicySourceType.VISA_BULLETIN)
                 .map(source -> sync(source, principal.getName()))
                 .toList();
     }
@@ -105,6 +106,7 @@ public class SourceSyncService {
     public void syncDueSources() {
         Instant now = Instant.now();
         sourceRepository.findAllByEnabledTrueOrderByIdAsc().stream()
+                .filter(source -> source.getType() != mygrant.sources.PolicySourceType.VISA_BULLETIN)
                 .filter(source -> isDue(source, now))
                 .forEach(source -> sync(source, "scheduler@system"));
     }
@@ -114,6 +116,9 @@ public class SourceSyncService {
                 .orElseThrow(() -> new IllegalArgumentException("Policy source not found: " + sourceId));
         if (!source.isEnabled()) {
             throw new IllegalArgumentException("Disabled policy sources cannot be synced");
+        }
+        if (source.getType() == mygrant.sources.PolicySourceType.VISA_BULLETIN) {
+            throw new IllegalArgumentException("Save the official Visa Bulletin HTML and import it in the admin page");
         }
         return sync(source, principal.getName());
     }

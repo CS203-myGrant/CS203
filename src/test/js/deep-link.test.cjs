@@ -30,6 +30,16 @@ test('an alert link is kept across sign-in and the hash is cleared', () => {
   assert.equal(page.takeDeepLink(), null, 'a link opens only once');
 });
 
+test('an assessment link from an alert email is kept across sign-in (CS203-91)', () => {
+  const page = browser('#impact=17');
+  assert.equal(page.captureDeepLink(), true);
+  assert.equal(page.replacedWith, '/mygrant-prototype.html');
+  assert.deepEqual({ ...page.takeDeepLink() }, { impact: 17 });
+  for (const hash of ['#impact=abc', '#impact=0', '#impact=-3']) {
+    assert.equal(browser(hash).captureDeepLink(), false, hash);
+  }
+});
+
 test('the email settings link opens the profile', () => {
   const page = browser('#view=profile');
   page.captureDeepLink();

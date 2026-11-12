@@ -9,8 +9,7 @@ import java.util.UUID;
 
 import org.springframework.test.util.ReflectionTestUtils;
 
-import mygrant.notifications.Notification;
-import mygrant.notifications.ProfileField;
+import mygrant.impact.ImpactUrgency;
 import mygrant.user.User;
 
 /** Builders for the email tests; entities without setters are filled in by reflection. */
@@ -38,26 +37,46 @@ final class EmailTestData {
         return user;
     }
 
-    static Notification critical(Long id, Long userId, Instant createdAt) {
-        return notification(id, userId, true, createdAt);
+    /** A HIGH-impact item: the critical email setting applies. */
+    static ImpactEmailAlert critical(Long id, Long userId, Instant updatedAt) {
+        return alert(id, userId, ImpactUrgency.HIGH, ImpactEmailAlert.Kind.FIRST, updatedAt);
     }
 
-    static Notification informational(Long id, Long userId, Instant createdAt) {
-        return notification(id, userId, false, createdAt);
+    /** A MEDIUM-impact item: the other email setting applies. */
+    static ImpactEmailAlert informational(Long id, Long userId, Instant updatedAt) {
+        return alert(id, userId, ImpactUrgency.MEDIUM, ImpactEmailAlert.Kind.FIRST, updatedAt);
     }
 
-    static Notification notification(Long id, Long userId, boolean actionRequired, Instant createdAt) {
-        Notification notification = new Notification(userId, 1, 3L,
-                "New policy affecting F-1: Alert " + id,
-                actionRequired ? List.of(ProfileField.PROGRAM_END_DATE) : List.of());
-        ReflectionTestUtils.setField(notification, "id", id);
-        ReflectionTestUtils.setField(notification, "createdAt", createdAt);
-        return notification;
+    /** A change we could not assess yet: digest only, linked to its in-app alert. */
+    static ImpactEmailAlert unassessed(Long id, Long userId, Instant updatedAt) {
+        ImpactEmailAlert alert = alert(id, userId, null, ImpactEmailAlert.Kind.FIRST, updatedAt);
+        ReflectionTestUtils.setField(alert, "assessmentId", null);
+        ReflectionTestUtils.setField(alert, "assessmentVersion", null);
+        return alert;
     }
 
-    static Notification inDelivery(Notification notification, UUID deliveryId) {
-        ReflectionTestUtils.setField(notification, "emailDeliveryId", deliveryId);
-        return notification;
+    /** Item {@code id} describes assessment {@code 100 + id}, from in-app alert {@code 200 + id}. */
+    static ImpactEmailAlert alert(Long id, Long userId, ImpactUrgency urgency, ImpactEmailAlert.Kind kind,
+            Instant updatedAt) {
+        ImpactEmailAlert alert = org.springframework.beans.BeanUtils.instantiateClass(ImpactEmailAlert.class);
+        ReflectionTestUtils.setField(alert, "id", id);
+        ReflectionTestUtils.setField(alert, "userId", userId);
+        ReflectionTestUtils.setField(alert, "policyId", 3L);
+        ReflectionTestUtils.setField(alert, "notificationId", 200 + id);
+        ReflectionTestUtils.setField(alert, "kind", kind);
+        ReflectionTestUtils.setField(alert, "assessmentId", 100 + id);
+        ReflectionTestUtils.setField(alert, "assessmentVersion", 1);
+        ReflectionTestUtils.setField(alert, "urgency", urgency);
+        ReflectionTestUtils.setField(alert, "policyTitle", "F-1 rule " + id);
+        ReflectionTestUtils.setField(alert, "summary", "New policy affecting F-1: Alert " + id);
+        ReflectionTestUtils.setField(alert, "createdAt", updatedAt);
+        ReflectionTestUtils.setField(alert, "updatedAt", updatedAt);
+        return alert;
+    }
+
+    static ImpactEmailAlert inDelivery(ImpactEmailAlert alert, UUID deliveryId) {
+        ReflectionTestUtils.setField(alert, "emailDeliveryId", deliveryId);
+        return alert;
     }
 
     /** A row as a dispatcher run sees it right after claiming it. */

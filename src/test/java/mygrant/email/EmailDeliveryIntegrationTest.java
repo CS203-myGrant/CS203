@@ -40,8 +40,8 @@ class EmailDeliveryIntegrationTest extends EmailIntegrationTestBase {
         sender.failNext(FakeEmailSender.retryable("HTTP 503 service_unavailable"));
 
         Notification alert = publishPolicy("Outage rule", user).get(0);
-        requireAction(alert);
-        UUID email = outbox.queueImmediate(user.getId(), alert.getId(), now).orElseThrow();
+        long item = highItem(alert, now);
+        UUID email = outbox.queueImmediate(user.getId(), item, now).orElseThrow();
 
         // The alert exists and was pushed to open pages before email was even involved.
         verify(streams).publish(eq(user.getId()), argThat(response -> response.id().equals(alert.getId())));
@@ -53,7 +53,7 @@ class EmailDeliveryIntegrationTest extends EmailIntegrationTestBase {
         assertThat(dispatcher.dispatch(email, now)).isEqualTo(Outcome.NOT_CLAIMED);
         assertThat(dispatcher.dispatch(email, now.plus(Duration.ofMinutes(2)))).isEqualTo(Outcome.SENT);
         assertThat(dispatcher.dispatch(email, now.plus(Duration.ofMinutes(3)))).isEqualTo(Outcome.NOT_CLAIMED);
-        assertThat(outbox.queueImmediate(user.getId(), alert.getId(), now)).isEmpty();
+        assertThat(outbox.queueImmediate(user.getId(), item, now)).isEmpty();
 
         EmailDelivery sent = delivery(email);
         assertThat(sent.getStatus()).isEqualTo(DeliveryStatus.SENT);
@@ -71,8 +71,8 @@ class EmailDeliveryIntegrationTest extends EmailIntegrationTestBase {
     void anOverlappingRunCannotClaimAnEmailBeingSentAndIsNotBlockedByIt() throws Exception {
         User user = applicant();
         Notification alert = publishPolicy("Overlap rule", user).get(0);
-        requireAction(alert);
-        UUID email = outbox.queueImmediate(user.getId(), alert.getId(), now).orElseThrow();
+        long item = highItem(alert, now);
+        UUID email = outbox.queueImmediate(user.getId(), item, now).orElseThrow();
         CountDownLatch inSend = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         sender.duringSend(message -> {
@@ -103,6 +103,7 @@ class EmailDeliveryIntegrationTest extends EmailIntegrationTestBase {
     void twoQueueRunsRacingForOneAlertMakeOneEmail() throws Exception {
         User user = applicant();
         Notification alert = publishPolicy("Race rule", user).get(0);
+        long item = highItem(alert, now);
         CyclicBarrier start = new CyclicBarrier(2);
         ExecutorService pool = Executors.newFixedThreadPool(2);
         List<Future<Optional<UUID>>> runs = new ArrayList<>();
@@ -110,7 +111,7 @@ class EmailDeliveryIntegrationTest extends EmailIntegrationTestBase {
             for (int i = 0; i < 2; i++) {
                 runs.add(pool.submit(() -> {
                     start.await(10, TimeUnit.SECONDS);
-                    return outbox.queueImmediate(user.getId(), alert.getId(), now);
+                    return outbox.queueImmediate(user.getId(), item, now);
                 }));
             }
             List<UUID> queued = new ArrayList<>();
@@ -131,7 +132,8 @@ class EmailDeliveryIntegrationTest extends EmailIntegrationTestBase {
     void markingAnAlertReadKeepsItsEmailClaim() {
         User user = applicant();
         Notification alert = publishPolicy("Read rule", user).get(0);
-        UUID email = outbox.queueImmediate(user.getId(), alert.getId(), now).orElseThrow();
+        long item = highItem(alert, now);
+        UUID email = outbox.queueImmediate(user.getId(), item, now).orElseThrow();
 
         notificationService.markRead(user.getEmail(), alert.getId());
 
@@ -143,12 +145,14 @@ class EmailDeliveryIntegrationTest extends EmailIntegrationTestBase {
     void anAccountPurgeRemovesItsEmailsAndPreferences() {
         User user = applicant();
         Notification alert = publishPolicy("Purge rule", user).get(0);
-        UUID email = outbox.queueImmediate(user.getId(), alert.getId(), now).orElseThrow();
+        long item = highItem(alert, now);
+        UUID email = outbox.queueImmediate(user.getId(), item, now).orElseThrow();
         preferences.saveAndFlush(new EmailPreference(user.getId(), DeliveryMode.DIGEST, DeliveryMode.OFF));
 
         purgeService.purge(user.getId());
 
         assertThat(deliveries.findById(email)).isEmpty();
+        assertThat(items.findById(item)).isEmpty();
         assertThat(preferences.findById(user.getId())).isEmpty();
         assertThat(dispatcher.dispatch(email, now)).isEqualTo(Outcome.NOT_CLAIMED);
         assertThat(sender.requests).isEmpty();

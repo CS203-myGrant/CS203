@@ -80,9 +80,23 @@ anthropic:
   base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
 
 mygrant:
+  questions:
+    # CS203-12: per-user cap on policy questions (policy follow-ups and /rag/query combined).
+    # Over the cap the API answers 429 with a Retry-After header.
+    rate-limit:
+      enabled: ${QUESTION_RATE_LIMIT_ENABLED:true}
+      max-requests: ${QUESTION_RATE_LIMIT_MAX_REQUESTS:10}
+      window: ${QUESTION_RATE_LIMIT_WINDOW:1m}
   impact:
     assessments-enabled: ${IMPACT_ASSESSMENTS_ENABLED:true}
     review-confidence-threshold: ${IMPACT_REVIEW_CONFIDENCE_THRESHOLD:60}
+  demo:
+    enabled: ${MYGRANT_DEMO_ENABLED:false}
+    evaluate: ${MYGRANT_DEMO_EVALUATE:false}
+    applicant-password: ${DEMO_APPLICANT_PASSWORD:}
+    manager-password: ${DEMO_MANAGER_PASSWORD:}
+    admin-password: ${DEMO_ADMIN_PASSWORD:}
+    report-directory: ${MYGRANT_DEMO_REPORT_DIRECTORY:demo-reports}
   # TEMPORARY testing aid: lets admins and applicants move the app's "today" to when a
   # policy is published, from the admin page and profile settings. Set to false to hide it.
   test-clock:

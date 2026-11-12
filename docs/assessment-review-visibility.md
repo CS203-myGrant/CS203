@@ -1,6 +1,6 @@
 # Assessment review and owner visibility
 
-`AssessmentReviewPolicy` is shared by async ingestion, on-demand recommendations
+`ImpactReviewPolicy` is shared by async ingestion, on-demand recommendations
 and independent reevaluation. Configure the integer percentage threshold with
 `IMPACT_REVIEW_CONFIDENCE_THRESHOLD` (default 60; valid range 0–100).
 
@@ -92,6 +92,11 @@ response parsing and button handlers with mocked HTTP responses. They cover load
 empty states, retry URLs, review markers, hidden content, and the dashboard-to-detail
 flow, asserting that all requests are saved-assessment reads. These tests do not
 replace the PostgreSQL-backed server ownership/visibility tests or a browser check.
+
+V56 derives legacy review metadata from the central publication decisions and
+synchronizes linked saved-assessment content and review status. This preserves
+main's human decision, reporting, automatic-publication and email workflows while
+the saved read APIs remain the dashboard data source.
 
 ## Existing recommendation/feed/checklist paths
 

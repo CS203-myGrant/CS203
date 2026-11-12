@@ -362,8 +362,8 @@ Swagger UI is available at `http://localhost:8080/swagger-ui.html`; see
 ### Import a Visa Bulletin
 
 Sign in as an admin, then open **Admin → Visa Bulletin**. The panel shows
-import health and saved cutoff entries for a publication month. It can attempt to
-fetch the official page or import a saved official HTML page. Applicants and managers cannot
+import health and saved cutoff entries for a publication month. Open the official page in a
+normal browser, save its complete HTML, and use **Import saved HTML**. Applicants and managers cannot
 access the panel or its API. Every `/api/v1/ingestion` request needs an admin JWT; an
 applicant's `$TOKEN` gets 403. Sign in as the [admin account](#admin-account-setup) with
 `.env` loaded:
@@ -375,23 +375,11 @@ ADMIN_TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
 ```
 
-Then (`YYYY-MM` is the bulletin publication month):
-
-```bash
-curl -X POST http://localhost:8080/api/v1/ingestion/visa-bulletin/2026-10 \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-curl http://localhost:8080/api/v1/ingestion/visa-bulletin/health \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-curl "http://localhost:8080/api/v1/ingestion/visa-bulletin/entries/2026-10?size=200" \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-```
-
-The entries come back as a [page](#pagination), 20 at a time unless you pass `size`; a
-month has about 150.
-
-If the Department of State blocks the server download (HTTP 403), use the
-**Open official page** link in the admin panel, save that page as HTML in a
-normal browser, and import the saved copy. The import detects the publication
+The server's direct HTML and PDF downloads currently receive HTTP 403 from the Department
+of State, so the scheduled source sync and bulk sync skip Visa Bulletin. The old direct
+fetch API remains available for a future permitted access route but is not used by the
+admin interface. Import the saved official page when each new monthly bulletin is
+published; publication is not necessarily on the first day of the month. The import detects the publication
 month from the page heading and rejects unrelated or incomplete HTML. This
 checks content and layout; it cannot prove where an uploaded file originated.
 The equivalent API request is:
@@ -402,13 +390,37 @@ curl -X POST http://localhost:8080/api/v1/ingestion/visa-bulletin/saved \
   --data-binary @saved-bulletin.html
 ```
 
+Check the import and saved rows (`YYYY-MM` is the publication month):
+
+```bash
+curl http://localhost:8080/api/v1/ingestion/visa-bulletin/health \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+curl "http://localhost:8080/api/v1/ingestion/visa-bulletin/entries/2026-10?size=200" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+The entries come back as a [page](#pagination), 20 at a time unless you pass `size`; a
+month has about 150.
+
 The importer saves the four family/employment cutoff charts in
 `visa_bulletin_entries`. A repeated import updates the same monthly keys. If
 the page is missing a chart or its layout changes, no partial chart is saved
 and health becomes `FAILED`; the last successful import time remains visible.
 This is immigrant preference data. The bulletin's family `F1` category is
-different from an `F-1` student visa, so it is not automatically matched to
-student profiles.
+different from an `F-1` student visa. A student's F-1 status alone does not
+enable tracking.
+
+Applicants may optionally turn on **Visa Bulletin updates** in Your profile after saving
+an immigrant preference category (such as `EB-2`), an exact chargeability chart column,
+and a priority date, with consent to use all three fields. This is separate from F-1,
+OPT and H-1B status. The applicant dashboard shows the latest saved chart cutoffs and,
+after a later monthly import changes their row, an in-app alert. The first imported month
+is a baseline; importing an older month does not announce a historical change. Re-imports
+update the same alert rather than duplicating it. Turning tracking off deletes its alerts.
+These are published cutoff changes, not eligibility or filing advice. The user must check
+the official bulletin and USCIS chart selection. `GET` and `PUT`
+`/api/v1/visa-bulletin/tracking` are authenticated applicant-only endpoints; `PUT` accepts
+`{"enabled":true}` or `{"enabled":false}`.
 
 The myGRANT application is available at `http://localhost:8080/`. Create an account
 there or sign in with an existing account. The browser stores the JWT in session storage
@@ -986,13 +998,35 @@ demo. RAG retrieves those chunks after classification.
 ## Published impact feed
 
 The applicant dashboard now shows published per-user policy assessments above the
-notification inbox. An independently approved recommendation created by **See how
-this impacts me** appears in this feed. An assessment that needs review is saved
-as `PENDING_REVIEW` and is not returned by the applicant feed or detail APIs;
-temporary AI failures are not saved. Managers and admins can correct and publish
-held assessments with `/api/v1/review/impacts`. Corrections retain previous
-versions and show a **Reviewed by a human** marker. `HIGH` assessment urgency is
-shown as `HIGH` severity so the dashboard presents it as a warning.
+notification inbox. Assessments reach the feed two ways:
+
+- **Automatically after ingestion (CS203-153).** When an official (`PRIMARY`) policy
+  is imported, every user whose profile matches it gets their own assessment in the
+  background, published straight to their feed and checklist or held for review.
+  News (`SECONDARY`) results are kept as processing records only and never reach
+  the feed, in line with news never creating alerts.
+- **On demand,** when the user opens a policy and selects **See how this impacts me**.
+  If the background assessment already covers that user's current profile version,
+  the page shows it without calling the model again.
+
+Both paths use one review rule (`ImpactReviewPolicy`). An assessment is **held for
+review** (saved as `PENDING_REVIEW`, hidden from its owner, listed in the reviewer
+queue) when the model asked for review, its confidence is below
+`IMPACT_REVIEW_CONFIDENCE_THRESHOLD` (default 60), or the independent judge did not
+pass it or was unavailable. Otherwise it is **published**, whatever its urgency: a
+confident, verified `HIGH` result goes straight to the user. Without
+`ANTHROPIC_API_KEY` the judge is unavailable, so every new assessment is held.
+Assessments published before this rule existed are left as they were.
+
+While an assessment is held, its policy page says it is awaiting review
+(`status: AWAITING_REVIEW`) and does not call the model again, even with
+`refresh=true`. Temporary AI failures are not saved. Managers and admins can
+approve (publish unchanged) or correct held assessments with
+`/api/v1/review/impacts`; the queue shows why each AI draft was held
+(`holdReasons`). Corrections retain previous versions and show a **Reviewed by a
+human** marker, and no automated path ever changes a human-reviewed assessment.
+`HIGH` assessment urgency is shown as `HIGH` severity so the dashboard presents it
+as a warning.
 
 `GET /api/v1/impacts` returns the signed-in user's published assessments, 20 per
 page by default, sorted by severity then date. Use `sort=date,desc` or
@@ -1051,6 +1085,11 @@ For an offline check against a local PostgreSQL test database, run
 `mvn -Dtest=ImpactFeedIntegrationTest test` with `DATABASE_URL` and `JWT_SECRET`
 set as in the regular test setup. It covers sorting, filters, citations, archive
 history, account isolation, pending-review visibility and manager corrections.
+`mvn -Dtest=AutoPublishIntegrationTest test` covers automatic reports: one
+ingestion giving two users different reports, low-confidence and unverified results
+held for review and published on approval, direct publication of a confident
+verified `HIGH`, reuse on the policy page with no model call, untouched
+human-reviewed rows, and the manager dashboard counts.
 `node --test src/test/js/impact-feed.test.cjs` checks the dashboard rendering and
 archive requests without calling AI services.
 
@@ -1835,24 +1874,47 @@ Alerts can also arrive by email. Each applicant sets two modes under **Email ale
 defaults are right away for critical alerts and the digest for the rest. In-app alerts are
 never affected.
 
-- **Critical** means the alert asks the reader to act (`actionRequired`), or impact
-  assessment rated it `HIGH`. Nothing rates individual recipients yet, so today this is
-  just `actionRequired`. The rule lives in `AlertBucket.of`.
-- **Right away**: within about 30 seconds, one email per alert. It holds the alert's
-  message, its date and a **View in myGRANT** link that opens the alert after sign-in,
-  WorkOS included.
-- **Daily digest**: at 08:00 America/New_York, one email listing every new alert from the
+Since CS203-91, how an alert is emailed follows the user's own AI impact assessment,
+not the keyword rules behind the in-app alert (those still decide the in-app
+"action needed" flag). The rule lives in `AlertBucket` and `ImpactEmailPlanner`:
+
+| Assessment the user can see | Email setting used | With the default settings |
+| --- | --- | --- |
+| `HIGH` | Critical alerts | Emailed right away |
+| `MEDIUM` or `LOW` | Other alerts | In the daily digest |
+| `NOT_APPLICABLE` | None | Never emailed |
+| None yet, or the AI was unavailable | Other alerts, digest only | In the digest as "We couldn't assess this one yet" |
+| Held for review (not visible yet) | None until a reviewer approves or corrects it | Then as above |
+
+- An assessment counts once its owner can see it: published straight away, or approved
+  or corrected by a reviewer. A held one sends nothing until then.
+- Only changes that also have an in-app alert are emailed, so news never emails anyone
+  and the test clock still applies.
+- **At most one email per user and policy, plus one more** if a later visible version is
+  `HIGH` after the first email went out below `HIGH` (for example after a correction, or
+  after a retry assesses a change that went in the digest unassessed). The database
+  enforces this with a unique (user, policy, kind) key on `impact_email_alerts` (V54). An
+  item not yet in an email follows the latest visible assessment instead, so a correction
+  before the digest replaces it rather than adding an email.
+- **Right away**: within about 30 seconds, one email per item. It holds the policy title,
+  the assessment's plain-English summary, its date and a **View in myGRANT** link that
+  opens the assessment (`#impact=<id>`) after sign-in, WorkOS included. A change we could
+  not assess yet links to its in-app alert instead.
+- **Daily digest**: at 08:00 America/New_York, one email listing every new item from the
   buckets set to the digest. A user with nothing new gets no email.
-- Emails never contain the impact analysis, only the alert's own message.
+- Emails never contain the full analysis, only the summary and the link.
 - Every email has **Manage email settings** and **Unsubscribe** links, plus
   `List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click` headers.
   Unsubscribing turns both modes off. Opening the link only shows a confirm button,
   because mail scanners open links; the button (or a mail client's one-click POST) does
   the change.
-- Only unread alerts are emailed, and each alert goes out in at most one email.
-- Only recent alerts are emailed: the last 24 hours for immediate emails and the last 48
-  hours for the digest. So the first deploy, or turning emails on, does not mail anyone
-  their old inbox, and a digest missed while the app was down rolls into the next one.
+- Each item goes out in at most one email. An unassessed change is emailed only if its
+  in-app alert is still unread when the digest is built.
+- Only recent changes are emailed: assessments that became visible in the last 24 hours
+  (48 for the digest), and unassessed alerts from the last 48 hours. So the first deploy,
+  or turning emails on, does not mail anyone their old inbox, and a digest missed while
+  the app was down rolls into the next one. Emails sent before CS203-91 carried the
+  in-app alerts themselves; `notifications.email_delivery_id` keeps that history.
 
 Endpoints: `GET`/`PUT /api/v1/profiles/me/email-preferences`, the public
 `GET`/`POST /api/v1/email/unsubscribe?token=...` page, `GET /api/v1/notifications/{id}`,
@@ -1899,8 +1961,10 @@ Never enable it on a shared deployment: anyone can register with someone else's 
    sign in with **Continue with Google**, or set `EMAIL_ALLOW_UNVERIFIED_RECIPIENTS=true`
    to use a password account.
 3. Start Spring Boot and import a document as in
-   [Test policy change notifications](#test-policy-change-notifications). Critical alerts
-   are emailed within `EMAIL_DISPATCH_INTERVAL`; check **Emails** in the Resend dashboard.
+   [Test policy change notifications](#test-policy-change-notifications). Once the
+   applicant's assessment of it is visible (see
+   [Published impact feed](#published-impact-feed)), a `HIGH` one is emailed within
+   `EMAIL_DISPATCH_INTERVAL`; check **Emails** in the Resend dashboard.
 4. Build the digest without waiting for 08:00, signed in as the
    [admin account](#admin-account-setup):
 

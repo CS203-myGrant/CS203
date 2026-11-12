@@ -56,6 +56,44 @@ class ReviewVisibilityMigrationTest extends PgvectorIntegrationTestBase {
         }
     }
 
+    @Test
+    void linkedHistoricalHumanCorrectionIsBackfilledIntoSavedReads() {
+        String database = "linked_" + UUID.randomUUID().toString().replace("-", "");
+        var admin = jdbc(POSTGRES.getJdbcUrl());
+        admin.execute("CREATE DATABASE " + database);
+        String url = POSTGRES.getJdbcUrl().replace("/" + POSTGRES.getDatabaseName(), "/" + database);
+        try {
+            Flyway.configure().dataSource(url, POSTGRES.getUsername(), POSTGRES.getPassword()).target("55").load().migrate();
+            var jdbc = jdbc(url);
+            Long owner = jdbc.queryForObject("INSERT INTO users (full_name,email,password_hash) VALUES ('Test','linked@example.org','unused') RETURNING id", Long.class);
+            Long policy = jdbc.queryForObject("""
+                    INSERT INTO policy_documents (external_id,title,agency,visa_type,status,source_type,
+                        publication_date,source_url,content,content_hash)
+                    VALUES ('linked','Rule','DHS','F-1','FINAL','PRIMARY',CURRENT_DATE,'https://example.org','text','hash') RETURNING id
+                    """, Long.class);
+            Long recommendation = jdbc.queryForObject("""
+                    INSERT INTO policy_recommendations (user_id,policy_id,input_hash,assessment_json,publication_status,
+                        severity,reviewed_by_human)
+                    VALUES (?,?,'corrected','{"status":"COMPLETED","confidence":95,"summary":"Human correction",
+                        "reasons":["Corrected reason"],"recommendedActions":["Corrected action"],"requiresHumanReview":false}',
+                        'PUBLISHED','HIGH',TRUE) RETURNING id
+                    """, Long.class, owner, policy);
+            jdbc.update("""
+                    INSERT INTO impact_assessments (user_id,policy_id,profile_version,status,urgency,confidence,
+                        summary,reasons,recommended_actions,requires_review,review_status,recommendation_id)
+                    VALUES (?,?,1,'COMPLETED','LOW',40,'Original model draft','[]','[]',TRUE,'PENDING_REVIEW',?)
+                    """, owner, policy, recommendation);
+            Flyway.configure().dataSource(url, POSTGRES.getUsername(), POSTGRES.getPassword()).load().migrate();
+            var result = jdbc.queryForMap("SELECT summary,urgency,confidence,review_status FROM impact_assessments WHERE user_id = ?", owner);
+            assertThat(result.get("summary")).isEqualTo("Human correction");
+            assertThat(result.get("urgency")).isEqualTo("HIGH");
+            assertThat(result.get("confidence")).isEqualTo(95);
+            assertThat(result.get("review_status")).isEqualTo("APPROVED");
+        } finally {
+            admin.execute("DROP DATABASE " + database + " WITH (FORCE)");
+        }
+    }
+
     private JdbcTemplate jdbc(String url) {
         return new JdbcTemplate(new DriverManagerDataSource(url, POSTGRES.getUsername(), POSTGRES.getPassword()));
     }

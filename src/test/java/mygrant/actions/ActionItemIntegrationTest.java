@@ -110,8 +110,9 @@ class ActionItemIntegrationTest extends mygrant.support.PgvectorIntegrationTestB
     }
 
     @Test
-    void unverifiedDraftsAndBlankAssessmentsDoNotExposeItems() throws Exception {
+    void heldDraftsAndBlankAssessmentsReceiveNoItems() throws Exception {
         User owner = account(UserRole.APPLICANT);
+        // The judge did not pass it, so the shared review policy holds it for a reviewer.
         recommendations.getOrGenerate(owner.getEmail(), policy(null),
                 () -> rejected(List.of("Draft step that must stay hidden")));
         long held = jdbc.queryForObject("SELECT id FROM policy_recommendations WHERE user_id = ?",
@@ -127,19 +128,19 @@ class ActionItemIntegrationTest extends mygrant.support.PgvectorIntegrationTestB
     }
 
     @Test
-    void requestingAHeldDraftAgainCannotPublishItOrItsChecklist() throws Exception {
+    void askingAgainDoesNotRegenerateAHeldDraftOrPublishItsChecklist() throws Exception {
         User owner = account(UserRole.APPLICANT);
         PolicyDocument policy = policy(null);
         recommendations.getOrGenerate(owner.getEmail(), policy, () -> rejected(List.of("Check the rule")));
-        var result = recommendations.getOrGenerate(owner.getEmail(), policy, () -> {
-            throw new AssertionError("Pending draft must wait for human review");
-        });
+        // Even an explicit refresh waits for the reviewer instead of rolling the model again.
+        recommendations.getOrGenerate(owner.getEmail(), policy,
+                () -> { throw new AssertionError("A held draft was regenerated"); }, true);
         long assessment = jdbc.queryForObject("SELECT id FROM policy_recommendations WHERE user_id = ?",
                 Long.class, owner.getId());
-        assertThat(result.summary()).contains("awaiting review");
+
         assertThat(rows(assessment)).isEmpty();
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM policy_recommendations WHERE user_id = ?",
-                Integer.class, owner.getId())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT publication_status FROM policy_recommendations WHERE id = ?",
+                String.class, assessment)).isEqualTo("PENDING_REVIEW");
     }
 
     @Test

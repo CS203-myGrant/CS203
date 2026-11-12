@@ -21,10 +21,10 @@ public class OutputPublicationService {
     private final ObjectMapper mapper;
     private final ImpactJudgeService judge;
     private final ActionItemService actions;
-    private final AssessmentReviewPolicy reviewPolicy;
+    private final ImpactReviewPolicy reviewPolicy;
 
     public OutputPublicationService(JdbcTemplate jdbc, ObjectMapper mapper,
-            ImpactJudgeService judge, ActionItemService actions, AssessmentReviewPolicy reviewPolicy) {
+            ImpactJudgeService judge, ActionItemService actions, ImpactReviewPolicy reviewPolicy) {
         this.jdbc = jdbc;
         this.mapper = mapper;
         this.judge = judge;
@@ -100,22 +100,23 @@ public class OutputPublicationService {
         boolean human = humanReviewed(output.reviewId());
         if (human) return new Result(output.id(), evaluation, status(output.reviewId()), true, output.reviewId());
         boolean passed = evaluation.verdict() == JudgeEvaluation.Verdict.YES;
+        // Policy Q&A responses are published only when the judge passes them.
         String state = passed ? "PUBLISHED" : "PENDING_REVIEW";
         Long reviewId = output.reviewId();
         if ("ASSESSMENT".equals(output.type())) {
             if (reviewId == null) throw new IllegalStateException("Assessment is not attached to its review state");
             var candidate = read(output.candidate(), ProfileImpactAssessment.class);
-            var assessed = reviewPolicy.apply(new ProfileImpactAssessment(candidate.urgency(), candidate.confidence(), candidate.summary(),
+            var assessed = new ProfileImpactAssessment(candidate.urgency(), candidate.confidence(), candidate.summary(),
                     candidate.reasons(), candidate.recommendedActions(), candidate.missingInformation(),
                     candidate.requiresHumanReview() || !passed, candidate.provider(), candidate.model(),
-                    evaluation, candidate.attempts()));
-            state = assessed.requiresHumanReview() ? "PENDING_REVIEW" : "PUBLISHED";
+                    evaluation, candidate.attempts());
+            // Assessments follow the shared review policy: a failed or unavailable check holds them.
+            state = reviewPolicy.requiresReview(assessed) ? "PENDING_REVIEW" : "PUBLISHED";
             jdbc.update("""
                     UPDATE policy_recommendations SET assessment_json = ?, publication_status = ?,
-                        requires_review = ?, review_status = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP
+                        version = version + 1, updated_at = CURRENT_TIMESTAMP
                     WHERE id = ? AND reviewed_by_human = FALSE
-                    """, json(assessed), state, assessed.requiresHumanReview(),
-                    assessed.requiresHumanReview() ? "PENDING_REVIEW" : "NOT_REQUIRED", reviewId);
+                    """, json(assessed), state, reviewId);
             actions.syncForAssessment(reviewId);
         } else {
             if (!passed && reviewId == null) {
@@ -156,6 +157,27 @@ public class OutputPublicationService {
             var output = load(id);
             updateAnswer(output, answer, new JudgeEvaluation(JudgeEvaluation.Verdict.YES,
                     "Approved by a human reviewer", "Human"), false, true);
+        }
+    }
+
+    /** Keep a rejected Policy Q&A draft hidden and its applicant-facing answer safely withheld. */
+    @Transactional
+    public void rejectHumanAnswer(long reviewId) {
+        var ids = jdbc.queryForList("SELECT id FROM stored_ai_outputs WHERE review_id = ?", UUID.class, reviewId);
+        for (UUID id : ids) {
+            var output = load(id);
+            if (output.historyId() == null) continue;
+            String response = jdbc.queryForObject("SELECT response_json FROM policy_question_history WHERE id = ?",
+                    String.class, output.historyId());
+            ObjectNode node = (ObjectNode) read(response, JsonNode.class);
+            node.put("answer", "A human reviewer could not verify this answer. Check the official source or contact support.");
+            node.put("requiresReview", true);
+            node.put("reviewedByHuman", true);
+            node.put("confidence", "LOW");
+            node.set("evaluation", mapper.valueToTree(new JudgeEvaluation(JudgeEvaluation.Verdict.NO,
+                    "Rejected by a human reviewer", "Human")));
+            jdbc.update("UPDATE policy_question_history SET response_json = ? WHERE id = ?",
+                    json(node), output.historyId());
         }
     }
 

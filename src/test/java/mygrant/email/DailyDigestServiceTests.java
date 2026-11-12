@@ -2,6 +2,7 @@ package mygrant.email;
 
 import static mygrant.email.EmailTestData.critical;
 import static mygrant.email.EmailTestData.informational;
+import static mygrant.email.EmailTestData.unassessed;
 import static mygrant.email.EmailTestData.verifiedUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -25,8 +26,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import mygrant.notifications.Notification;
-import mygrant.notifications.NotificationRepository;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
 
@@ -37,7 +36,7 @@ class DailyDigestServiceTests {
     private static final LocalDate DAY = LocalDate.parse("2026-10-24");
 
     @Mock
-    private NotificationRepository notificationRepository;
+    private ImpactEmailAlertRepository alertRepository;
 
     @Mock
     private UserRepository userRepository;
@@ -47,6 +46,9 @@ class DailyDigestServiceTests {
 
     @Mock
     private EmailOutbox outbox;
+
+    @Mock
+    private ImpactEmailPlanner planner;
 
     @Test
     void digestDateIsTheLocalDateInTheDigestZone() {
@@ -77,8 +79,28 @@ class DailyDigestServiceTests {
     }
 
     @Test
+    void plansVisibleAndUnassessedChangesOverTheDigestWindowFirst() {
+        when(alertRepository.findNotEmailedSince(NOW.minus(Duration.ofHours(48)))).thenReturn(List.of());
+
+        service().buildDigests(DAY, NOW);
+
+        verify(planner).planVisible(NOW.minus(Duration.ofHours(48)));
+        verify(planner).planUnassessed(NOW.minus(Duration.ofHours(48)));
+    }
+
+    @Test
+    void changesWeCouldNotAssessGoInTheDigestEvenForImmediateUsers() {
+        candidates(List.of(unassessed(42L, 7L, NOW), informational(43L, 7L, NOW)), List.of(verifiedUser(7L)));
+        when(preferenceRepository.findAllById(Set.of(7L)))
+                .thenReturn(List.of(new EmailPreference(7L, DeliveryMode.IMMEDIATE, DeliveryMode.IMMEDIATE)));
+        when(outbox.queueDigest(7L, DAY, List.of(42L), NOW)).thenReturn(Optional.of(UUID.randomUUID()));
+
+        assertThat(service().buildDigests(DAY, NOW)).isEqualTo(1);
+    }
+
+    @Test
     void nothingNewMeansNoEmailAndNoRow() {
-        when(notificationRepository.findNotEmailedSince(NOW.minus(Duration.ofHours(48)))).thenReturn(List.of());
+        when(alertRepository.findNotEmailedSince(NOW.minus(Duration.ofHours(48)))).thenReturn(List.of());
 
         assertThat(service().buildDigests(DAY, NOW)).isZero();
         verifyNoInteractions(outbox);
@@ -127,25 +149,25 @@ class DailyDigestServiceTests {
 
     @Test
     void buildsOneAccountsDigestFromOnlyThatAccountsAlerts() {
-        Notification alert = informational(42L, 7L, NOW);
+        ImpactEmailAlert alert = informational(42L, 7L, NOW);
         when(userRepository.findById(7L)).thenReturn(Optional.of(verifiedUser(7L)));
-        when(notificationRepository.findNotEmailedSinceForUser(7L, NOW.minus(Duration.ofHours(48))))
+        when(alertRepository.findNotEmailedSinceForUser(7L, NOW.minus(Duration.ofHours(48))))
                 .thenReturn(List.of(alert));
         UUID digest = UUID.randomUUID();
         when(outbox.queueDigest(7L, DAY, List.of(42L), NOW)).thenReturn(Optional.of(digest));
 
         assertThat(service().buildDigestFor(7L, DAY, NOW)).contains(digest);
-        verify(notificationRepository, never()).findNotEmailedSince(any());
+        verify(alertRepository, never()).findNotEmailedSince(any());
     }
 
-    private void candidates(List<Notification> notifications, List<User> users) {
-        when(notificationRepository.findNotEmailedSince(NOW.minus(Duration.ofHours(48)))).thenReturn(notifications);
+    private void candidates(List<ImpactEmailAlert> notifications, List<User> users) {
+        when(alertRepository.findNotEmailedSince(NOW.minus(Duration.ofHours(48)))).thenReturn(notifications);
         when(userRepository.findAllById(any())).thenReturn(users);
     }
 
     private DailyDigestService service() {
         EmailProperties properties = EmailTestData.properties();
-        return new DailyDigestService(notificationRepository, userRepository, preferenceRepository,
+        return new DailyDigestService(alertRepository, planner, userRepository, preferenceRepository,
                 new EmailEligibility(properties), outbox, properties);
     }
 }

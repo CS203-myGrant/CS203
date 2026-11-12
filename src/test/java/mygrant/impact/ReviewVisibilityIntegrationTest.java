@@ -170,6 +170,54 @@ class ReviewVisibilityIntegrationTest extends PgvectorIntegrationTestBase {
                 Integer.class, owner.getId())).isZero();
     }
 
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(ImpactReviewController.Decision.class)
+    void humanDecisionUpdatesLinkedSavedAssessmentVisibility(ImpactReviewController.Decision decision) throws Exception {
+        var owner = account(UserRole.APPLICANT);
+        var reviewer = account(UserRole.ADMIN);
+        var policy = policy();
+        recommendations.getOrGenerate(owner.getEmail(), policy, () -> candidate(50, false));
+        Long legacyId = jdbc.queryForObject("SELECT id FROM policy_recommendations WHERE user_id = ?", Long.class, owner.getId());
+        var saved = assessments.saveAndFlush(new ImpactAssessment(owner.getId(), policy.getId(), 1,
+                AssessmentStatus.COMPLETED, ImpactUrgency.MEDIUM, 50, "Private linked candidate",
+                List.of("Private reason"), List.of("Private action"), true,
+                AssessmentReviewStatus.PENDING_REVIEW, "Test", "test"));
+        assessments.linkRecommendation(saved.getId(), legacyId);
+        int version = jdbc.queryForObject("SELECT version FROM policy_recommendations WHERE id = ?", Integer.class, legacyId);
+        review.decide(legacyId, reviewer.getEmail(), new ImpactReviewController.DecisionRequest(decision, version,
+                "Checked the official policy and the user's dates."));
+        entityManager.clear();
+        mvc.perform(get("/api/v1/impact-assessments/" + saved.getId()).header("Authorization", token(owner)))
+                .andExpect(decision == ImpactReviewController.Decision.VERIFY ? status().isOk() : status().isNotFound());
+        var updated = assessments.findById(saved.getId()).orElseThrow();
+        assertThat(updated.getReviewStatus()).isEqualTo(decision == ImpactReviewController.Decision.VERIFY
+                ? AssessmentReviewStatus.APPROVED : AssessmentReviewStatus.REJECTED);
+    }
+
+    @Test
+    void humanCorrectionIsAlsoTheContentShownBySavedAssessmentApi() throws Exception {
+        var owner = account(UserRole.APPLICANT);
+        var reviewer = account(UserRole.ADMIN);
+        var policy = policy();
+        recommendations.getOrGenerate(owner.getEmail(), policy, () -> candidate(90, true));
+        Long legacyId = jdbc.queryForObject("SELECT id FROM policy_recommendations WHERE user_id = ?", Long.class, owner.getId());
+        var saved = assessments.saveAndFlush(new ImpactAssessment(owner.getId(), policy.getId(), 1,
+                AssessmentStatus.COMPLETED, ImpactUrgency.MEDIUM, 90, "Original candidate",
+                List.of("Original reason"), List.of("Original action"), true,
+                AssessmentReviewStatus.PENDING_REVIEW, "Test", "test"));
+        assessments.linkRecommendation(saved.getId(), legacyId);
+        review.publishCorrection(legacyId, reviewer.getEmail(), new ImpactReviewController.Correction(
+                "HIGH", 95, "Human-corrected summary", List.of("Corrected reason"),
+                List.of("Corrected action"), List.of()));
+        entityManager.clear();
+        mvc.perform(get("/api/v1/impact-assessments/" + saved.getId()).header("Authorization", token(owner)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.summary").value("Human-corrected summary"))
+                .andExpect(jsonPath("$.urgency").value("HIGH"))
+                .andExpect(jsonPath("$.reasons[0]").value("Corrected reason"))
+                .andExpect(jsonPath("$.recommendedActions[0]").value("Corrected action"))
+                .andExpect(jsonPath("$.reviewedByHuman").value(true));
+    }
+
     private void assertVisible(User owner, Long id, int count) throws Exception {
         mvc.perform(get("/api/v1/impacts").header("Authorization", token(owner)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(count));
@@ -184,7 +232,7 @@ class ReviewVisibilityIntegrationTest extends PgvectorIntegrationTestBase {
     private ProfileImpactAssessment candidate(int confidence, boolean review) {
         return new ProfileImpactAssessment(ImpactUrgency.MEDIUM, confidence, "Private profile date analysis",
                 List.of("Private reasons"), List.of("Read the official source"), List.of(), review,
-                "Test", "test", null, 1);
+                "Test", "test", new JudgeEvaluation(JudgeEvaluation.Verdict.YES, "Verified fixture", "Test"), 1);
     }
 
     private User account(UserRole role) {

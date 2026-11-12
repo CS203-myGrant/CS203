@@ -31,16 +31,30 @@ test('retains source details when recommendation fails',async()=>{
   assert.equal(context.state.policyDetail.error,'Unavailable');
   assert.equal(context.state.policyDetail.loading,false);
 });
-test('report includes policy, issue, and recommendation',async()=>{
+test('policy detail report is linked to the saved assessment and review queue',async()=>{
   let sent;
   const context=setup(async(path,options)=>{sent={path,body:JSON.parse(options.body)};return {};});
-  context.state.policyDetail={id:7,policy:{externalId:'2026-1',title:'Policy'},assessment:{summary:'Summary',recommendedActions:['Check source']},reportText:'Wrong deadline'};
+  context.state.policyDetail={id:7,policy:{externalId:'2026-1',title:'Policy'},
+    assessment:{summary:'Summary'},impact:{id:42,version:2},
+    reportCategory:'WRONG_SEVERITY',reportText:'Wrong deadline'};
   await context.reportPolicyRecommendation({preventDefault(){}});
-  assert.equal(sent.path,'/api/v1/feedback/messages');
-  assert.match(sent.body.message,/2026-1/);
-  assert.match(sent.body.message,/Wrong deadline/);
-  assert.match(sent.body.message,/Check source/);
+  assert.equal(sent.path,'/api/v1/impacts/42/reports');
+  assert.deepEqual(sent.body,{category:'WRONG_SEVERITY',details:'Wrong deadline',version:2});
   assert.equal(context.state.policyDetail.reported,true);
+});
+
+test('only the displayed saved assessment can be linked to a recommendation report',async()=>{
+  const calls=[];
+  const context=setup(async(path,options)=>{
+    calls.push([path,options]);
+    if(path.startsWith('/api/v1/impact-assessments')) return {content:[record]};
+    if(path.includes('/impacts/policy/')) return {ok:true,id:42,version:1,summary:'Older advice',urgency:'LOW'};
+    return {id:7};
+  });
+  await context.openPolicyDetail(7);
+  assert.equal(context.state.policyDetail.assessment.summary,record.summary);
+  assert.equal(context.state.policyDetail.impact,null);
+  assert.ok(calls.every(([,options])=>options===undefined));
 });
 test('extracts official summary from HTML Federal Register fixture',()=>{
   const context=setup(async()=>({}));

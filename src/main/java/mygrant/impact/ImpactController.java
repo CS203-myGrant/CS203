@@ -1,6 +1,7 @@
 package mygrant.impact;
 
 import java.security.Principal;
+import java.util.List;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -11,15 +12,21 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 /** The signed-in user's published impact feed. */
 @RestController
@@ -27,9 +34,11 @@ import jakarta.validation.constraints.NotNull;
 @Tag(name = "Impacts")
 public class ImpactController {
     private final ImpactFeedService service;
+    private final RecommendationReportService reports;
 
-    public ImpactController(ImpactFeedService service) {
+    public ImpactController(ImpactFeedService service, RecommendationReportService reports) {
         this.service = service;
+        this.reports = reports;
     }
 
     @GetMapping
@@ -63,6 +72,15 @@ public class ImpactController {
         return service.get(principal.getName(), id);
     }
 
+    @GetMapping("/policy/{policyId}/latest")
+    @Operation(summary = "Find your latest published assessment for a policy",
+            description = "Lets the policy detail screen attach a report to the exact saved assessment version.")
+    @ApiResponse(responseCode = "200", description = "Your latest published assessment for this policy")
+    @ApiResponse(responseCode = "404", description = "No published assessment for this user and policy")
+    public ImpactFeedService.ImpactView latestForPolicy(Principal principal, @PathVariable long policyId) {
+        return service.latestForPolicy(principal.getName(), policyId);
+    }
+
     @PatchMapping("/{id}")
     @Operation(summary = "Archive or unarchive one of your published assessments")
     @ApiResponse(responseCode = "200", description = "The assessment with its new archive state")
@@ -73,5 +91,49 @@ public class ImpactController {
         return service.archive(principal.getName(), id, request.archived());
     }
 
+    @PostMapping("/{id}/reports")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Report a problem with one of your published assessments",
+            description = "Records the category, your description and the assessment version you saw, and sends "
+                    + "the assessment to the reviewer queue. The assessment stays visible until a reviewer "
+                    + "publishes a correction or dismisses the report.")
+    @ApiResponse(responseCode = "201", description = "The report, now open for review")
+    @ApiResponse(responseCode = "400", description = "Missing or unknown category, or empty or oversized details")
+    @ApiResponse(responseCode = "404", description = "Missing, unpublished or owned by another user")
+    @ApiResponse(responseCode = "409", description = "Five of your reports on it are already waiting for review, or it changed since you loaded it")
+    public RecommendationReportService.Report report(Principal principal, @PathVariable long id,
+            @Valid @RequestBody ReportRequest request) {
+        return reports.report(principal.getName(), id, request.category(), request.details(), request.version());
+    }
+
+    @GetMapping("/{id}/reports")
+    @Operation(summary = "List your reports on one of your published assessments",
+            description = "Newest first, with each report's review status: OPEN (waiting), RESOLVED (a reviewer "
+                    + "published a correction) or DISMISSED (a reviewer found the assessment correct).")
+    @ApiResponse(responseCode = "200", description = "Your reports and their review status")
+    @ApiResponse(responseCode = "404", description = "Missing, unpublished or owned by another user")
+    public List<RecommendationReportService.Report> reports(Principal principal, @PathVariable long id) {
+        return reports.mine(principal.getName(), id);
+    }
+
+    @PatchMapping("/{id}/reports/{reportId}")
+    @Operation(summary = "Archive or restore one of your answered reports",
+            description = "Hides a corrected or dismissed report from your list and the updates bell; "
+                    + "`archived: false` restores it. Reports still waiting for review cannot be archived.")
+    @ApiResponse(responseCode = "200", description = "The report with its new archive state")
+    @ApiResponse(responseCode = "400", description = "archived must be true or false")
+    @ApiResponse(responseCode = "404", description = "Not your report, or the assessment is not visible to you")
+    @ApiResponse(responseCode = "409", description = "The report is still waiting for review")
+    public RecommendationReportService.Report archiveReport(Principal principal, @PathVariable long id,
+            @PathVariable long reportId, @Valid @RequestBody ArchiveRequest request) {
+        return reports.archive(principal.getName(), id, reportId, request.archived());
+    }
+
     public record ArchiveRequest(@NotNull Boolean archived) {}
+
+    public record ReportRequest(
+            @NotNull ReportCategory category,
+            @NotBlank @Size(max = 900) String details,
+            @io.swagger.v3.oas.annotations.media.Schema(description = "The assessment version being reported, from its detail view")
+            @NotNull @Min(1) Integer version) {}
 }

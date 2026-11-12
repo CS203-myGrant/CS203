@@ -9,8 +9,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
-import mygrant.notifications.Notification;
-import mygrant.notifications.NotificationRepository;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
 
@@ -19,10 +17,10 @@ import mygrant.user.UserRepository;
  * with no transaction or row lock held, and its outcome recorded in another; this class is
  * deliberately not transactional. The delivery id is the provider idempotency key.
  *
- * <p>Before the first attempt the email may still drop alerts the user no longer wants
+ * <p>Before the first attempt the email may still drop items the user no longer wants
  * emailed this way, which releases them. After any attempt its contents are frozen: a retry
- * sends exactly the same alerts, or the whole email is SKIPPED if the user has opted out or
- * can no longer receive email. A frozen email never releases its alerts, because an earlier
+ * sends exactly the same items, or the whole email is SKIPPED if the user has opted out or
+ * can no longer receive email. A frozen email never releases its items, because an earlier
  * attempt may have reached the user and releasing them could send them twice.
  */
 @Service
@@ -48,7 +46,7 @@ public class EmailDispatcher {
     }
 
     private final EmailDeliveryRepository deliveryRepository;
-    private final NotificationRepository notificationRepository;
+    private final ImpactEmailAlertRepository alertRepository;
     private final UserRepository userRepository;
     private final EmailPreferenceRepository preferenceRepository;
     private final EmailEligibility eligibility;
@@ -56,12 +54,12 @@ public class EmailDispatcher {
     private final EmailSender sender;
     private final EmailProperties properties;
 
-    public EmailDispatcher(EmailDeliveryRepository deliveryRepository, NotificationRepository notificationRepository,
+    public EmailDispatcher(EmailDeliveryRepository deliveryRepository, ImpactEmailAlertRepository alertRepository,
             UserRepository userRepository, EmailPreferenceRepository preferenceRepository,
             EmailEligibility eligibility, AlertEmailRenderer renderer, EmailSender sender,
             EmailProperties properties) {
         this.deliveryRepository = deliveryRepository;
-        this.notificationRepository = notificationRepository;
+        this.alertRepository = alertRepository;
         this.userRepository = userRepository;
         this.preferenceRepository = preferenceRepository;
         this.eligibility = eligibility;
@@ -112,12 +110,12 @@ public class EmailDispatcher {
         UUID id = delivery.getId();
         boolean firstAttempt = delivery.getAttempts() == 1;
         User user = userRepository.findById(delivery.getUserId()).orElse(null);
-        List<Notification> items = notificationRepository.findByEmailDeliveryIdOrderByCreatedAtAscIdAsc(id);
+        List<ImpactEmailAlert> items = alertRepository.findByEmailDeliveryIdOrderByCreatedAtAscIdAsc(id);
         EmailPreference preference = preferenceRepository.findById(delivery.getUserId())
                 .orElseGet(() -> EmailPreference.defaults(delivery.getUserId()));
         DeliveryMode mode = delivery.getKind() == DeliveryKind.IMMEDIATE ? DeliveryMode.IMMEDIATE : DeliveryMode.DIGEST;
-        List<Notification> stillWanted = items.stream()
-                .filter(notification -> AlertBucket.of(notification).modeIn(preference) == mode)
+        List<ImpactEmailAlert> stillWanted = items.stream()
+                .filter(alert -> AlertBucket.modeFor(alert, preference) == mode)
                 .toList();
         boolean canReceive = eligibility.canReceive(user);
 
@@ -178,9 +176,9 @@ public class EmailDispatcher {
         return Outcome.SKIPPED;
     }
 
-    private void release(UUID id, List<Notification> notifications) {
-        if (!notifications.isEmpty()) {
-            notificationRepository.releaseFromDelivery(id, notifications.stream().map(Notification::getId).toList());
+    private void release(UUID id, List<ImpactEmailAlert> alerts) {
+        if (!alerts.isEmpty()) {
+            alertRepository.releaseFromDelivery(id, alerts.stream().map(ImpactEmailAlert::getId).toList());
         }
     }
 

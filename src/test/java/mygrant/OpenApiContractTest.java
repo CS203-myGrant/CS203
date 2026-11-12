@@ -150,7 +150,8 @@ class OpenApiContractTest extends mygrant.support.PgvectorIntegrationTestBase {
 
     @Test
     void documentedAuthMatchesSecurity() throws Exception {
-        String applicant = token();
+        String applicant = token(UserRole.APPLICANT);
+        String admin = token(UserRole.ADMIN);
 
         for (Operation operation : operations) {
             String name = operation.name();
@@ -161,7 +162,9 @@ class OpenApiContractTest extends mygrant.support.PgvectorIntegrationTestBase {
                 assertThat(signedOut).as(name + " is documented as needing a token").isEqualTo(401);
             }
             if (operation.documentsRole()) {
-                assertThat(perform(operation, applicant)).as(name + " is documented as role-restricted").isEqualTo(403);
+                String wrongRole = operation.node().path("description").asText()
+                        .contains("Requires the APPLICANT role") ? admin : applicant;
+                assertThat(perform(operation, wrongRole)).as(name + " is documented as role-restricted").isEqualTo(403);
             }
         }
     }
@@ -183,10 +186,10 @@ class OpenApiContractTest extends mygrant.support.PgvectorIntegrationTestBase {
         return mvc.perform(request).andReturn().getResponse().getStatus();
     }
 
-    private String token() {
+    private String token(UserRole role) {
         User user = new User("Contract test", "contract-test-" + UUID.randomUUID() + "@example.com",
                 "unused-test-password-hash");
-        user.setRole(UserRole.APPLICANT);
+        user.setRole(role);
         users.saveAndFlush(user);
         return "Bearer " + jwt.generateAccessToken(user);
     }
