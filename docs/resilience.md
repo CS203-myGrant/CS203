@@ -59,7 +59,8 @@ The `spring.ai.retry.*` properties are therefore not used.
 
 | Path | Result |
 | --- | --- |
-| Policy page (`POST /api/v1/policies/{id}/recommendation`) | `503` with `Retry-After: 30` and "The AI service is temporarily unavailable. Please try again later." The page shows it with **Try again**. Nothing is stored. |
+| On-demand assessment (`POST /api/v1/policies/{id}/recommendation`) | `503` with `Retry-After: 30` and "The AI service is temporarily unavailable. Please try again later." Nothing is stored. Since PR #82 the policy page shows the saved assessment instead of calling this, so the page itself no longer meets this case |
+| Policy questions in the app (`POST /api/v1/policies/{id}/questions`) | `503`; the chat shows the server's message and keeps the question so it can be sent again |
 | A Spring AI embedding error, or any other `RestClientException`, reaching an endpoint | The same `503`, via `GlobalExceptionHandler`. The provider's response body is never logged |
 | `OPENAI_API_KEY` not set, or an empty completion | The same `503` |
 | Policy questions and `/api/v1/rag/query` | `503`, as before; RAG keeps its "…or choose Talk to a person" wording (`RagExceptionHandler`) |
@@ -175,4 +176,4 @@ so the limit is generous. The properties moved from `mygrant.questions.rate-limi
 
 Tests: `RateLimiterTest` (separate allowances, messages, switching off),
 `PolicyRecommendationControllerTest` (the `429`), `PolicyChatControllerTest` (questions), and
-the node test in `policy-recommendation.test.cjs`.
+the node tests in `policy-chat.test.cjs` (the chat shows the `429` and `503` messages).
