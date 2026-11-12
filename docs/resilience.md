@@ -177,3 +177,38 @@ so the limit is generous. The properties moved from `mygrant.questions.rate-limi
 Tests: `RateLimiterTest` (separate allowances, messages, switching off),
 `PolicyRecommendationControllerTest` (the `429`), `PolicyChatControllerTest` (questions), and
 the node tests in `policy-chat.test.cjs` (the chat shows the `429` and `503` messages).
+
+## Load test (CS203-177)
+
+`loadtest/read-paths.k6.js` makes the requests an applicant's dashboard makes on load: the
+policy list, the saved-assessment feed, the checklist, notifications and the unread count, at
+the dashboard's page sizes. It runs at 5 virtual users by default (about 10 requests a second),
+which is gentle enough for Render staging, and calls no AI endpoint, so it costs nothing in
+provider fees and never touches the rate limits. The test account comes from environment
+variables, never the repository.
+
+How to run it is in [loadtest/README.md](../loadtest/README.md); results are in
+[load-test-results.md](load-test-results.md). The runs so far are local, not staging: there was
+no staging URL or test account. Every threshold passed, with no failed requests. The main
+finding is that the policy list returns every policy's full text, which makes it the slowest
+and largest response.
+
+## Known limits: one instance, state in memory
+
+myGRANT runs as a **single instance**. Several pieces keep their state in that instance's
+memory, so they would behave differently, or lose work, with more instances or after a restart:
+
+| What | Where | With more instances, or after a restart |
+| --- | --- | --- |
+| Rate limits | `RateLimiter` | Each instance counts separately, so a user gets N × the allowance; a restart clears the counts |
+| Live notification streams (SSE) | `NotificationStreamRegistry` | A push reaches only streams open on the instance that created the alert; others see it on their next poll or reconnect |
+| Background assessment queue | `IngestionAssessmentListener` on the in-memory task executor | Work queued but not started is lost on a restart; those users get no automatic assessment until the next ingestion or a page open |
+| Scheduled jobs | Spring's single scheduler thread | Each instance would run every job; the email outbox's conditional claims already prevent double sends |
+
+Durable state is in PostgreSQL: assessments, the email outbox, alerts and sync failures. Running
+several instances would need, at least:
+
+- a shared rate limiter, such as PostgreSQL or Redis;
+- a shared pub/sub for the live streams;
+- a durable assessment queue, such as a table claimed with `FOR UPDATE SKIP LOCKED`;
+- a lock around the scheduled jobs, such as ShedLock.
