@@ -440,11 +440,10 @@ public class ImpactReviewService {
                     "Open applicant reports on this assessment; empty when it is queued for another reason")
             List<RecommendationReportService.Report> reports) {
         PendingImpact withReports(List<RecommendationReportService.Report> open) {
-            return new PendingImpact(id, userId, applicantName, applicantEmail, policyId, policyTitle, draftSummary, createdAt, sourceUrl,
-                    sourceExcerpt, reviewType, outputId, version, draftUrgency, draftConfidence, draftAnalysis,
-                    draftActionItems, draftMissingInformation, holdReasons, List.copyOf(open));
-                    sourceExcerpt, reviewType, outputType, citationsValid, outputId, version, draftUrgency, draftConfidence, draftAnalysis,
-                    draftActionItems, draftMissingInformation, List.copyOf(open));
+            return new PendingImpact(id, userId, applicantName, applicantEmail, policyId, policyTitle, draftSummary,
+                    createdAt, sourceUrl, sourceExcerpt, reviewType, outputType, citationsValid, outputId, version,
+                    draftUrgency, draftConfidence, draftAnalysis, draftActionItems, draftMissingInformation,
+                    holdReasons, List.copyOf(open));
         }
     }
     public record ReportDismissal(long id, int dismissedReports, Instant dismissedAt) {}

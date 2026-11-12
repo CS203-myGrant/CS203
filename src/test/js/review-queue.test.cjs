@@ -66,6 +66,8 @@ test('the editor starts from a held AI draft so approving it keeps its content',
   // A draft held for another reason still starts from a blank form.
   view.openQueueEditor(7);
   assert.equal(elements['review-edit-actions'].value,'');
+});
+
 test('draft verification sends its current version and review note',async()=>{
   const view=queue([draft]);
   view.state.reviewEditing=draft;

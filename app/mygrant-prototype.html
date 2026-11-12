@@ -3627,10 +3627,6 @@ function openQueueEditor(id){
   document.getElementById('review-edit-analysis').value = prefill ? (item.draftAnalysis || []).join('\n') : '';
   document.getElementById('review-edit-actions').value = prefill ? (item.draftActionItems || []).join('\n') : '';
   document.getElementById('review-edit-missing').value = prefill ? (item.draftMissingInformation || []).join('\n') : '';
-  const extractionReview = item.reviewType === 'Policy extractor';
-  document.getElementById('review-edit-analysis').value = reported ? (item.draftAnalysis || []).join('\n') : '';
-  document.getElementById('review-edit-actions').value = reported ? (item.draftActionItems || []).join('\n') : '';
-  document.getElementById('review-edit-missing').value = reported ? (item.draftMissingInformation || []).join('\n') : '';
   document.getElementById('review-editor-title').textContent = extractionReview
     ? 'Review policy extraction' : reported ? 'Review reported assessment' : 'Review and publish assessment';
   document.getElementById('review-editor-policy').textContent = item.policyTitle || 'Policy';
