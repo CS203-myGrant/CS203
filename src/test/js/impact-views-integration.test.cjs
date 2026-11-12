@@ -88,9 +88,12 @@ test('late applicant explicitly requests a matching official policy while feed r
   assert.match(view.screen,/Request an assessment for an imported policy/);
   assert.match(view.screen,/F-1 policy/);
   assert.doesNotMatch(view.screen,/J-1 policy|Secondary article/);
+  let openedPolicy=null;
+  view.openPolicyDetail=async id=>{openedPolicy=id;};
   await click(view,'See how this impacts me');
   assert.equal(view.calls[1][0],'/api/v1/impact-assessments/policy/52/request');
   assert.equal(view.calls[1][1].method,'POST');
+  assert.equal(openedPolicy,52);
   assert.match(view.screen,/after any required review/);
   assert.doesNotMatch(view.screen,/Your saved summary/);
 });

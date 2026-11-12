@@ -44,7 +44,10 @@ request is idempotent for the same policy and profile version. The result enters
 same review workflow as ingestion: pending, rejected and unavailable results remain
 absent from the owner-facing GET endpoints. The dashboard offers this action under
 matching imported policies; clicking it is the only dashboard path that may call
-the model. Refreshing or opening saved assessments remains read-only.
+the assessment model, then opens that policy's detail page. The policy assistant
+appears on that page even while the assessment awaits review. Its answers use
+the policy source and only a visible saved recommendation; the pending assessment
+is not supplied as chat context. Refreshing or opening saved assessments remains read-only.
 
 These endpoints expose saved records and their recommended actions. The dashboard
 reads these saved records directly, preserving the API ordering and

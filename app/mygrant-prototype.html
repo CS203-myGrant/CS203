@@ -2091,6 +2091,7 @@ async function requestPolicyImpact(policyId){
     if(state.user!==owner) return;
     state.impactRequestMessage=result.message;
     await loadImpacts();
+    if(state.user===owner) await openPolicyDetail(policyId);
   }catch(error){if(state.user===owner) state.impactRequestError=error.message;}
   finally{if(state.user===owner){state.impactRequestBusy=null;if(state.view==='dashboard') render();}}
 }
@@ -2663,7 +2664,7 @@ async function openPolicyDetail(id){
         if(saved.summary===detail.assessment.summary && saved.urgency===detail.assessment.urgency) detail.impact=saved;
       }else if(linked.status!==404) await parseApiResponse(linked);
     }
-    if(detail.assessment) await loadPolicyChatHistory(detail);
+    await loadPolicyChatHistory(detail);
   }catch(error){ detail.error=error.message; }
   finally{ detail.loading=false; if(state.policyDetail===detail && state.user===owner && state.view==='policyDetail') render(); }
 }
@@ -2722,7 +2723,7 @@ function renderPolicyDetail(){
     ${detail.loading?'<p role="status">Loading your saved assessment...</p>':''}
     ${detail.error?`<div class="rag-error" role="alert">${escapeHtml(detail.error)}</div><button class="btn ghost small" onclick="openPolicyDetail(${Number(detail.id)})">Try again</button>`:''}
     ${detail.assessmentUnavailable?'<div class="empty">No saved assessment is currently available for this policy. It may still be processing or awaiting review.</div>':''}
-    ${detail.assessment?`${renderSavedImpactDetail(detail.assessment)}${renderPolicyChat(detail)}
+    ${detail.assessment?`${renderSavedImpactDetail(detail.assessment)}
       <div class="detail-card"><h2>Report a recommendation</h2>
       ${detail.impact?`<p>Your report is linked to this saved assessment and goes to the review queue.</p>
       ${detail.reported?'<p role="status">Report sent to the review queue. You can follow its status in the assessment details.</p>':`
@@ -2740,7 +2741,8 @@ function renderPolicyDetail(){
       :`${detail.reportError?`<p class="rag-error" role="alert">${escapeHtml(detail.reportError)}</p>`:''}
       <p>This policy has no matching published assessment to report yet. You can contact support about the policy.</p>
       <button class="btn ghost small" type="button" onclick="openFeedback()">Contact support</button>`}
-      </div>`:''}`;
+      </div>`:''}
+    ${policy&&!detail.loading&&!detail.error?renderPolicyChat(detail):''}`;
 }
 
 async function loadPolicyChatHistory(detail){
@@ -2766,7 +2768,7 @@ function renderPolicyChat(detail){
   const chat=detail.chat;
   return `<section class="detail-card" aria-labelledby="policy-chat-heading">
     <h2 id="policy-chat-heading">Questions about this change?</h2>
-    <p>Ask about this policy, your recommendation, or your next steps.</p>
+    <p>${detail.assessment?'Ask about this policy, your assessment, or your next steps.':'Ask about this policy while your assessment is being processed or reviewed.'}</p>
     <div class="chat-shell" style="max-width:100%;">
       <div class="chat-head"><strong>Policy assistant</strong><span class="tag">AI-generated</span></div>
       <div class="chat-log" id="policy-chat-log" role="log" aria-label="Policy questions and answers" aria-live="polite" style="min-height:180px;height:auto;max-height:480px;">

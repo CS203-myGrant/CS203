@@ -75,6 +75,8 @@ test('policy with no visible saved assessment retains the source and does not ge
   assert.equal(context.state.policyDetail.assessmentUnavailable,true);
   assert.ok(calls.every(([,options])=>options===undefined));
   assert.match(context.renderPolicyDetail(),/No saved assessment is currently available/);
+  assert.match(context.renderPolicyDetail(),/Questions about this change\?/);
+  assert.match(context.renderPolicyDetail(),/assessment is being processed or reviewed/);
 });
 test('policy detail reuses saved detail rendering and canonical review markers',async()=>{
   const approved={...record,reviewStatus:'APPROVED',requiresReview:true};
