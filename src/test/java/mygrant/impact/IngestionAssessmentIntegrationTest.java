@@ -287,6 +287,116 @@ class IngestionAssessmentIntegrationTest extends PgvectorIntegrationTestBase {
         verify(generator, times(2)).generateJson(anyString(), anyString(), any(), anyString());
     }
 
+    // ---- CS203-153 follow-up: automatic assessments reach the feed, review queue and alerts ----
+
+    @Autowired mygrant.policies.PolicyRecommendationStore store;
+    @Autowired ImpactReviewService review;
+
+    @Test
+    void confidentVerifiedAssessmentIsPublishedToTheFeedWithItsActionItems() {
+        var owner = profile("F-1", "2028-12-01", 1);
+        Long policyId = ingest("F-1");
+        awaitRows(policyId, 1);
+        Long feedId = awaitFeedRow(owner.getUserId(), policyId, "PUBLISHED");
+        assertThat(rows(policyId).getFirst().getId()).isNotNull();
+        assertThat(jdbc.queryForObject("SELECT recommendation_id FROM impact_assessments WHERE policy_id = ?",
+                Long.class, policyId)).isEqualTo(feedId);
+        assertThat(jdbc.queryForObject("SELECT severity FROM policy_recommendations WHERE id = ?", String.class, feedId))
+                .isEqualTo("MEDIUM");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM action_items WHERE assessment_id = ?", Long.class, feedId))
+                .isEqualTo(1L);
+
+        // Opening the policy afterwards reuses the saved assessment instead of generating again.
+        String email = users.findById(owner.getUserId()).orElseThrow().getEmail();
+        var reused = store.getOrGenerate(email, policies.findById(policyId).orElseThrow(), () -> {
+            throw new AssertionError("must not regenerate");
+        });
+        assertThat(reused.summary()).isEqualTo("Profile-specific result");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM policy_recommendations WHERE user_id = ? AND policy_id = ?",
+                Long.class, owner.getUserId(), policyId)).isEqualTo(1L);
+    }
+
+    @Test
+    void lowConfidenceAssessmentIsQueuedHiddenAndPublishedOnlyByAReviewer() {
+        var owner = profile("F-1", "2028-12-01", 1);
+        User admin = reviewer();
+        when(generator.generateJson(anyString(), anyString(), any(), anyString()))
+                .thenReturn(candidate(60, false, "Unsure result"));
+        Long policyId = ingest("F-1");
+        awaitRows(policyId, 1);
+        Long feedId = awaitFeedRow(owner.getUserId(), policyId, "PENDING_REVIEW");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM action_items WHERE assessment_id = ?", Long.class, feedId))
+                .isZero();
+        assertThat(review.pending(admin.getEmail())).extracting(ImpactReviewService.PendingImpact::id).contains(feedId);
+
+        // Opening the policy, even asking for a fresh assessment, cannot publish around the queue.
+        String email = users.findById(owner.getUserId()).orElseThrow().getEmail();
+        var held = store.getOrGenerate(email, policies.findById(policyId).orElseThrow(), () -> {
+            throw new AssertionError("must not regenerate while held");
+        }, true);
+        assertThat(held.summary()).isEqualTo("This assessment is awaiting review.");
+
+        review.publishCorrection(feedId, admin.getEmail(), new ImpactReviewController.Correction("LOW", 90,
+                "Checked: low impact for you.", List.of("Expiry after the rule"), List.of("No action now"), List.of()));
+        assertThat(jdbc.queryForObject("SELECT publication_status FROM policy_recommendations WHERE id = ?",
+                String.class, feedId)).isEqualTo("PUBLISHED");
+        assertThat(rows(policyId).getFirst().getReviewStatus()).isEqualTo(AssessmentReviewStatus.APPROVED);
+        assertThat(results.findVisibleByUserId(owner.getUserId())).hasSize(1);
+    }
+
+    @Test
+    void reviewerPublishedHighAssessmentMarksTheUnsentAlertAsNeedingAction() {
+        var owner = profile("F-1", "2028-12-01", 1);
+        User admin = reviewer();
+        when(generator.generateJson(anyString(), anyString(), any(), anyString())).thenReturn("""
+                {"urgency":"HIGH","confidence":95,"summary":"Travel risk",
+                 "reasons":["Travel booked"],"recommendedActions":["Do not travel yet"],
+                 "missingInformation":[],"requiresHumanReview":false}
+                """);
+        Long policyId = ingest("F-1");
+        awaitRows(policyId, 1);
+        // The generator always asks for review of HIGH results, so it waits in the queue first.
+        Long feedId = awaitFeedRow(owner.getUserId(), policyId, "PENDING_REVIEW");
+        jdbc.update("""
+                INSERT INTO notifications (user_id, policy_id, message, action_required)
+                VALUES (?, ?, 'New policy that may affect F-1', FALSE)
+                ON CONFLICT (user_id, policy_id) DO UPDATE SET action_required = FALSE, email_delivery_id = NULL
+                """, owner.getUserId(), policyId);
+
+        review.publishCorrection(feedId, admin.getEmail(), new ImpactReviewController.Correction("HIGH", 95,
+                "Travel risk confirmed.", List.of("Travel booked"), List.of("Do not travel yet"), List.of()));
+        assertThat(jdbc.queryForObject("SELECT action_required FROM notifications WHERE user_id = ? AND policy_id = ?",
+                Boolean.class, owner.getUserId(), policyId)).isTrue();
+    }
+
+    @Test
+    void unavailableAssessmentIsNotPublished() {
+        var owner = profile("F-1", "2028-12-01", 1);
+        when(generator.generateJson(anyString(), anyString(), any(), anyString()))
+                .thenThrow(new IllegalStateException("provider down"));
+        Long policyId = ingest("F-1");
+        awaitRows(policyId, 1);
+        assertThat(rows(policyId).getFirst().getStatus()).isEqualTo(AssessmentStatus.UNAVAILABLE);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM policy_recommendations WHERE user_id = ? AND policy_id = ?",
+                Long.class, owner.getUserId(), policyId)).isZero();
+    }
+
+    private Long awaitFeedRow(Long userId, Long policyId, String status) {
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(jdbc.queryForList(
+                "SELECT publication_status FROM policy_recommendations WHERE user_id = ? AND policy_id = ?",
+                String.class, userId, policyId)).containsExactly(status));
+        return jdbc.queryForObject("SELECT id FROM policy_recommendations WHERE user_id = ? AND policy_id = ?",
+                Long.class, userId, policyId);
+    }
+
+    private User reviewer() {
+        User admin = new User("Reviewer", UUID.randomUUID() + "@example.org", "unused");
+        admin.setRole(mygrant.user.UserRole.ADMIN);
+        admin = users.saveAndFlush(admin);
+        createdUsers.add(admin.getId());
+        return admin;
+    }
+
     private UserProfile profile(String visaType, String expiry, int version) {
         User user = users.saveAndFlush(new User("Secret Applicant", UUID.randomUUID() + "@example.org", "unused"));
         createdUsers.add(user.getId());

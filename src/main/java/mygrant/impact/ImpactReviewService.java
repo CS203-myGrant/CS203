@@ -203,6 +203,9 @@ public class ImpactReviewService {
                 """, json, severity, reviewerId, id);
         // CS203-97: the published correction answers any applicant reports on this assessment.
         if (reported) reports.close(id, reviewerId, RecommendationReportService.Outcome.RESOLVED, correction.reviewNote());
+        // CS203-153: an automatic assessment held for review is approved by this publication.
+        jdbc.update("UPDATE impact_assessments SET review_status = 'APPROVED' WHERE recommendation_id = ? "
+                + "AND requires_review AND review_status = 'PENDING_REVIEW'", id);
         String outputType = jdbc.queryForObject("SELECT output_type FROM policy_recommendations WHERE id = ?", String.class, id);
         if ("ANSWER".equals(outputType)) {
             publication.publishHumanAnswer(id, correction.summary().trim());
@@ -210,6 +213,16 @@ public class ImpactReviewService {
         }
         // The correction's actions replace the old ones; the owner's progress on kept items stays.
         actionItems.syncForAssessment(id);
+        if (urgency == ImpactUrgency.HIGH) {
+            // A published HIGH assessment makes the policy's alert need action, so it follows the
+            // owner's critical email setting if it has not been emailed yet. No analysis is emailed.
+            jdbc.update("""
+                    UPDATE notifications n SET action_required = TRUE
+                    FROM policy_recommendations r
+                    WHERE r.id = ? AND n.user_id = r.user_id AND n.policy_id = r.policy_id
+                      AND n.email_delivery_id IS NULL
+                    """, id);
+        }
         return new ReviewResult(id, versions.getFirst() + 1, true, "PUBLISHED", Instant.now());
     }
 

@@ -3536,7 +3536,12 @@ function queueApplicant(item){
 /** CS203-97: applicant reports name their category; other items are drafts held for review. */
 function queueReason(item){
   const reports=item.reports || [];
-  if(!reports.length) return `<div class="queue-reason"><strong>${escapeHtml(item.reviewType==='Policy extractor' ? 'Extraction check' : 'Draft')}</strong><span>Awaiting review</span></div>`;
+  if(!reports.length){
+    if(item.reviewType==='Policy extractor') return '<div class="queue-reason"><strong>Extraction check</strong><span>Awaiting review</span></div>';
+    // CS203-153: assessments made after ingestion that were held back instead of published.
+    const confidence = item.draftUrgency && Number.isFinite(Number(item.draftConfidence)) ? ` · ${Number(item.draftConfidence)}% confidence` : '';
+    return `<div class="queue-reason"><strong>Held for review</strong><span>Automatic assessment${escapeHtml(confidence)}</span></div>`;
+  }
   return reports.map(report=>`<div class="queue-reason queue-reason--report"><strong>Reported</strong><span>${escapeHtml(reportCategoryLabel(report.category))}</span></div>`).join('');
 }
 
@@ -3556,17 +3561,19 @@ function openQueueEditor(id){
   if(!item) return;
   // A reported assessment is already published, so start from what the applicant saw.
   const reported = (item.reports || []).length > 0;
+  // Start from the draft as written: what the applicant saw, or what the AI produced and was held back.
+  const prefill = item.reviewType !== 'Policy extractor' && !!item.draftUrgency;
   const reportsPanel = document.getElementById('review-reports');
   reportsPanel.innerHTML = renderQueueReports(item);
   reportsPanel.hidden = !reported;
   document.getElementById('review-dismiss').hidden = !reported;
   document.getElementById('review-edit-id').value = item.id;
-  document.getElementById('review-edit-severity').value = reported && item.draftUrgency ? item.draftUrgency : 'MEDIUM';
-  document.getElementById('review-edit-confidence').value = reported ? item.draftConfidence : 80;
+  document.getElementById('review-edit-severity').value = prefill ? item.draftUrgency : 'MEDIUM';
+  document.getElementById('review-edit-confidence').value = prefill ? item.draftConfidence : 80;
   document.getElementById('review-edit-summary').value = item.draftSummary || '';
-  document.getElementById('review-edit-analysis').value = reported ? (item.draftAnalysis || []).join('\n') : '';
-  document.getElementById('review-edit-actions').value = reported ? (item.draftActionItems || []).join('\n') : '';
-  document.getElementById('review-edit-missing').value = reported ? (item.draftMissingInformation || []).join('\n') : '';
+  document.getElementById('review-edit-analysis').value = prefill ? (item.draftAnalysis || []).join('\n') : '';
+  document.getElementById('review-edit-actions').value = prefill ? (item.draftActionItems || []).join('\n') : '';
+  document.getElementById('review-edit-missing').value = prefill ? (item.draftMissingInformation || []).join('\n') : '';
   const extractionReview = item.reviewType === 'Policy extractor';
   document.getElementById('review-editor-title').textContent = extractionReview
     ? 'Review policy extraction' : reported ? 'Review reported assessment' : 'Review and publish assessment';

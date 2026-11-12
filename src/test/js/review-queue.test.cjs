@@ -23,7 +23,7 @@ test('reported items come first, are highlighted, and a banner counts the waitin
   const rendered=queue([draft,reported]).renderQueue();
   assert.match(rendered,/1 applicant report waiting/);
   assert.match(rendered,/queue-row--reported/);
-  assert.ok(rendered.indexOf('DOES_NOT_APPLY_TO_ME')<rendered.indexOf('Awaiting review'));
+  assert.ok(rendered.indexOf('DOES_NOT_APPLY_TO_ME')<rendered.indexOf('Held for review'));
   assert.match(rendered,/Ana/);
   assert.match(rendered,/ana@example\.org/);
 });
@@ -40,4 +40,10 @@ test('an untouched reported assessment counts as unchanged, ignoring spacing and
     analysis:['Not immigration'],actionItems:['None'],missingInformation:[]}),false);
   assert.equal(view.reviewCorrectionUnchanged(reported,{severity:'LOW',confidence:90,summary:'No impact',
     analysis:['Not immigration','Checked the rule text'],actionItems:['None'],missingInformation:[]}),false);
+});
+
+test('a held automatic assessment says so and shows its confidence',()=>{
+  const rendered=queue([{...draft,draftConfidence:62}]).renderQueue();
+  assert.match(rendered,/Held for review/);
+  assert.match(rendered,/Automatic assessment · 62% confidence/);
 });

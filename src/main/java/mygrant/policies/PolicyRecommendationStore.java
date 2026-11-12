@@ -31,6 +31,9 @@ public class PolicyRecommendationStore {
 
     @org.springframework.beans.factory.annotation.Autowired
     void setEvaluationStore(mygrant.impact.EvaluationStore evaluations) { this.evaluations = evaluations; }
+    private PolicyDocumentRepository policies;
+    @org.springframework.beans.factory.annotation.Autowired
+    void setPolicies(PolicyDocumentRepository policies) { this.policies = policies; }
 
     public PolicyRecommendationStore(JdbcTemplate jdbc, ObjectMapper mapper,
             UserRepository users, UserProfileRepository profiles, ActionItemService actionItems) {
@@ -71,6 +74,14 @@ public class PolicyRecommendationStore {
                 throw new IllegalStateException("Human-reviewed assessment is unreadable", e);
             }
         }
+        // CS203-153: an automatic assessment held for review stays hidden until a reviewer acts.
+        // Opening the policy, even with refresh, must not regenerate and publish around the queue.
+        List<Integer> held = jdbc.queryForList("""
+                SELECT 1 FROM policy_recommendations
+                WHERE user_id = ? AND policy_id = ? AND input_hash = ? AND output_type = 'ASSESSMENT'
+                  AND publication_status = 'PENDING_REVIEW' AND reviewed_by_human = FALSE
+                """, Integer.class, user.getId(), policy.getId(), hash);
+        if (held != null && !held.isEmpty()) return awaitingReview(0);
         List<String> saved = jdbc.queryForList("""
                 SELECT assessment_json FROM policy_recommendations
                 WHERE user_id = ? AND policy_id = ? AND input_hash = ?
@@ -125,6 +136,43 @@ public class PolicyRecommendationStore {
             actionItems.syncForAssessment(id);
         }
         return result;
+    }
+
+    /**
+     * CS203-153 follow-up: publishes an assessment made in the background after ingestion into
+     * the same row the dashboard feed, action items, review queue and manager view read, keyed
+     * exactly as {@link #getOrGenerate} keys it, so opening the policy later reuses it instead of
+     * generating again. A result that needs review goes to the queue and stays hidden until a
+     * reviewer publishes it. An existing row, including an applicant-generated or human-reviewed
+     * one, is never replaced.
+     *
+     * @return the feed row's id, new or existing; empty when the user or policy no longer exists
+     */
+    @Transactional
+    public java.util.Optional<Long> publishAutomatic(Long userId, Long policyId, ProfileImpactAssessment result,
+            boolean holdForReview) {
+        if (result.status() != AssessmentStatus.COMPLETED) return java.util.Optional.empty();
+        var policy = policies == null ? null : policies.findById(policyId).orElse(null);
+        if (policy == null || !users.existsById(userId)) return java.util.Optional.empty();
+        var profile = profiles.findById(userId).orElseGet(() -> UserProfile.empty(userId));
+        String hash = fingerprint(profile, policy);
+        jdbc.execute("SELECT pg_advisory_xact_lock(" + userId.intValue() + "," + policyId.intValue() + ")");
+        List<Long> existing = jdbc.queryForList("""
+                SELECT id FROM policy_recommendations WHERE user_id = ? AND policy_id = ? AND input_hash = ?
+                """, Long.class, userId, policyId, hash);
+        if (!existing.isEmpty()) return java.util.Optional.of(existing.getFirst());
+        String status = holdForReview ? "PENDING_REVIEW" : "PUBLISHED";
+        Long id = jdbc.queryForObject("""
+                INSERT INTO policy_recommendations
+                    (user_id, policy_id, input_hash, assessment_json, publication_status, severity)
+                VALUES (?, ?, ?, ?, ?, ?)
+                RETURNING id
+                """, Long.class, userId, policyId, hash, json(result), status, severity(result));
+        if (evaluations != null && result.evaluation() != null && result.evaluation().evaluationId() != null) {
+            evaluations.attachAssessment(result.evaluation().evaluationId(), id, userId, policyId);
+        }
+        if (!holdForReview) actionItems.syncForAssessment(id);
+        return java.util.Optional.of(id);
     }
 
     /** Queues an uncertain source extraction in the existing CS203-6 per-profile review queue. */

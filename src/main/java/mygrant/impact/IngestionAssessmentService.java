@@ -16,6 +16,8 @@ import mygrant.ingestion.classification.VisaClassification;
 import mygrant.ingestion.federalregister.FederalRegisterDocument;
 import mygrant.policies.PolicyAssessmentInputs;
 import mygrant.policies.PolicyDocumentRepository;
+import mygrant.policies.PolicyRecommendationStore;
+import org.springframework.jdbc.core.JdbcTemplate;
 import mygrant.user.UserProfile;
 import mygrant.user.UserProfileRepository;
 
@@ -31,15 +33,20 @@ public class IngestionAssessmentService {
     private final ImpactAssessmentProperties properties;
     private final TransactionTemplate read;
     private final TransactionTemplate write;
+    private final PolicyRecommendationStore feed;
+    private final JdbcTemplate jdbc;
 
     public IngestionAssessmentService(PolicyDocumentRepository policies, UserProfileRepository profiles,
             ImpactAssessmentRepository results, ProfileImpactAssessmentService generator,
-            ImpactAssessmentProperties properties, PlatformTransactionManager transactions) {
+            ImpactAssessmentProperties properties, PlatformTransactionManager transactions,
+            PolicyRecommendationStore feed, JdbcTemplate jdbc) {
         this.policies = policies;
         this.profiles = profiles;
         this.results = results;
         this.generator = generator;
         this.properties = properties;
+        this.feed = feed;
+        this.jdbc = jdbc;
         this.read = new TransactionTemplate(transactions);
         read.setReadOnly(true);
         read.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -93,6 +100,38 @@ public class IngestionAssessmentService {
         } catch (DataIntegrityViolationException conflict) {
             // The losing transaction has already rolled back. The unique key also protects multiple app instances.
             if (!alreadySaved(profile, policyId)) throw conflict;
+            return; // Another worker saved and published this one.
+        }
+        if (!unavailable) publish(saved, result, requiresReview);
+    }
+
+    /**
+     * Puts the saved assessment where the user and reviewers see it: published to the dashboard
+     * feed (and its action items and manager counts) when it needs no review, or queued for
+     * review otherwise. A published HIGH result also marks the user's alert for the policy as
+     * needing action, so it follows their critical email setting; nothing of the analysis goes
+     * into the email. A failure here is logged and leaves the stored assessment as it is.
+     */
+    private void publish(ImpactAssessment saved, ProfileImpactAssessment result, boolean holdForReview) {
+        try {
+            var stored = new ProfileImpactAssessment(result.urgency(), result.confidence(), result.summary(),
+                    result.reasons(), result.recommendedActions(), result.missingInformation(),
+                    result.requiresHumanReview() || holdForReview, result.provider(), result.model(),
+                    result.evaluation(), result.attempts());
+            feed.publishAutomatic(saved.getUserId(), saved.getPolicyId(), stored, holdForReview)
+                    .ifPresent(recommendationId -> write.executeWithoutResult(tx -> {
+                        jdbc.update("UPDATE impact_assessments SET recommendation_id = ? WHERE id = ?",
+                                recommendationId, saved.getId());
+                        if (!holdForReview && result.urgency() == ImpactUrgency.HIGH) {
+                            jdbc.update("""
+                                    UPDATE notifications SET action_required = TRUE
+                                    WHERE user_id = ? AND policy_id = ? AND email_delivery_id IS NULL
+                                    """, saved.getUserId(), saved.getPolicyId());
+                        }
+                    }));
+        } catch (RuntimeException failure) {
+            log.warn("Saved assessment {} could not be published to the feed ({})", saved.getId(),
+                    failure.getClass().getSimpleName());
         }
     }
 
