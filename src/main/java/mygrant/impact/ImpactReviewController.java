@@ -55,6 +55,20 @@ public class ImpactReviewController {
         return service.publishCorrection(id, principal.getName(), correction);
     }
 
+    @PostMapping("/{id}/decision")
+    @Operation(summary = "Verify or reject a pending AI draft",
+            description = "Only managers linked to the applicant, or admins, may decide. "
+                    + "Verify publishes the unchanged draft; reject keeps it hidden. "
+                    + "Reported published assessments use correction or report dismissal instead.")
+    @ApiResponse(responseCode = "200", description = "Recorded human decision and current publication state")
+    @ApiResponse(responseCode = "400", description = "Missing note or invalid decision")
+    @ApiResponse(responseCode = "404", description = "Draft not found or outside reviewer scope")
+    @ApiResponse(responseCode = "409", description = "Draft changed or is no longer pending")
+    public ImpactReviewService.ReviewResult decide(@PathVariable long id, Principal principal,
+            @Valid @RequestBody DecisionRequest request) {
+        return service.decide(id, principal.getName(), request);
+    }
+
     @PostMapping("/{id}/reports/dismiss")
     @Operation(summary = "Dismiss applicant reports on an assessment that is correct as published",
             description = "Closes the open reports without changing the assessment. To fix the assessment, "
@@ -77,6 +91,11 @@ public class ImpactReviewController {
 
     public record Dismissal(
             @io.swagger.v3.oas.annotations.media.Schema(description = "Why the assessment is correct; shown to the applicant")
+            @NotBlank @Size(max = 1000) String note) {}
+
+    public enum Decision { VERIFY, REJECT }
+
+    public record DecisionRequest(@NotNull Decision decision, @Min(1) int version,
             @NotBlank @Size(max = 1000) String note) {}
 
     public record Correction(@NotBlank

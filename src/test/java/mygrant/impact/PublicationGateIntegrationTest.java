@@ -170,6 +170,38 @@ class PublicationGateIntegrationTest extends mygrant.support.PgvectorIntegration
         return evaluation.evaluationId();
     }
 
+    @Test void humanMayVerifyACitedAnswerAndItsDecisionSurvivesReevaluation() throws Exception {
+        UUID outputId = answer("Supported after source review [1]", "NO");
+        long reviewId = jdbc.queryForObject("SELECT review_id FROM stored_ai_outputs WHERE id = ?",
+                Long.class, outputId);
+        assertThat(review.pending(admin.getEmail())).hasSize(1);
+        review.decide(reviewId, admin.getEmail(), new ImpactReviewController.DecisionRequest(
+                ImpactReviewController.Decision.VERIFY, 1, "Checked the answer and cited passage."));
+        assertThat(history.context(owner.getEmail(), policy.getId()).getLast().message())
+                .isEqualTo("Supported after source review [1]");
+        stubAnswer("NO");
+        assertThat(publication.evaluate(outputId).publicationStatus()).isEqualTo("PUBLISHED");
+        assertThat(review.pending(admin.getEmail())).isEmpty();
+    }
+
+    @Test void invalidCitationAnswerCannotBeVerifiedUnchangedAndMayBeRejected() throws Exception {
+        UUID outputId = answer("Unsupported [2]", "NO");
+        long reviewId = jdbc.queryForObject("SELECT review_id FROM stored_ai_outputs WHERE id = ?",
+                Long.class, outputId);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> review.decide(reviewId, admin.getEmail(),
+                new ImpactReviewController.DecisionRequest(ImpactReviewController.Decision.VERIFY, 1,
+                        "The cited passage was checked.")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("unverified citations");
+        review.decide(reviewId, admin.getEmail(), new ImpactReviewController.DecisionRequest(
+                ImpactReviewController.Decision.REJECT, 1, "Citation 2 is not in the evidence."));
+        assertThat(history.context(owner.getEmail(), policy.getId()).getLast().message())
+                .contains("human reviewer could not verify");
+        stubAnswer("YES");
+        assertThat(publication.evaluate(outputId).publicationStatus()).isEqualTo("REJECTED");
+        assertThat(review.pending(admin.getEmail())).isEmpty();
+    }
+
     @Test void invalidCitationAnswerUsesExistingReviewAndHumanCorrectionSurvivesReevaluation() throws Exception {
         UUID id = answer("Unsupported [2]", "UNAVAILABLE");
         stubAnswer("UNAVAILABLE");

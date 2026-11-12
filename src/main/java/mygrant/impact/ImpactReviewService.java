@@ -11,6 +11,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -23,6 +25,8 @@ import mygrant.policies.CountryIdentifiers;
 import mygrant.policies.PolicyIndexedEvent;
 import mygrant.impact.ImpactReviewController.Correction;
 import mygrant.impact.ImpactReviewController.CountryRuleCorrection;
+import mygrant.impact.ImpactReviewController.Decision;
+import mygrant.impact.ImpactReviewController.DecisionRequest;
 
 /** Manager correction and publication, with revisions retained by the database trigger. */
 @Service
@@ -70,7 +74,8 @@ public class ImpactReviewService {
         }
         String sql = """
                 SELECT r.id, r.user_id, r.policy_id, p.title, r.assessment_json, r.generated_at,
-                       r.version, p.source_url, p.content, o.id AS output_id,
+                       r.version, r.output_type, p.source_url, p.content, o.id AS output_id,
+                       CAST(o.latest_evaluation_json::jsonb ->> 'citationsValid' AS BOOLEAN) AS citations_valid,
                        applicant.full_name AS applicant_name, applicant.email AS applicant_email
                 FROM policy_recommendations r JOIN policy_documents p ON p.id = r.policy_id
                 JOIN users applicant ON applicant.id = r.user_id
@@ -107,6 +112,85 @@ public class ImpactReviewService {
         User reviewer = reviewer(reviewerEmail);
         return reports.openCount(reviewer.getId(), reviewer.getRole() == UserRole.ADMIN);
     }
+
+    /** A reviewer may accept an unchanged draft or reject it without deleting its history. */
+    @Transactional
+    public ReviewResult decide(long id, String reviewerEmail, DecisionRequest request) {
+        User reviewer = reviewer(reviewerEmail);
+        List<Integer> versions = lockInScope(id, reviewer);
+        if (versions.isEmpty()) throw new ImpactNotFoundException();
+        int version = versions.getFirst();
+        if (version != request.version()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "This draft changed. Reload the review queue.");
+        }
+        var rows = jdbc.query("SELECT publication_status, output_type, assessment_json FROM policy_recommendations WHERE id = ?",
+                (rs, row) -> new ReviewDraft(rs.getString(1), rs.getString(2), rs.getString(3)), id);
+        ReviewDraft row = rows.getFirst();
+        if (!"PENDING_REVIEW".equals(row.status()) || reports.hasOpen(id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "This item is no longer an unreviewed draft.");
+        }
+        ProfileImpactAssessment draft;
+        try {
+            draft = mapper.readValue(row.json(), ProfileImpactAssessment.class);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Stored pending impact is unreadable", exception);
+        }
+        if ("Policy extractor".equals(draft.provider())) {
+            throw new IllegalArgumentException("Review the extracted country rules before publishing this policy.");
+        }
+        String note = request.note().trim();
+        String status;
+        if (request.decision() == Decision.VERIFY) {
+            if (draft.status() != AssessmentStatus.COMPLETED || draft.urgency() == null) {
+                throw new IllegalArgumentException("An unavailable result cannot be verified as an assessment.");
+            }
+            if ("ANSWER".equals(row.outputType())) {
+                var evaluations = jdbc.query("SELECT latest_evaluation_json FROM stored_ai_outputs WHERE review_id = ?",
+                        (rs, index) -> rs.getString(1), id);
+                try {
+                    if (evaluations.isEmpty() || !Boolean.TRUE.equals(
+                            mapper.readValue(evaluations.getFirst(), JudgeEvaluation.class).citationsValid())) {
+                        throw new IllegalArgumentException("This answer has unverified citations. Publish a corrected answer instead.");
+                    }
+                } catch (JsonProcessingException exception) {
+                    throw new IllegalStateException("Stored evaluation is unreadable", exception);
+                }
+            }
+            var verified = new ProfileImpactAssessment(draft.urgency(), draft.confidence(), draft.summary(),
+                    draft.reasons(), draft.recommendedActions(), draft.missingInformation(), false,
+                    draft.provider(), draft.model(), new JudgeEvaluation(JudgeEvaluation.Verdict.YES,
+                    "Verified by a human reviewer", "Human"), draft.attempts());
+            String json;
+            try {
+                json = mapper.writeValueAsString(verified);
+            } catch (JsonProcessingException exception) {
+                throw new IllegalStateException("Unable to store verified impact", exception);
+            }
+            jdbc.update("""
+                    UPDATE policy_recommendations SET assessment_json = ?, publication_status = 'PUBLISHED',
+                        reviewed_by_human = TRUE, reviewed_by_user_id = ?, reviewed_at = CURRENT_TIMESTAMP,
+                        version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+                    """, json, reviewer.getId(), id);
+            if ("ANSWER".equals(row.outputType())) publication.publishHumanAnswer(id, draft.summary());
+            else actionItems.syncForAssessment(id);
+            status = "PUBLISHED";
+        } else {
+            jdbc.update("""
+                    UPDATE policy_recommendations SET publication_status = 'REJECTED',
+                        reviewed_by_human = TRUE, reviewed_by_user_id = ?, reviewed_at = CURRENT_TIMESTAMP,
+                        version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+                    """, reviewer.getId(), id);
+            if ("ANSWER".equals(row.outputType())) publication.rejectHumanAnswer(id);
+            status = "REJECTED";
+        }
+        jdbc.update("""
+                INSERT INTO impact_review_decisions (assessment_id, reviewer_id, assessment_version, decision, note)
+                VALUES (?, ?, ?, ?, ?)
+                """, id, reviewer.getId(), version, request.decision().name(), note);
+        return new ReviewResult(id, version + 1, true, status, Instant.now());
+    }
+
+    private record ReviewDraft(String status, String outputType, String json) {}
 
     /**
      * A reviewer answering an applicant's report must say why, and must actually change the
@@ -168,6 +252,12 @@ public class ImpactReviewService {
         Long reviewerId = reviewer.getId();
         List<Integer> versions = lockInScope(id, reviewer);
         if (versions.isEmpty()) throw new ImpactNotFoundException();
+        String currentStatus = jdbc.queryForObject(
+                "SELECT publication_status FROM policy_recommendations WHERE id = ?", String.class, id);
+        if ("REJECTED".equals(currentStatus)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "This draft was rejected. Create a new assessment rather than publishing the rejected output.");
+        }
         String provider = jdbc.queryForObject("SELECT assessment_json::jsonb ->> 'provider' FROM policy_recommendations WHERE id = ?",
                 String.class, id);
         if ("Policy extractor".equals(provider)) {
@@ -273,7 +363,8 @@ public class ImpactReviewService {
                     rs.getString("applicant_name"), rs.getString("applicant_email"),
                     rs.getLong("policy_id"), rs.getString("title"), assessment.summary(),
                     rs.getTimestamp("generated_at").toInstant(), rs.getString("source_url"),
-                    reviewExcerpt(rs.getString("content")), assessment.provider(), rs.getObject("output_id", java.util.UUID.class),
+                    reviewExcerpt(rs.getString("content")), assessment.provider(), rs.getString("output_type"),
+                    rs.getObject("citations_valid", Boolean.class), rs.getObject("output_id", java.util.UUID.class),
                     rs.getInt("version"), assessment.urgency(), assessment.confidence(), assessment.reasons(),
                     assessment.recommendedActions(), assessment.missingInformation(), List.of());
         } catch (JsonProcessingException exception) {
@@ -317,7 +408,8 @@ public class ImpactReviewService {
             String applicantEmail,
             long policyId,
             String policyTitle, String draftSummary, Instant createdAt,
-            String sourceUrl, String sourceExcerpt, String reviewType, java.util.UUID outputId,
+            String sourceUrl, String sourceExcerpt, String reviewType, String outputType,
+            Boolean citationsValid, java.util.UUID outputId,
             int version, ImpactUrgency draftUrgency, int draftConfidence, List<String> draftAnalysis,
             List<String> draftActionItems, List<String> draftMissingInformation,
             @io.swagger.v3.oas.annotations.media.Schema(description =
@@ -325,7 +417,7 @@ public class ImpactReviewService {
             List<RecommendationReportService.Report> reports) {
         PendingImpact withReports(List<RecommendationReportService.Report> open) {
             return new PendingImpact(id, userId, applicantName, applicantEmail, policyId, policyTitle, draftSummary, createdAt, sourceUrl,
-                    sourceExcerpt, reviewType, outputId, version, draftUrgency, draftConfidence, draftAnalysis,
+                    sourceExcerpt, reviewType, outputType, citationsValid, outputId, version, draftUrgency, draftConfidence, draftAnalysis,
                     draftActionItems, draftMissingInformation, List.copyOf(open));
         }
     }
