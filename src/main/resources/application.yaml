@@ -123,6 +123,10 @@ mygrant:
       enabled: ${EVALUATION_RATE_LIMIT_ENABLED:true}
       max-requests: ${EVALUATION_RATE_LIMIT_MAX_REQUESTS:10}
       window: ${EVALUATION_RATE_LIMIT_WINDOW:1m}
+  # CS203-175: a policy source is stale (and the app warns users) when it has not synced
+  # successfully within its poll interval times this factor, or has never synced.
+  sources:
+    stale-grace-factor: ${SOURCE_STALE_GRACE_FACTOR:3}
   impact:
     assessments-enabled: ${IMPACT_ASSESSMENTS_ENABLED:true}
     review-confidence-threshold: ${IMPACT_REVIEW_CONFIDENCE_THRESHOLD:60}

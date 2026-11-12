@@ -100,6 +100,38 @@ These tests use a local stub server, never the real APIs:
 - `PolicyRecommendationControllerTest`: the `503` responses.
 - `IngestionAssessmentIntegrationTest`: a timeout is saved as `UNAVAILABLE` and ingestion completes.
 
+## Source freshness (CS203-175)
+
+The impact feed (`GET /api/v1/impacts`), one assessment (`GET /api/v1/impacts/{id}`, also from
+`PATCH`) and the consolidated view (`GET /api/v1/impacts/consolidated`) include
+`sourceFreshness`:
+
+```json
+"sourceFreshness": {
+  "stale": true,
+  "staleSince": "2026-11-01T08:00:00Z",
+  "sources": [
+    {"name": "Federal Register", "type": "FEDERAL_REGISTER", "lastSuccessAt": "2026-11-01T08:00:00Z",
+     "pollIntervalSeconds": 3600, "stale": true}
+  ]
+}
+```
+
+- **Sources covered:** the enabled sources that produce policy documents (`FEDERAL_REGISTER`,
+  `NEWS`, `RSS`). The Visa Bulletin and USCIS sources feed other pages.
+- **When a source is stale:** it has never synced, or its `lastSuccessAt` is older than
+  `pollIntervalSeconds` × `SOURCE_STALE_GRACE_FACTOR` (default `3`, minimum `1`). The factor
+  allows for a missed run or two, from a slow provider or a redeploy, before users are warned.
+- **`staleSince`:** the oldest `lastSuccessAt` among stale sources. It is `null` when nothing is
+  stale, or when a stale source has never synced.
+- **What the page shows:** the dashboard feed and the assessment detail page show "Some sources
+  haven't updated since <date>; information may be out of date." Freshness is read once per
+  request. Every item in a page carries the same value, because a Spring `Page` cannot carry
+  extra top-level fields.
+
+Tests: `SourceFreshnessServiceTest`, `ImpactFeedIntegrationTest`, and the node tests in
+`impact-feed.test.cjs`.
+
 ## Rate limits (CS203-176)
 
 `RateLimiter` (formerly `QuestionRateLimiter`) is one per-user sliding-window mechanism with a

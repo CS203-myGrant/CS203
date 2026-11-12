@@ -172,3 +172,21 @@ test('answered reports can be archived and restored; open ones cannot',async()=>
   assert.deepEqual(JSON.parse(calls[1][1].body),{archived:false});
   assert.doesNotMatch(view.renderImpactRecommendationReport(view.state.impactDetail),/Show archived/);
 });
+
+// CS203-175: a banner when the sources behind the assessments have stopped updating.
+test('the feed warns when a policy source has not updated since a date',async()=>{
+  const stale={stale:true,staleSince:'2026-11-01T08:00:00Z',sources:[{name:'Federal Register',stale:true}]};
+  const view=page(async()=>({content:[{...impact(1,'HIGH','Act now'),sourceFreshness:stale}],totalPages:1}));
+  await view.loadImpacts();
+  assert.match(view.renderImpactFeed(),/Some sources haven't updated since 2026-11-01; information may be out of date\./);
+  view.state.impactDetail={...impact(1,'HIGH','Act now'),sourceFreshness:stale};
+  view.state.impactRecommendationReport={category:'',text:'',sending:false,justSent:false,error:null,history:[]};
+  assert.match(view.renderImpactDetail(),/Some sources haven't updated since 2026-11-01/);
+});
+
+test('no banner while every source is fresh, and a never-synced source is still flagged',async()=>{
+  const view=page(async()=>({content:[{...impact(1,'LOW','Fine'),sourceFreshness:{stale:false,staleSince:null,sources:[]}}],totalPages:1}));
+  await view.loadImpacts();
+  assert.doesNotMatch(view.renderImpactFeed(),/haven't updated/);
+  assert.match(view.staleSourcesBanner({stale:true,staleSince:null,sources:[]}),/haven't updated recently/);
+});

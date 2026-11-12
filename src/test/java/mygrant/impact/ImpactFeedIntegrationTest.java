@@ -66,7 +66,10 @@ class ImpactFeedIntegrationTest extends mygrant.support.PgvectorIntegrationTestB
 
         mvc.perform(get("/api/v1/impacts?size=1").header("Authorization", token(owner)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(2))
-                .andExpect(jsonPath("$.content[0].id").value(critical));
+                .andExpect(jsonPath("$.content[0].id").value(critical))
+                // CS203-175: every response says whether the policy sources are still updating.
+                .andExpect(jsonPath("$.content[0].sourceFreshness.stale").isBoolean())
+                .andExpect(jsonPath("$.content[0].sourceFreshness.sources").isArray());
         mvc.perform(get("/api/v1/impacts?sort=date,asc&severity=LOW")
                         .header("Authorization", token(owner)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1))
@@ -76,7 +79,8 @@ class ImpactFeedIntegrationTest extends mygrant.support.PgvectorIntegrationTestB
                 .andExpect(jsonPath("$.citations[*].url").value(org.hamcrest.Matchers.containsInAnyOrder(
                         policy.getSourceUrl(), "https://www.whitehouse.gov/proclamation",
                         "https://www.whitehouse.gov/proclamation#section-2")))
-                .andExpect(jsonPath("$.actionItems[0].text").value("Check the official rule"));
+                .andExpect(jsonPath("$.actionItems[0].text").value("Check the official rule"))
+                .andExpect(jsonPath("$.sourceFreshness.stale").isBoolean());
         mvc.perform(get("/api/v1/impacts/" + pending).header("Authorization", token(owner)))
                 .andExpect(status().isNotFound());
         mvc.perform(get("/api/v1/impacts/" + critical).header("Authorization", token(stranger)))
