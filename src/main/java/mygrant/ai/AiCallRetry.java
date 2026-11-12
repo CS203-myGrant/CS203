@@ -1,5 +1,7 @@
 package mygrant.ai;
 
+import java.net.SocketTimeoutException;
+import java.net.http.HttpTimeoutException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -17,10 +19,10 @@ import org.springframework.web.client.RestClientResponseException;
 
 /**
  * CS203-174: the one retry rule for AI provider calls. A call is retried, a bounded number of
- * times with exponential backoff, only when it timed out or hit another I/O failure, or when the
- * provider answered 429 or 5xx. A Retry-After header is honoured; one asking for longer than the
- * configured maximum ends the call at once, since waiting that long would hold a user's request
- * or a worker. Every other failure, such as a 400 or 401, is returned straight away.
+ * times with exponential backoff, only when it timed out or the provider answered 429 or 5xx.
+ * A Retry-After header is honoured; one asking for longer than the configured maximum ends the
+ * call at once, since waiting that long would hold a user's request or a worker. Every other
+ * failure, such as a refused connection, a 400 or a 401, is returned straight away.
  */
 public final class AiCallRetry {
 
@@ -81,7 +83,7 @@ public final class AiCallRetry {
     public Optional<Duration> delayAfter(int failedAttempts, Throwable failure) {
         Duration backoff = backoff(failedAttempts);
         if (failure instanceof ResourceAccessException) {
-            return Optional.of(backoff); // A timeout or another I/O failure.
+            return timedOut(failure) ? Optional.of(backoff) : Optional.empty();
         }
         int status;
         Optional<Duration> retryAfter;
@@ -95,7 +97,7 @@ public final class AiCallRetry {
         } else {
             return Optional.empty();
         }
-        if (status != 429 && status < 500) {
+        if (status != 429 && (status < 500 || status > 599)) {
             return Optional.empty();
         }
         if (retryAfter.isPresent()) {
@@ -105,6 +107,16 @@ public final class AiCallRetry {
             return Optional.of(retryAfter.get().compareTo(backoff) > 0 ? retryAfter.get() : backoff);
         }
         return Optional.of(backoff);
+    }
+
+    /** A connect or read timeout from either HTTP client; HttpConnectTimeoutException is one too. */
+    private static boolean timedOut(Throwable failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof SocketTimeoutException || cause instanceof HttpTimeoutException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     Duration backoff(int failedAttempts) {

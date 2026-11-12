@@ -29,11 +29,19 @@ public class EvaluationController {
     @ApiResponse(responseCode = "400", description = "Missing or invalid outputId")
     @ApiResponse(responseCode = "403", description = "Admin role required")
     @ApiResponse(responseCode = "404", description = "Stored output not found or predates candidate retention")
+    @ApiResponse(responseCode = "503", description = "Independent evaluation temporarily unavailable; try again later")
     @ApiResponse(responseCode = "429", description = "Too many re-evaluations in a short time; wait for the Retry-After seconds",
             content = @io.swagger.v3.oas.annotations.media.Content(schema =
                     @io.swagger.v3.oas.annotations.media.Schema(implementation = mygrant.common.ApiError.class)))
     public OutputPublicationService.Result evaluate(@Valid @RequestBody Request request, java.security.Principal principal) {
         rateLimiter.acquire(mygrant.common.RateLimiter.Allowance.EVALUATIONS, principal.getName());
-        return service.evaluate(request.outputId());
+        var result = service.evaluate(request.outputId());
+        // CS203-174: re-evaluating is this endpoint's only job, so an unavailable judge is a 503.
+        // The service's own transaction has already committed the audit entry and review state.
+        if (result != null && result.evaluation() != null
+                && result.evaluation().verdict() == JudgeEvaluation.Verdict.UNAVAILABLE) {
+            throw new mygrant.common.AiUnavailableException();
+        }
+        return result;
     }
 }

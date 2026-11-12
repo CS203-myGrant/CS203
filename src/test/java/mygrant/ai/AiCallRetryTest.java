@@ -33,7 +33,7 @@ class AiCallRetryTest {
     void aTimeoutIsRetriedWithExponentialBackoffUntilItSucceeds() {
         AtomicInteger calls = new AtomicInteger();
         String result = retry.call("test", () -> {
-            if (calls.incrementAndGet() < 3) throw new ResourceAccessException("Read timed out");
+            if (calls.incrementAndGet() < 3) throw new ResourceAccessException("Read timed out", new java.net.SocketTimeoutException());
             return "ok";
         });
 
@@ -87,6 +87,30 @@ class AiCallRetryTest {
     }
 
     @Test
+    void onlyTimeoutsAmongIoFailuresAreRetried() {
+        assertThat(retry.delayAfter(1, new ResourceAccessException("Request timed out",
+                new java.net.http.HttpTimeoutException("request timed out")))).contains(Duration.ofSeconds(1));
+        assertThat(retry.delayAfter(1, new ResourceAccessException("Connect timed out",
+                new java.net.http.HttpConnectTimeoutException("connect timed out")))).contains(Duration.ofSeconds(1));
+        assertThat(retry.delayAfter(1, new ResourceAccessException("Connection refused",
+                new java.net.ConnectException("Connection refused")))).isEmpty();
+        assertThat(retry.delayAfter(1, new ResourceAccessException("Unknown host",
+                new java.net.UnknownHostException("api.openai.com")))).isEmpty();
+    }
+
+    @Test
+    void invalidTimeoutAndRetrySettingsAreRejected() {
+        assertThatThrownBy(() -> new AiResilienceProperties.Http(Duration.ZERO, Duration.ofSeconds(90)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new AiResilienceProperties.Http(Duration.ofSeconds(5), Duration.ofSeconds(-1)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new AiResilienceProperties.Retry(0, Duration.ofSeconds(1), 2.0,
+                Duration.ofSeconds(8), Duration.ofSeconds(20))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new AiResilienceProperties.Retry(3, Duration.ofSeconds(1), 0.5,
+                Duration.ofSeconds(8), Duration.ofSeconds(20))).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void springAiProviderErrorsFollowTheSameRule() {
         assertThat(retry.delayAfter(1, new RetryableAiException("HTTP 429", 429, Duration.ofSeconds(6))))
                 .contains(Duration.ofSeconds(6));
@@ -108,7 +132,7 @@ class AiCallRetryTest {
         AtomicInteger calls = new AtomicInteger();
         assertThatThrownBy(() -> AiCallRetry.once().call("test", () -> {
             calls.incrementAndGet();
-            throw new ResourceAccessException("Read timed out");
+            throw new ResourceAccessException("Read timed out", new java.net.SocketTimeoutException());
         })).isInstanceOf(ResourceAccessException.class);
         assertThat(calls).hasValue(1);
     }

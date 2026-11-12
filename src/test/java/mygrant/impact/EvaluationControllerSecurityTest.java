@@ -61,4 +61,19 @@ class EvaluationControllerSecurityTest {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"outputId\":\"bad-id\"}")) .andExpect(status().isBadRequest());
         verify(service, times(1)).evaluate(any());
     }
+
+    /** CS203-174: the evaluation is the endpoint's whole purpose, so an unavailable judge is a 503. */
+    @Test void anUnavailableJudgeIsReportedAsTemporarilyUnavailable() throws Exception {
+        token(UserRole.ADMIN);
+        UUID id = UUID.randomUUID();
+        when(service.evaluate(id)).thenReturn(new OutputPublicationService.Result(id,
+                new JudgeEvaluation(JudgeEvaluation.Verdict.UNAVAILABLE, "Judge timed out", "judge"),
+                "PENDING_REVIEW", false, 1L));
+        mvc.perform(post("/api/v1/evaluate").header("Authorization", "Bearer token")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"outputId\":\""+id+"\"}"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().exists("Retry-After"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.message")
+                        .value(mygrant.common.AiUnavailableException.MESSAGE));
+    }
 }

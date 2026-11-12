@@ -17,11 +17,13 @@ Every call to an AI provider has a connect timeout, a read timeout and a bounded
 
 `AiCallRetry` retries a call only when it:
 
-- timed out or hit another I/O failure (`ResourceAccessException`);
+- timed out, while connecting or reading (a `ResourceAccessException` caused by a
+  `SocketTimeoutException` or `HttpTimeoutException`);
 - was answered `429 Too Many Requests`; or
 - was answered with a `5xx`.
 
-Anything else, such as `400` or `401`, fails at once, because retrying cannot fix it. Waits grow
+Anything else fails at once, because retrying cannot fix it, or not quickly: a `400` or `401`, a
+refused connection or an unknown host. Waits grow
 exponentially from `initial-backoff` up to `max-backoff`. A `Retry-After` header (seconds or an
 HTTP date) is honoured: the wait is at least that long. If it asks for longer than
 `max-retry-after`, the call fails at once instead, because waiting that long would hold up a
@@ -58,8 +60,12 @@ The `spring.ai.retry.*` properties are therefore not used.
 | Path | Result |
 | --- | --- |
 | Policy page (`POST /api/v1/policies/{id}/recommendation`) | `503` with `Retry-After: 30` and "The AI service is temporarily unavailable. Please try again later." The page shows it with **Try again**. Nothing is stored. |
-| A Spring AI embedding error reaching any endpoint | The same `503`, via `GlobalExceptionHandler` |
-| Policy questions and `/api/v1/rag/query` | `503`, as before |
+| A Spring AI embedding error, or any other `RestClientException`, reaching an endpoint | The same `503`, via `GlobalExceptionHandler`. The provider's response body is never logged |
+| `OPENAI_API_KEY` not set, or an empty completion | The same `503` |
+| Policy questions and `/api/v1/rag/query` | `503`, as before; RAG keeps its "…or choose Talk to a person" wording (`RagExceptionHandler`) |
+| The independent judge is unavailable for a question | `200` with the existing in-band notice, "The independent review is temporarily unavailable…", unchanged |
+| The judge is unavailable for a policy assessment | The assessment is saved and held for review (`ImpactReviewPolicy`), and returned as awaiting review |
+| Admin re-evaluation (`POST /api/v1/evaluate`) with the judge unavailable | `503`, because the evaluation is the request's only purpose. The attempt is still audited |
 | Background assessment after ingestion | Ingestion completes; the affected users' assessments are saved as `UNAVAILABLE` |
 | Embedding a document during a scheduled sync | That document is recorded in `sync_failures` and retried on the next run; the run completes |
 
@@ -92,7 +98,9 @@ follow-up work.
 
 These tests use a local stub server, never the real APIs:
 
-- `AiCallRetryTest`: which failures are retried, `Retry-After` handling, and giving up.
+- `AiCallRetryTest`: which failures are retried (timeouts yes, refused connections no),
+  `Retry-After` handling, giving up, and rejecting invalid settings.
+- `EvaluationControllerSecurityTest`: re-evaluation with the judge unavailable is a `503`.
 - `AiResilienceHttpTest`:
   - the chat read timeout fires and is retried;
   - `503` and `429` are retried and `400` is not;

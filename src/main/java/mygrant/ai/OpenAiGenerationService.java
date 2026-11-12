@@ -12,6 +12,8 @@ import org.springframework.web.client.RestClient;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
+import mygrant.common.AiUnavailableException;
+
 /** Calls GPT-6.1 Sol for grounded answers and structured policy assessments. */
 @Service
 public class OpenAiGenerationService {
@@ -50,7 +52,7 @@ public class OpenAiGenerationService {
     }
 
     private String call(String system, String user, Map<String, Object> responseFormat) {
-        if (apiKey.isBlank()) throw new IllegalStateException("OPENAI_API_KEY is not configured");
+        if (apiKey.isBlank()) throw new AiUnavailableException();
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("model", model);
         request.put("reasoning_effort", "low");
@@ -62,7 +64,7 @@ public class OpenAiGenerationService {
                 .contentType(MediaType.APPLICATION_JSON).body(request).retrieve().body(JsonNode.class));
         String content = response == null ? "" : response.path("choices").path(0)
                 .path("message").path("content").asText();
-        if (content.isBlank()) throw new IllegalStateException("OpenAI returned an empty response");
+        if (content.isBlank()) throw new AiUnavailableException();
         return content;
     }
 

@@ -24,10 +24,17 @@ public record AiResilienceProperties(@DefaultValue @Valid Http http, @DefaultVal
     /** Chat completions answer only once generation finishes, so the read timeout is generous. */
     public record Http(
             @DefaultValue("5s") @NotNull Duration connectTimeout,
-            @DefaultValue("90s") @NotNull Duration readTimeout) {}
+            @DefaultValue("90s") @NotNull Duration readTimeout) {
+        public Http {
+            if (connectTimeout == null || connectTimeout.isNegative() || connectTimeout.toMillis() < 1
+                    || readTimeout == null || readTimeout.isNegative() || readTimeout.toMillis() < 1) {
+                throw new IllegalArgumentException("AI connect and read timeouts must be positive");
+            }
+        }
+    }
 
     /**
-     * Retries only timeouts and other I/O failures, 429 and 5xx. A Retry-After header is honoured,
+     * Retries only timeouts, 429 and 5xx. A Retry-After header is honoured,
      * unless it asks for longer than {@code maxRetryAfter}, in which case the call fails at once.
      */
     public record Retry(
@@ -36,6 +43,15 @@ public record AiResilienceProperties(@DefaultValue @Valid Http http, @DefaultVal
             @DefaultValue("2.0") @DecimalMin("1.0") double multiplier,
             @DefaultValue("8s") @NotNull Duration maxBackoff,
             @DefaultValue("20s") @NotNull Duration maxRetryAfter) {
+
+        public Retry {
+            if (maxAttempts < 1 || maxAttempts > 10 || !Double.isFinite(multiplier) || multiplier < 1
+                    || initialBackoff == null || initialBackoff.isNegative()
+                    || maxBackoff == null || maxBackoff.isNegative()
+                    || maxRetryAfter == null || maxRetryAfter.isNegative()) {
+                throw new IllegalArgumentException("Invalid AI retry bounds");
+            }
+        }
 
         /** A single attempt: for clients built by hand, such as in tests. */
         public static Retry once() {

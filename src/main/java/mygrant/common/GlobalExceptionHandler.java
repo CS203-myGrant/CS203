@@ -198,10 +198,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
      * gave up on an embedding. The details stay in the log; the caller is told to try again later.
      */
     @ExceptionHandler({AiUnavailableException.class, org.springframework.ai.retry.TransientAiException.class,
-            org.springframework.ai.retry.NonTransientAiException.class})
+            org.springframework.ai.retry.NonTransientAiException.class, org.springframework.web.client.RestClientException.class})
     public ResponseEntity<ApiError> handleAiUnavailable(RuntimeException exception) {
         if (!(exception instanceof AiUnavailableException)) {
-            LOGGER.warn("AI provider call failed: {}", exception.getMessage());
+            LOGGER.warn("Upstream provider call failed ({})", exception.getClass().getSimpleName());
         }
         HttpHeaders headers = new HttpHeaders();
         headers.set(HttpHeaders.RETRY_AFTER, Long.toString(AiUnavailableException.RETRY_AFTER.toSeconds()));

@@ -2,7 +2,6 @@ package mygrant.ai;
 
 import java.io.IOException;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 
@@ -22,7 +21,6 @@ import org.springframework.retry.backoff.BackOffInterruptedException;
 import org.springframework.retry.backoff.BackOffPolicy;
 import org.springframework.retry.context.RetryContextSupport;
 import org.springframework.retry.support.RetryTemplate;
-import org.springframework.util.StreamUtils;
 import org.springframework.web.client.ResponseErrorHandler;
 import org.springframework.web.client.RestClient;
 
@@ -42,8 +40,6 @@ import org.springframework.web.client.RestClient;
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(AiResilienceProperties.class)
 public class AiResilience {
-
-    private static final int MAX_ERROR_BODY = 300;
 
     private final AiResilienceProperties properties;
     private final AiCallRetry.Sleeper sleeper;
@@ -130,7 +126,7 @@ public class AiResilience {
 
     /**
      * Turns Spring AI provider errors into exceptions the retry rule understands: 429 and 5xx are
-     * retryable and carry Retry-After; every other error is final. Bodies are cut short for the logs.
+     * retryable and carry Retry-After; every other error is final. Provider bodies are never logged.
      */
     @Bean
     public ResponseErrorHandler aiResponseErrorHandler() {
@@ -148,10 +144,8 @@ public class AiResilience {
             @Override
             public void handleError(ClientHttpResponse response) throws IOException {
                 int status = response.getStatusCode().value();
-                String body = StreamUtils.copyToString(response.getBody(), StandardCharsets.UTF_8);
-                if (body.length() > MAX_ERROR_BODY) body = body.substring(0, MAX_ERROR_BODY) + "...";
-                String message = "HTTP " + status + " - " + (body.isBlank() ? "No response body available" : body);
-                if (status == 429 || status >= 500) {
+                String message = "AI provider returned HTTP " + status;
+                if (status == 429 || response.getStatusCode().is5xxServerError()) {
                     throw new RetryableAiException(message, status, AiCallRetry.parseRetryAfter(
                             response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER), clock).orElse(null));
                 }
