@@ -65,7 +65,7 @@ public class UserProfileService {
         .orElseGet(() -> UserProfile.empty(user.getId()));
         applyUpdates(profile, request);
         clearWithdrawnFields(user.getId(), profile, request);
-        validateOnboardingConsent(user, profile, request);
+        validateProfileConsent(user, profile, request);
         validate(profile);
 
         recordConsents(user.getId(), profile, request);
@@ -230,22 +230,23 @@ public class UserProfileService {
             UserProfile profile,
             UpdateProfileRequest request) {
 
-        Set<String> consentedFields = request.consentedFields() == null
-                ? Set.of()
-                : request.consentedFields();
+        if (request.consentedFields() == null) return; // Partial updates leave consent unchanged.
 
-        for (String fieldName : consentedFields) {
-            ProfileFieldDefinition field = profileField(fieldName, "consentedFields");
-
-            if (!isPopulated(profile, field)) {
-                continue;
+        Set<ProfileFieldDefinition> selected = java.util.EnumSet.noneOf(ProfileFieldDefinition.class);
+        for (String fieldName : request.consentedFields()) {
+            selected.add(profileField(fieldName, "consentedFields"));
+        }
+        for (ProfileFieldConsent existing : consentRepository.findByUserId(userId)) {
+            ProfileFieldDefinition field = existing.getFieldName();
+            if (!field.required() && !selected.contains(field)) {
+                consentRepository.deleteByUserIdAndFieldName(userId, field);
             }
-
-            consentRepository.save(new ProfileFieldConsent(
-                    userId,
-                    field,
-                    java.time.Instant.now()
-            ));
+        }
+        for (ProfileFieldDefinition field : selected) {
+            if (isPopulated(profile, field)) {
+                consentRepository.save(new ProfileFieldConsent(
+                        userId, field, java.time.Instant.now()));
+            }
         }
     }
 
@@ -283,13 +284,13 @@ public class UserProfileService {
         };
     }
 
-    private void validateOnboardingConsent(
+    private void validateProfileConsent(
             User user,
             UserProfile profile,
             UpdateProfileRequest request) {
-        if (user.isProfileComplete()) {
-            return;
-        }
+        // A full profile save supplies the complete set of checked boxes.
+        // Partial updates omit the list and keep existing consent unchanged.
+        if (user.isProfileComplete() && request.consentedFields() == null) return;
 
         Set<String> consentedFields = request.consentedFields() == null
                 ? Set.of()

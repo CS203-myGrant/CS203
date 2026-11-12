@@ -1,0 +1,370 @@
+Federal Register, Volume 90 Issue 165 (Thursday, August 28, 2025)
+
+
+[Federal Register Volume 90, Number 165 (Thursday, August 28, 2025)]
+[Proposed Rules]
+[Pages 42070-42115]
+From the Federal Register Online via the Government Publishing Office [www.gpo.gov]
+[FR Doc No: 2025-16554]
+
+
+
+[[Page 42069]]
+
+Vol. 90
+
+Thursday,
+
+No. 165
+
+August 28, 2025
+
+Part II
+
+
+
+
+
+ Department of Homeland Security
+
+
+
+
+
+-----------------------------------------------------------------------
+
+
+
+
+
+8 CFR Parts 214, 248, and 274a
+
+
+
+
+
+Establishing a Fixed Time Period of Admission and an Extension of Stay 
+Procedure for Nonimmigrant Academic Students, Exchange Visitors, and 
+Representatives of Foreign Information Media; Proposed Rule
+
+Federal Register / Vol. 90, No. 165 / Thursday, August 28, 2025 / 
+Proposed Rules
+
+[[Page 42070]]
+
+
+-----------------------------------------------------------------------
+
+DEPARTMENT OF HOMELAND SECURITY
+
+8 CFR Parts 214, 248, and 274a
+
+[DHS Docket No. ICEB-2025-0001]
+RIN 1653-AA95
+
+
+Establishing a Fixed Time Period of Admission and an Extension of 
+Stay Procedure for Nonimmigrant Academic Students, Exchange Visitors, 
+and Representatives of Foreign Information Media
+
+AGENCY: U.S. Immigration and Customs Enforcement (ICE), U.S. Department 
+of Homeland Security (DHS).
+
+ACTION: Notice of proposed rulemaking (NPRM).
+
+-----------------------------------------------------------------------
+
+SUMMARY: Unlike most nonimmigrant classifications, which are admitted 
+for a fixed time period, aliens in the F (academic student), J 
+(exchange visitor), and most I (representatives of foreign information 
+media) classifications, with limited exceptions, are currently admitted 
+into the United States for the period of time that they are complying 
+with the terms and conditions of their nonimmigrant classification 
+(``duration of status''). The U.S. Department of Homeland Security 
+(DHS) proposes to amend its regulations by changing the admission 
+period in the F, J, and I classifications from duration of status to an 
+admission for a fixed time period.
+
+DATES: Comments must be received on or before September 29, 2025. 
+Information collection comment period: Comments on the information 
+collection described in the Paperwork Reduction Act section below must 
+be received by October 27, 2025.
+
+ADDRESSES: You may submit comments on the entirety of this rule, which 
+must be identified by Docket No. ICEB-2025-0001, through the following 
+method:
+     Federal eRulemaking Portal: https://www.regulations.gov. 
+Follow the website instructions to submit comments.
+    Comments on the information collection may be submitted to the same 
+docket as the NPRM or as described in the ``submitting comments'' 
+section below. In addition, all comments on the information collection 
+must include the OMB Control Number in the body of the comments.
+    Comments submitted in a manner other than the Federal eRulemaking 
+Portal, including emails or letters sent to the Department of Homeland 
+Security (the Department or DHS), will not be considered comments, and 
+will not receive a response from DHS. Please note that DHS cannot 
+accept any hand delivered or couriered comments, nor any comments 
+contained on any form of digital media storage devices, such as CDs, 
+DVDs, and USB drives. If you cannot submit your material using https://www.regulations.gov, contact the person in the FOR FURTHER INFORMATION 
+CONTACT section of this document for alternate instructions.
+
+FOR FURTHER INFORMATION CONTACT: Office of Regulatory Affairs and 
+Policy, U.S. Immigration and Customs Enforcement, Department of 
+Homeland Security, 500 12th Street SW, Washington, DC 20536. Telephone 
+202-732-6960 (not a toll-free number) (for questions only--no comments 
+will be accepted at this phone number).
+
+I. Public Participation
+
+    DHS encourages all interested parties to participate in this 
+rulemaking by submitting data, views, comments, and arguments on all 
+aspects of this notice of proposed rulemaking. Comments providing the 
+most assistance to DHS will reference a specific portion of this rule, 
+explain the reason for any recommended change and include the data, 
+information, or authority that supports the recommended change. See the 
+ADDRESSES section above for information on where to submit comments.
+
+A. Submitting Comments
+
+    All comments must be submitted in English, or an English 
+translation must be provided. If you submit comments, you must include 
+the DHS docket number for this rulemaking (ICEB-2025-0001), indicate 
+the specific section of this document to which each comment applies, 
+and provide a reason for each suggestion or recommendation. Include 
+data, information, or the authority that supports the comment. Your 
+comments must be submitted online by 11:59 p.m. of the last day of the 
+comment period.
+    Instructions: To submit your comments online, go to https://www.regulations.gov and insert ``ICEB-2025-0001'' in the ``Search'' 
+box. Click on the rule that appears in the ``Search Results.'' Click on 
+the ``Comment'' box under the name of the rule and input your comments 
+in the text box provided. When you are satisfied with your comments, 
+follow the prompts, and then click ``Submit Comment.'' Collection of 
+information. You must submit comments on the collection of information 
+discussed in this notice of proposed rulemaking to either DHS's docket 
+or the Office of Management and Budget's (OMB) Office of Information 
+and Regulatory Affairs (OIRA). OIRA will have access to and view the 
+comments submitted in the docket. OIRA submissions can also be sent 
+using any of the following alternative methods:
+     Email (alternative): [email protected] (include 
+the docket number and ``Attention: Desk Officer for U.S. Immigration 
+and Customs Enforcement, DHS'' in the subject line of the email).
+     Fax: 202-395-6566.
+     Mail: Office of Information and Regulatory Affairs, Office 
+of Management and Budget, 725 17th Street NW, Washington, DC 20503; 
+Attention: Desk Officer, U.S. Immigration and Customs Enforcement, DHS.
+    DHS will post your comments to the federal e-Rulemaking Portal at 
+https://www.regulations.gov and will include any personal information 
+you provide. Therefore, submitting this information makes it public. 
+You may wish to consider limiting the amount of personal information 
+that you provide in any voluntary public comment submission. DHS may 
+withhold from public viewing information provided in comments that it 
+determines is offensive. For more information, please read the 
+``Privacy & Security Notice'' via the link in the footer of https://www.regulations.gov. DHS will consider all comments and materials 
+received during the comment period and may change this rule based on 
+your comments.
+
+B. Viewing Comments and Documents
+
+    To view comments, as well as documents referenced in this preamble 
+as being available in the docket, go to https://www.regulations.gov and 
+insert ``ICEB-2025-0001'' in the ``Search'' box. Next, click on the 
+name of the rule, and then click ``Browse Posted Comments.'' 
+Individuals without internet access can request alternate arrangements 
+for viewing comments and documents related to this rulemaking (see the 
+FOR FURTHER INFORMATION CONTACT section of this document). You may also 
+sign up for email alerts on the online docket so that you will be 
+notified when comments are posted, or a final rule is published.
+
+SUPPLEMENTARY INFORMATION:
+
+II. Acronyms and Abbreviations
+
+CBP U.S. Customs and Border Protection
+CFR Code of Federal Regulations
+DOJ U.S. Department of Justice
+DHS U.S. Department of Homeland Security
+D/S Duration of Status
+DOS U.S. Department of State
+DSO Designated School Official
+EAD Employment Authorization Document
+
+[[Page 42071]]
+
+ED U.S. Department of Education
+EOS Extension of Stay
+GAO U.S. Government Accountability Office
+ICE U.S. Immigration and Customs Enforcement
+IIRIRA Illegal Immigration Reform and Immigrant Responsibility Act 
+of 1996
+INA Immigration and Nationality Act
+INS Immigration and Naturalization Service
+NPRM Notice of Proposed Rulemaking
+OPT Optional Practical Training
+POE Port of Entry
+PRC People's Republic of China
+RFE Request for Evidence
+RO Responsible Officer
+SAR Special Administrative Region
+SEVIS Student and Exchange Visitor Information System
+SEVP Student and Exchange Visitor Program
+SSR Special Student Relief
+STEM Science Technology Engineering and Mathematics
+U.S.C. United States Code
+USCIS U.S. Citizenship and Immigration Services
+
+III. Executive Summary
+
+A. Purpose of the Proposed Regulatory Action
+
+    Studying and participating in exchange visitor and academic 
+programs in the United States offers aliens access to world-renowned, 
+individualized instructional and educational programs. Similarly, the 
+United States allows foreign news and media members access to the 
+United States as part of their foreign employment. Millions of aliens 
+have come to the United States on a temporary basis in the F (academic 
+student),\1\ J (exchange visitor),\2\ and I (representatives of foreign 
+information media) \3\ classifications.\4\ Unlike aliens in most 
+nonimmigrant classifications who are admitted until a specific 
+departure date, F, J, and I (except for some I aliens from the People's 
+Republic of China (PRC)) nonimmigrants are admitted into the United 
+States for an unspecified period of time to engage in activities 
+authorized under their respective nonimmigrant classifications. This 
+unspecified period of time is referred to as ``duration of status'' (D/
+S). D/S for F academic students is generally the time during which a 
+student is pursuing a full course of study at an educational 
+institution approved by DHS, or engaging in authorized practical 
+training following completion of studies, plus authorized time to 
+depart the country.\5\ D/S for J exchange visitors is the time during 
+which an exchange visitor is participating in an authorized program, 
+plus authorized time to depart the country.\6\ D/S for I 
+representatives of foreign information media is the duration of his or 
+her foreign employment duties in the United States.\7\ For dependents 
+of principal F, J, or I nonimmigrants, D/S generally corresponds with 
+the principal's period of admission so long as the dependents are also 
+complying with the requirements for their particular 
+classifications.\8\ Since D/S was first introduced in 1978 for F 
+nonimmigrants and 1985 for J and I nonimmigrants,\9\ the number of F, 
+J, and I nonimmigrants admitted each year into the United States has 
+significantly increased.\10\ In 2023 alone, there were over 1.6 million 
+admissions in F status, a dramatic rise from when the legacy 
+Immigration and Naturalization Service (INS) first shifted to D/S 
+admission in 1979.\11\ For example, in the 1980-81 school year, there 
+were approximately 260,000 admissions in F status.\12\ Similar growth 
+in the J nonimmigrant population has also occurred over the past 
+decades. In 2023, there were over 500,000 admissions in J status, up 
+over 250 percent from the 141,213 J admissions into the United States 
+in 1985.\13\ Finally, there were 32,470 admissions for I nonimmigrant 
+foreign media representatives in the United States in 2023, nearly 
+double from the 16,753 admissions into the U.S. in 1985.\14\
+---------------------------------------------------------------------------
+
+    \1\ See Immigration and Nationality Act (INA) 101(a)(15)(F), 8 
+U.S.C. 1101(a)(15)(F).
+    \2\ See INA 101(a)(15)(J), 8 U.S.C. 1101(a)(15)(J).
+    \3\ See INA 101(a)(15)(I), 8 U.S.C. 1101(a)(15)(I).
+    \4\ See Office of Homeland Security Statistics, Yearbook of 
+Immigration Statistics-Yearbook 2023, Table 25, Nonimmigrant 
+Admissions by Class of Admission: Fiscal Years 2014 to 2023 at 
+https://ohss.dhs.gov/topics/immigration/yearbook-immigration-statistics/yearbook-2023 (last visited Mar. 31, 2025).
+    \5\ Statutory and regulatory requirements restrict the duration 
+of study for an alien who is admitted in F-1 status to attend a 
+public high school to an aggregate of 12 months of study at any 
+public high school(s). See INA section 214(m), 8 U.S.C. 1184(m); see 
+also 8 CFR 214.2(f)(5)(i).
+    \6\ See 8 CFR 214.2(j)(1)(ii) (explaining the initial admission 
+period) and (j)(1)(iv) (explaining that extensions of stay can be 
+obtained with a new Form DS-2019); see also 22 CFR 62.43 (permitting 
+responsible officers to extend J nonimmigrant's program beyond the 
+original DS-2019 end date according to length permitted for the 
+specific program category).
+    \7\ See 8 CFR 214.2(i).
+    \8\ See 8 CFR 214.2(f)(3), (f)(5)(vi)(D) (discussing F-2 period 
+of authorized admission); 214.2(j)(1)(ii), (j)(1)(iv) (discussing J-
+2 authorized period of admission); INA 101(a)(15)(I), 8 U.S.C. 
+1101(a)(15)(I); 22 CFR 41.52(c).
+    \9\ See 43 FR 54618 (Nov. 22, 1978) and 50 FR 42006 (Oct. 17, 
+1985).
+    \10\ In 1985, when D/S was introduced for I and J nonimmigrants, 
+there were 16,753 admissions in I status, 141,213 admissions in J 
+status, and 251,234 admissions in F-1 status. See U.S. Department of 
+Justice (DOJ), Immigration and Naturalization Service, 1997 
+Statistical Yearbook of the Immigration and Naturalization Service, 
+available at https://ohss.dhs.gov/sites/default/files/2023-12/Yearbook_Immigration_Statistics_1997.pdf (last visited March 20, 
+2025).
+    \11\ In fiscal year (FY) 2023, there were 1,625,740 admissions 
+in F-1 status and 61,910 in F-2 status. See DHS Off. of Homeland 
+Sec. Stat., Legal Immig. and Adjustment of Status Report Fiscal Year 
+2023, Quarter 4, tbl.4B, available at https://ohss.dhs.gov/sites/default/files/2024-06/2024_0507_ohss_legal-immigration-adjustment-of-status-fy-2023q4.xlsx (last visited Apr. 3, 2025).
+    \12\ In the 1980-81 school year, 312,000 nonimmigrant students 
+were admitted into the United States. Approximately 83 percent of 
+the nonimmigrant students admitted into the United States during the 
+1980-81 school year were in F status. Therefore, approximately 
+258,960 nonimmigrant students in F status were admitted into the 
+United States in the 1980-81 school year. See U.S. Gov't 
+Accountability Off., Controls Over Foreign Students in U.S. 
+Postsecondary Institutions Are Still Ineffective; Proposed 
+Legislation and Regulations May Correct Problems (Mar. 10, 1983), 
+available at https://www.gao.gov/assets/hrd-83-27.pdf (last visited 
+Mar. 20, 2024).
+    \13\ See DHS FY23, Quarter 4, tbl.4B, supra note 11, sum of J1 
+481,280 and J2 62,000.
+    \14\ Id.
+---------------------------------------------------------------------------
+
+    The significant increase in the volume of F academic students, J 
+exchange visitors, and I foreign information media representatives 
+poses a challenge to the Department's ability to monitor and oversee 
+these nonimmigrants while they are in the United States. During the 
+length of their stay for D/S, a period of admission without a specified 
+end date, these nonimmigrants are not required to have direct 
+interaction with DHS, except for a few limited instances, such as when 
+applying for employment authorization for optional practical training 
+(OPT) or for reinstatement if they have failed to maintain status. 
+Admission for D/S, in general, does not afford immigration officers 
+enough predetermined opportunities to directly verify that aliens 
+granted such nonimmigrant statuses are engaging only in those 
+activities their respective classifications authorize while they are in 
+the United States. In turn, this has undermined DHS's ability to 
+effectively enforce compliance with the statutory inadmissibility 
+grounds related to unlawful presence and has created incentives for 
+fraud and abuse.
+    For F and J visa holders, the Immigration and Nationality Act (INA) 
+specifically states that aliens must have a residence in a foreign 
+country which they have no intention of abandoning and seek to enter 
+the United States temporarily.\15\ Yet, DHS has many examples of 
+students and exchange visitors staying for decades in their student or 
+exchange visitor status.\16\
+---------------------------------------------------------------------------
+
+    \15\ See INA sec. 101(a)(15)(F) and (J); 8 U.S.C. 1101(a)(15)(F) 
+and (J).
+    \16\ DHS has identified over 2,100 aliens who first entered as 
+F-1 students between 2000 and 2010 and remain in active F-1 status 
+as of Apr. 6, 2025. See Student Exchange Visitor Program analysis of 
+data in the Student Exchange Visitor Information System and valid as 
+of Apr. 6, 2025.
+---------------------------------------------------------------------------
+
+    The events of 9/11 highlighted the potential for abuse of the 
+student visa.
+
+[[Page 42072]]
+
+In the wake of 9/11, a Homeland Security Presidential Directive titled, 
+Combating Terrorism Through Immigration Policies directed, among other 
+things, that a program be developed to track the status of foreign 
+students. It also mandated that the government develop guidelines that 
+may include control mechanisms such as limited duration of student 
+status.\17\ The 9/11 Commission reiterated the need to track foreign 
+students and place tighter controls on student visas.\18\ From these 
+mandates and the statutory authorities described below, the Student and 
+Exchange Visitor Program (SEVP) was created, and the electronic Student 
+and Exchange Visitor Information System (SEVIS) was implemented. SEVIS 
+is a DHS computer system that stores and processes information on 
+foreign students and exchange visitors in the U.S.
+---------------------------------------------------------------------------
+
+    \17\ See Homeland Sec. Presidential Directive 2, Combating 
+Terrorism Through Immig. Policies (Oct. 29, 2001) (HSPD-2), https://georgewbush-whitehouse.archives.gov/news/releases/2001/10/text/20011030-2.html (last visited May 1, 2025).
+    \18\ Kean, T.H. & Hamilton, L.H., 2004. The 9/11 Commission 
+report: final report of the National Commiss
