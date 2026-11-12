@@ -998,13 +998,35 @@ demo. RAG retrieves those chunks after classification.
 ## Published impact feed
 
 The applicant dashboard now shows published per-user policy assessments above the
-notification inbox. An independently approved recommendation created by **See how
-this impacts me** appears in this feed. An assessment that needs review is saved
-as `PENDING_REVIEW` and is not returned by the applicant feed or detail APIs;
-temporary AI failures are not saved. Managers and admins can correct and publish
-held assessments with `/api/v1/review/impacts`. Corrections retain previous
-versions and show a **Reviewed by a human** marker. `HIGH` assessment urgency is
-shown as `HIGH` severity so the dashboard presents it as a warning.
+notification inbox. Assessments reach the feed two ways:
+
+- **Automatically after ingestion (CS203-153).** When an official (`PRIMARY`) policy
+  is imported, every user whose profile matches it gets their own assessment in the
+  background, published straight to their feed and checklist or held for review.
+  News (`SECONDARY`) results are kept as processing records only and never reach
+  the feed, in line with news never creating alerts.
+- **On demand,** when the user opens a policy and selects **See how this impacts me**.
+  If the background assessment already covers that user's current profile version,
+  the page shows it without calling the model again.
+
+Both paths use one review rule (`ImpactReviewPolicy`). An assessment is **held for
+review** (saved as `PENDING_REVIEW`, hidden from its owner, listed in the reviewer
+queue) when the model asked for review, its confidence is below
+`IMPACT_REVIEW_CONFIDENCE_THRESHOLD` (default 60), or the independent judge did not
+pass it or was unavailable. Otherwise it is **published**, whatever its urgency: a
+confident, verified `HIGH` result goes straight to the user. Without
+`ANTHROPIC_API_KEY` the judge is unavailable, so every new assessment is held.
+Assessments published before this rule existed are left as they were.
+
+While an assessment is held, its policy page says it is awaiting review
+(`status: AWAITING_REVIEW`) and does not call the model again, even with
+`refresh=true`. Temporary AI failures are not saved. Managers and admins can
+approve (publish unchanged) or correct held assessments with
+`/api/v1/review/impacts`; the queue shows why each AI draft was held
+(`holdReasons`). Corrections retain previous versions and show a **Reviewed by a
+human** marker, and no automated path ever changes a human-reviewed assessment.
+`HIGH` assessment urgency is shown as `HIGH` severity so the dashboard presents it
+as a warning.
 
 `GET /api/v1/impacts` returns the signed-in user's published assessments, 20 per
 page by default, sorted by severity then date. Use `sort=date,desc` or
@@ -1063,6 +1085,11 @@ For an offline check against a local PostgreSQL test database, run
 `mvn -Dtest=ImpactFeedIntegrationTest test` with `DATABASE_URL` and `JWT_SECRET`
 set as in the regular test setup. It covers sorting, filters, citations, archive
 history, account isolation, pending-review visibility and manager corrections.
+`mvn -Dtest=AutoPublishIntegrationTest test` covers automatic reports: one
+ingestion giving two users different reports, low-confidence and unverified results
+held for review and published on approval, direct publication of a confident
+verified `HIGH`, reuse on the policy page with no model call, untouched
+human-reviewed rows, and the manager dashboard counts.
 `node --test src/test/js/impact-feed.test.cjs` checks the dashboard rendering and
 archive requests without calling AI services.
 
