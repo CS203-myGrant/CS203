@@ -74,3 +74,12 @@ test('completed HIGH impact retains the canonical label and next steps',()=>{
   assert.match(rendered,/What to do next/);
   assert.doesNotMatch(rendered,/CRITICAL|WARNING|INFORMATIONAL|NO_IMPACT/);
 });
+test('a draft awaiting review shows no draft content or advice',()=>{
+  const context=setup(async()=>({}));
+  context.escapeHtml=value=>String(value ?? '');
+  const rendered=context.renderPolicyRecommendation({status:'AWAITING_REVIEW',urgency:null,
+    summary:'This assessment is awaiting review.',requiresHumanReview:true,recommendedActions:[]});
+  assert.match(rendered,/Awaiting review/);
+  assert.match(rendered,/reviewer is checking/);
+  assert.doesNotMatch(rendered,/What to do next|Unavailable|Not independently verified/);
+});

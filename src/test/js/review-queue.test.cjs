@@ -41,3 +41,29 @@ test('an untouched reported assessment counts as unchanged, ignoring spacing and
   assert.equal(view.reviewCorrectionUnchanged(reported,{severity:'LOW',confidence:90,summary:'No impact',
     analysis:['Not immigration','Checked the rule text'],actionItems:['None'],missingInformation:[]}),false);
 });
+
+// CS203-153: AI drafts held by the shared review policy.
+const held={...draft,id:9,draftUrgency:'MEDIUM',draftConfidence:40,draftAnalysis:['Expiry timing'],
+  draftActionItems:['Check the official rule'],holdReasons:['Low confidence (40%)','Independent check did not pass']};
+
+test('a held AI draft says why the review policy held it',()=>{
+  const rendered=queue([held]).renderQueue();
+  assert.match(rendered,/Low confidence \(40%\) · Independent check did not pass/);
+  assert.doesNotMatch(rendered,/Awaiting review/);
+});
+
+test('the editor starts from a held AI draft so approving it keeps its content',()=>{
+  const elements={};
+  const element=id=>elements[id] ??= {id,value:'',hidden:false,textContent:'',innerHTML:'',href:'',focus(){},
+    classList:{add(){},remove(){}}};
+  const view=queue([held,draft]);
+  view.document={getElementById:element};
+  view.openQueueEditor(9);
+  assert.equal(elements['review-edit-severity'].value,'MEDIUM');
+  assert.equal(elements['review-edit-confidence'].value,40);
+  assert.equal(elements['review-edit-actions'].value,'Check the official rule');
+  assert.match(elements['review-editor-facts'].innerHTML,/Low confidence \(40%\)/);
+  // A draft held for another reason still starts from a blank form.
+  view.openQueueEditor(7);
+  assert.equal(elements['review-edit-actions'].value,'');
+});
