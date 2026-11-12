@@ -9,9 +9,9 @@ All accounts use `example.test` addresses. Passwords are read from environment v
 BCrypt-hashed, and never stored in source. Re-running the seed reuses accounts, profile
 consents, manager links, and policy document numbers. It does not reset existing passwords.
 
-Export these values in your shell. If you keep them in the local ignored `.env` file,
-first run `set -a; source .env; set +a` from the repository root; Spring Boot does
-not load that file automatically:
+Put these values in the local ignored `.env` file at the repository root, or
+export them in your shell. `application.yaml` imports `.env` from the current
+working directory; if the file is elsewhere, source it before starting the app:
 
 ```text
 DEMO_APPLICANT_PASSWORD=<choose-a-password>
