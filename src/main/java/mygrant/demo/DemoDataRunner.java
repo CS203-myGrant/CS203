@@ -153,13 +153,7 @@ public class DemoDataRunner implements ApplicationRunner {
 
     private User applicant(String name, String email, String visa, String citizenship, LocalDate travel) {
         User user = account(name, email, applicantPassword, UserRole.APPLICANT, visa);
-        user.setCurrentLocation("US");
-        user.setUpcomingTravelDate(travel);
-        user.setAcademicLevel("Master's");
-        user.setProgramEndDate(LocalDate.of(2027, 5, 15));
-        users.save(user);
-
-        UserProfile profile = profiles.findById(user.getId()).orElseGet(() -> UserProfile.fromUser(user));
+        UserProfile profile = profiles.findById(user.getId()).orElseGet(() -> UserProfile.empty(user.getId()));
         profile.setVisaType(visa);
         profile.setCountryOfCitizenship(citizenship);
         profile.setCurrentLocation("US");
@@ -188,7 +182,6 @@ public class DemoDataRunner implements ApplicationRunner {
         }
         user.setFullName(name);
         user.setRole(role);
-        user.setVisaType(visa);
         user.setActive(true);
         user.setProfileComplete(true);
         return users.save(user);

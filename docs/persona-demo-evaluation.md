@@ -9,7 +9,9 @@ All accounts use `example.test` addresses. Passwords are read from environment v
 BCrypt-hashed, and never stored in source. Re-running the seed reuses accounts, profile
 consents, manager links, and policy document numbers. It does not reset existing passwords.
 
-Put these values in your local ignored `.env` file or export them in the shell:
+Export these values in your shell. If you keep them in the local ignored `.env` file,
+first run `set -a; source .env; set +a` from the repository root; Spring Boot does
+not load that file automatically:
 
 ```text
 DEMO_APPLICANT_PASSWORD=<choose-a-password>
@@ -89,8 +91,9 @@ judge calls. It writes `demo-reports/latest.md` (per-scenario results table),
 `demo-reports/history.svg` (agreement and review-rate visualization). The report directory
 is ignored by Git and can be changed with `MYGRANT_DEMO_REPORT_DIRECTORY`.
 
-Agreement means the returned urgency matches a team label **among available results**.
-Unavailable or judge-rejected results are counted separately, not as correct predictions.
+Agreement means the returned urgency matches a team label **among results approved by the
+independent judge**. Generation failures and judge-rejected results are counted separately,
+not as correct predictions.
 Review rate is the fraction of all cases marked for human review. Record model versions,
 run date, fixture versions, mismatches and limitations in the final project document.
 When the AI is wrong, its generated result should be reviewed or corrected through the

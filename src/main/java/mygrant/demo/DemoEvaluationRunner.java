@@ -68,15 +68,16 @@ public class DemoEvaluationRunner {
         for (Row row : rows) {
             csv.append(row.runAt()).append(',').append(quoted(row.scenario())).append(',')
                     .append(row.document()).append(',').append(row.expected()).append(',')
-                    .append(row.actual()).append(',').append(row.expected() == row.actual()).append(',')
+                    .append(row.actual() == null ? "UNAVAILABLE" : row.actual()).append(',')
+                    .append(eligible(row) && row.expected() == row.actual()).append(',')
                     .append(row.review()).append(',').append(row.judge()).append(',')
                     .append(quoted(row.model())).append('\n');
         }
         Files.writeString(history, csv.toString(), StandardCharsets.UTF_8, StandardOpenOption.APPEND);
 
-        long available = rows.stream().filter(row -> row.actual() != ImpactUrgency.UNAVAILABLE).count();
-        long agreed = rows.stream().filter(row -> row.actual() != ImpactUrgency.UNAVAILABLE
-                && row.expected() == row.actual()).count();
+        long available = rows.stream().filter(this::eligible).count();
+        long agreed = rows.stream().filter(this::eligible)
+                .filter(row -> row.expected() == row.actual()).count();
         long reviews = rows.stream().filter(Row::review).count();
         StringBuilder markdown = new StringBuilder("# Persona live-model evaluation\n\n")
                 .append("Run: ").append(rows.getFirst().runAt()).append("\n\n")
@@ -91,8 +92,8 @@ public class DemoEvaluationRunner {
                 .append("|---|---|---|---|---|---|---|---|\n");
         for (Row row : rows) {
             markdown.append('|').append(row.scenario()).append('|').append(row.document()).append('|')
-                    .append(row.expected()).append('|').append(row.actual()).append('|')
-                    .append(row.expected() == row.actual() && row.actual() != ImpactUrgency.UNAVAILABLE ? "yes" : "no")
+                    .append(row.expected()).append('|').append(row.actual() == null ? "UNAVAILABLE" : row.actual()).append('|')
+                    .append(eligible(row) && row.expected() == row.actual() ? "yes" : "no")
                     .append('|').append(row.review()).append('|').append(row.judge()).append('|')
                     .append(row.model()).append("|\n");
         }
@@ -109,7 +110,7 @@ public class DemoEvaluationRunner {
             if (cells.length < 9) continue;
             int[] totals = runs.computeIfAbsent(cells[0], ignored -> new int[4]);
             totals[0]++;
-            if (!"UNAVAILABLE".equals(cells[4])) {
+            if (!"UNAVAILABLE".equals(cells[4]) && "YES".equals(cells[7])) {
                 totals[1]++;
                 if (Boolean.parseBoolean(cells[5])) totals[2]++;
             }
@@ -143,7 +144,11 @@ public class DemoEvaluationRunner {
     }
 
     private String quoted(String value) {
-        return "\"" + value.replace("\"", "\"\"") + "\"";
+        return "\"" + (value == null ? "" : value.replace("\"", "\"\"")) + "\"";
+    }
+
+    private boolean eligible(Row row) {
+        return row.actual() != null && "YES".equals(row.judge());
     }
 
     record Row(Instant runAt, String scenario, String document, ImpactUrgency expected,

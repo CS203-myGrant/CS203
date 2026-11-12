@@ -67,8 +67,8 @@ class DemoScenarioTests {
                     User user = new User();
                     user.setId(10L);
                     user.setEmail(scenario.email());
-                    user.setVisaType(scenario.email().contains("employee") ? "H-1B" : "F-1");
-                    UserProfile profile = UserProfile.fromUser(user);
+                    UserProfile profile = UserProfile.empty(user.getId());
+                    profile.setVisaType(scenario.email().contains("employee") ? "H-1B" : "F-1");
                     profile.setCountryOfCitizenship(scenario.email().contains("student.b") ? "Iran"
                             : scenario.email().contains("student.c") ? "Somalia" : "Singapore");
                     if (scenario.email().contains("student.b") || scenario.email().contains("student.c")) {
@@ -105,7 +105,7 @@ class DemoScenarioTests {
                     assertThat(result.requiresHumanReview()).isEqualTo(scenario.expected() == ImpactUrgency.HIGH);
                     ArgumentCaptor<String> prompt = ArgumentCaptor.forClass(String.class);
                     verify(generator).generateJson(anyString(), prompt.capture(), any(), eq("profile_impact_assessment"));
-                    assertThat(prompt.getValue()).contains("visaType: " + user.getVisaType(),
+                    assertThat(prompt.getValue()).contains("visaType: " + profile.getVisaType(),
                             "countryOfCitizenship: " + profile.getCountryOfCitizenship(),
                             "documentNumber: " + fixture.number(), fixture.title());
                     if (fixture.number().equals("2025-23570")) {
@@ -137,13 +137,15 @@ class DemoScenarioTests {
                 new DemoEvaluationRunner.Row(java.time.Instant.parse("2026-11-09T00:00:00Z"),
                         "Student A", "2025-16554", ImpactUrgency.LOW, ImpactUrgency.LOW, false, "YES", "stub"),
                 new DemoEvaluationRunner.Row(java.time.Instant.parse("2026-11-09T00:00:00Z"),
-                        "Student B", "2025-23570", ImpactUrgency.HIGH, ImpactUrgency.UNAVAILABLE, true, "NO", "stub"),
+                        "Student B", "2025-23570", ImpactUrgency.HIGH, null, true, "NO", "stub"),
                 new DemoEvaluationRunner.Row(java.time.Instant.parse("2026-11-09T00:00:00Z"),
-                        "Student C", "2025-23570", ImpactUrgency.HIGH, ImpactUrgency.MEDIUM, true, "YES", "stub")));
+                        "Student C", "2025-23570", ImpactUrgency.HIGH, ImpactUrgency.MEDIUM, true, "YES", "stub"),
+                new DemoEvaluationRunner.Row(java.time.Instant.parse("2026-11-09T00:00:00Z"),
+                        "Employer", "2025-18601", ImpactUrgency.MEDIUM, ImpactUrgency.MEDIUM, true, "NO", null)));
         assertThat(Files.readString(temporary.resolve("latest.md")))
-                .contains("Agreement: 1/2 available results", "unavailable: 1/3", "review required: 2/3");
+                .contains("Agreement: 1/2 available results", "unavailable: 2/4", "review required: 3/4");
         assertThat(Files.readString(temporary.resolve("history.svg")))
-                .contains("Live evaluation history", "50% (1/2)", "67% (2/3)");
-        assertThat(Files.readAllLines(temporary.resolve("history.csv"))).hasSize(4);
+                .contains("Live evaluation history", "50% (1/2)", "75% (3/4)");
+        assertThat(Files.readAllLines(temporary.resolve("history.csv"))).hasSize(5);
     }
 }
