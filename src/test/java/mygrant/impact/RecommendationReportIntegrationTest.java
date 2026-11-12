@@ -265,6 +265,28 @@ class RecommendationReportIntegrationTest extends mygrant.support.PgvectorIntegr
                 .andExpect(jsonPath("$[1].status").value("DISMISSED"));
     }
 
+    @Test
+    void databaseRefusesToCloseAReportWithoutANote() throws Exception {
+        User owner = account(UserRole.APPLICANT);
+        long id = insert(owner, "PUBLISHED", ImpactUrgency.LOW, "Reminder");
+        report(owner, id, "OTHER", "Problem", 1).andExpect(status().isCreated());
+
+        for (String note : new String[] {null, "   "}) {
+            jdbc.execute("SAVEPOINT before_close");
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbc.update("""
+                    UPDATE recommendation_reports SET status = 'DISMISSED', resolved_at = CURRENT_TIMESTAMP,
+                        resolution_note = ? WHERE assessment_id = ?
+                    """, note, id))
+                    .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+            jdbc.execute("ROLLBACK TO SAVEPOINT before_close");
+        }
+
+        jdbc.update("""
+                UPDATE recommendation_reports SET status = 'DISMISSED', resolved_at = CURRENT_TIMESTAMP,
+                    resolution_note = 'Checked; the assessment is correct.' WHERE assessment_id = ?
+                """, id);
+    }
+
     private String correction(String severity, int confidence, String summary, List<String> analysis,
             List<String> actions, String note) throws Exception {
         return mapper.writeValueAsString(new ImpactReviewController.Correction(severity, confidence, summary,
