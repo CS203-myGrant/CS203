@@ -74,6 +74,24 @@ test('completed HIGH impact retains the canonical label and next steps',()=>{
   assert.match(rendered,/What to do next/);
   assert.doesNotMatch(rendered,/CRITICAL|WARNING|INFORMATIONAL|NO_IMPACT/);
 });
+test('an AI outage shows the server message with a way to try again (CS203-174)',async()=>{
+  const message='The AI service is temporarily unavailable. Please try again later.';
+  const context=setup(async path=>path.endsWith('recommendation')
+    ?{status:503,ok:false,json:async()=>({message})}
+    :{id:7,title:'Policy',status:'FINAL',agency:'DHS',visaType:'F-1',content:''});
+  context.parseApiResponse=async response=>{
+    if(response.ok===false) throw new Error((await response.json()).message);
+    return response;
+  };
+  context.escapeHtml=value=>String(value ?? '');
+  context.escapeAttribute=value=>String(value ?? '');
+  context.formatDate=value=>String(value ?? '');
+  await context.openPolicyDetail(7);
+  assert.equal(context.state.policyDetail.error,message);
+  const rendered=context.renderPolicyDetail();
+  assert.match(rendered,/temporarily unavailable\. Please try again later\./);
+  assert.match(rendered,/Try again/);
+});
 test('a draft awaiting review shows no draft content or advice',()=>{
   const context=setup(async()=>({}));
   context.escapeHtml=value=>String(value ?? '');

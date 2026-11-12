@@ -24,6 +24,16 @@ spring:
       ddl-auto: validate
     open-in-view: false
 
+  # CS203-174: timeouts for every client built from the shared RestClient.Builder: OpenAI
+  # embeddings through Spring AI, and the Federal Register, Visa Bulletin and USCIS imports.
+  # OpenAI chat and the Anthropic judge override the read timeout (mygrant.ai.http below).
+  # The JDK client is named so a new dependency cannot silently switch the HTTP client.
+  http:
+    client:
+      factory: jdk
+      connect-timeout: ${HTTP_CLIENT_CONNECT_TIMEOUT:5s}
+      read-timeout: ${HTTP_CLIENT_READ_TIMEOUT:30s}
+
   ai:
     # Spring AI is used only for embeddings. Chat goes through OpenAiGenerationService,
     # so every other OpenAI model the starter offers is switched off.
@@ -80,6 +90,20 @@ anthropic:
   base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
 
 mygrant:
+  # CS203-174: OpenAI chat and the Anthropic judge. A chat completion answers only once it has
+  # finished generating, so its read timeout is longer than other clients'. Only timeouts and
+  # other I/O failures, 429 and 5xx are retried; a Retry-After over max-retry-after fails at once.
+  # The same retry rule replaces Spring AI's for embeddings, so spring.ai.retry.* is not used.
+  ai:
+    http:
+      connect-timeout: ${AI_HTTP_CONNECT_TIMEOUT:5s}
+      read-timeout: ${AI_HTTP_READ_TIMEOUT:90s}
+    retry:
+      max-attempts: ${AI_RETRY_MAX_ATTEMPTS:3}
+      initial-backoff: ${AI_RETRY_INITIAL_BACKOFF:1s}
+      multiplier: ${AI_RETRY_MULTIPLIER:2.0}
+      max-backoff: ${AI_RETRY_MAX_BACKOFF:8s}
+      max-retry-after: ${AI_RETRY_MAX_RETRY_AFTER:20s}
   questions:
     # CS203-12: per-user cap on policy questions (policy follow-ups and /rag/query combined).
     # Over the cap the API answers 429 with a Retry-After header.

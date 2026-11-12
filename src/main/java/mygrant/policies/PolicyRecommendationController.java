@@ -9,8 +9,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import mygrant.common.AiUnavailableException;
+import mygrant.common.ApiError;
+import mygrant.impact.AssessmentStatus;
 import mygrant.impact.ProfileImpactAssessment;
 import mygrant.impact.ProfileImpactAssessmentService;
 
@@ -37,11 +42,16 @@ public class PolicyRecommendationController {
     @ApiResponse(responseCode = "200", description = "Personalized assessment, including availability and review status")
     @ApiResponse(responseCode = "400", description = "The id is not a number")
     @ApiResponse(responseCode = "404", description = "No policy has this id")
+    @ApiResponse(responseCode = "503", description = "The AI service failed after its retries; try again later "
+            + "(Retry-After header)", content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ProfileImpactAssessment recommendation(@PathVariable Long id,
             @RequestParam(defaultValue = "false") boolean refresh, Principal principal) {
         PolicyDocument policy = policies.findById(id);
-        return store.getOrGenerate(principal.getName(), policy,
+        ProfileImpactAssessment result = store.getOrGenerate(principal.getName(), policy,
                 () -> assessments.assess(principal.getName(), policy, PolicyAssessmentInputs.document(policy),
                         PolicyAssessmentInputs.classification(policy)), refresh);
+        // CS203-174: nothing was stored, so the user can simply try again later.
+        if (result != null && result.status() == AssessmentStatus.UNAVAILABLE) throw new AiUnavailableException();
+        return result;
     }
 }

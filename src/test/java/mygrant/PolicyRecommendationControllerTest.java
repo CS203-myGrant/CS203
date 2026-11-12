@@ -50,4 +50,41 @@ class PolicyRecommendationControllerTest {
 
         verify(store).getOrGenerate(eq("user@example.org"), eq(policy), any(), eq(true));
     }
+
+    /** CS203-174: when the AI service still fails after its retries, the caller is told to try later. */
+    @Test
+    void aProviderOutageAnswers503WithRetryAfter() throws Exception {
+        PolicyService policies = mock(PolicyService.class);
+        ProfileImpactAssessmentService assessments = mock(ProfileImpactAssessmentService.class);
+        PolicyRecommendationStore store = mock(PolicyRecommendationStore.class);
+        when(policies.findById(21L)).thenReturn(new PolicyDocument("2026-14439", "Policy", "DHS", "F-1",
+                PolicyStatus.FINAL, SourceType.PRIMARY, LocalDate.of(2026, 7, 17), null,
+                "https://example.org/policy", "SUMMARY: Policy facts", "hash"));
+        when(store.getOrGenerate(anyString(), any(), any(), anyBoolean())).thenReturn(
+                new mygrant.impact.ProfileImpactAssessment(null, 0, "Urgency assessment is temporarily unavailable.",
+                        java.util.List.of(), java.util.List.of(), java.util.List.of(), true, "OpenAI", "m", null, 0));
+
+        MockMvcBuilders.standaloneSetup(new PolicyRecommendationController(policies, assessments, store))
+                .setControllerAdvice(new mygrant.common.GlobalExceptionHandler()).build()
+                .perform(post("/api/v1/policies/21/recommendation").principal(() -> "user@example.org"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("Retry-After", "30"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.message")
+                        .value("The AI service is temporarily unavailable. Please try again later."));
+    }
+
+    @Test
+    void anEmbeddingOutageFromSpringAiAlsoAnswers503() throws Exception {
+        PolicyService policies = mock(PolicyService.class);
+        when(policies.findById(21L)).thenThrow(new org.springframework.ai.retry.TransientAiException("HTTP 503 - down"));
+
+        MockMvcBuilders.standaloneSetup(new PolicyRecommendationController(policies,
+                        mock(ProfileImpactAssessmentService.class), mock(PolicyRecommendationStore.class)))
+                .setControllerAdvice(new mygrant.common.GlobalExceptionHandler()).build()
+                .perform(post("/api/v1/policies/21/recommendation").principal(() -> "user@example.org"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.message")
+                        .value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("HTTP 503"))));
+    }
 }

@@ -208,6 +208,25 @@ class IngestionAssessmentIntegrationTest extends PgvectorIntegrationTestBase {
         verify(generator, times(2)).generateJson(anyString(), anyString(), any(), anyString());
     }
 
+    /** CS203-174: a provider timeout that outlasts the retries still lets ingestion complete. */
+    @Test
+    void aProviderTimeoutAfterRetriesIsSavedAsUnavailableAndIngestionCompletes() {
+        var owner = profile("F-1", "2028-12-01", 1);
+        when(generator.generateJson(anyString(), anyString(), any(), anyString()))
+                .thenThrow(new org.springframework.web.client.ResourceAccessException("Read timed out"));
+        var response = ingestion.ingest(request("F-1"));
+        createdPolicies.add(response.policyId());
+
+        assertThat(response.policyId()).isNotNull();
+        awaitRows(response.policyId(), 1);
+        var row = rows(response.policyId()).getFirst();
+        assertThat(row.getUserId()).isEqualTo(owner.getUserId());
+        assertThat(row.getStatus()).isEqualTo(AssessmentStatus.UNAVAILABLE);
+        assertThat(row.getRecommendationId()).isNull();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM policy_recommendations WHERE policy_id = ?",
+                Integer.class, response.policyId())).isZero();
+    }
+
     @ParameterizedTest
     @CsvSource({"74,false,true", "75,false,false", "76,false,false", "95,true,true"})
     void reviewThresholdAndModelFlagGateVisibility(int confidence, boolean modelReview, boolean expectedReview) {

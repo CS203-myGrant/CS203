@@ -193,6 +193,22 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .body(ApiError.of(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage(), Map.of()));
     }
 
+    /**
+     * CS203-174: an AI provider failed after its bounded retries (timeout, 429 or 5xx), or Spring AI
+     * gave up on an embedding. The details stay in the log; the caller is told to try again later.
+     */
+    @ExceptionHandler({AiUnavailableException.class, org.springframework.ai.retry.TransientAiException.class,
+            org.springframework.ai.retry.NonTransientAiException.class})
+    public ResponseEntity<ApiError> handleAiUnavailable(RuntimeException exception) {
+        if (!(exception instanceof AiUnavailableException)) {
+            LOGGER.warn("AI provider call failed: {}", exception.getMessage());
+        }
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.RETRY_AFTER, Long.toString(AiUnavailableException.RETRY_AFTER.toSeconds()));
+        return errorResponse(HttpStatus.SERVICE_UNAVAILABLE, headers)
+                .body(ApiError.of(HttpStatus.SERVICE_UNAVAILABLE, AiUnavailableException.MESSAGE, Map.of()));
+    }
+
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ApiError> handleAuthentication(AuthenticationException exception) {
         return response(HttpStatus.UNAUTHORIZED, "Please sign in to continue", Map.of());

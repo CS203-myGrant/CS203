@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -15,14 +16,28 @@ import com.fasterxml.jackson.databind.JsonNode;
 @Service
 public class OpenAiGenerationService {
     private final RestClient client;
+    private final AiCallRetry retry;
     private final String apiKey;
     private final String model;
 
-    public OpenAiGenerationService(RestClient.Builder builder,
+    /** CS203-174: with the configured AI timeouts and bounded retry. */
+    @Autowired
+    public OpenAiGenerationService(RestClient.Builder builder, AiResilience resilience,
             @Value("${openai.api-key:}") String apiKey,
             @Value("${openai.model:gpt-6.1-sol}") String model,
             @Value("${openai.base-url:https://api.openai.com/v1}") String baseUrl) {
+        this(resilience.withTimeouts(builder), resilience.retry(), apiKey, model, baseUrl);
+    }
+
+    /** One attempt on the given builder as it is, for tests that supply their own HTTP client. */
+    public OpenAiGenerationService(RestClient.Builder builder, String apiKey, String model, String baseUrl) {
+        this(builder, AiCallRetry.once(), apiKey, model, baseUrl);
+    }
+
+    public OpenAiGenerationService(RestClient.Builder builder, AiCallRetry retry, String apiKey, String model,
+            String baseUrl) {
         this.client = builder.baseUrl(baseUrl).build();
+        this.retry = retry;
         this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.model = model;
     }
@@ -42,9 +57,9 @@ public class OpenAiGenerationService {
         request.put("messages", List.of(Map.of("role", "system", "content", system),
                 Map.of("role", "user", "content", user)));
         if (responseFormat != null) request.put("response_format", responseFormat);
-        JsonNode response = client.post().uri("/chat/completions")
+        JsonNode response = retry.call("OpenAI chat completion", () -> client.post().uri("/chat/completions")
                 .header("Authorization", "Bearer " + apiKey)
-                .contentType(MediaType.APPLICATION_JSON).body(request).retrieve().body(JsonNode.class);
+                .contentType(MediaType.APPLICATION_JSON).body(request).retrieve().body(JsonNode.class));
         String content = response == null ? "" : response.path("choices").path(0)
                 .path("message").path("content").asText();
         if (content.isBlank()) throw new IllegalStateException("OpenAI returned an empty response");
