@@ -23,7 +23,9 @@ The unique key protects overlapping workers; duplicate provider calls are possib
 model review requests or confidence strictly below the threshold produce
 `PENDING_REVIEW`. `ImpactAssessmentRepository.findVisibleByUserId` excludes pending,
 rejected and unavailable results. Processing queries are deliberately unrestricted;
-future user-facing consumers must use the visibility-filtered query.
+user-facing consumers must use the visibility-filtered query. Owner-scoped page and
+detail reads are now available at `/api/v1/impact-assessments` (see
+[review visibility](assessment-review-visibility.md)).
 
 Provider failures persist as `UNAVAILABLE` without interrupting other profiles.
 Reprocessing skips existing rows, including unavailable results; retry execution,

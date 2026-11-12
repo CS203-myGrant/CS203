@@ -127,6 +127,7 @@ public class ImpactReviewService {
         jdbc.update("""
                 UPDATE policy_recommendations SET assessment_json = ?, severity = ?,
                     publication_status = 'PUBLISHED', reviewed_by_human = TRUE,
+                    requires_review = TRUE, review_status = 'APPROVED',
                     reviewed_by_user_id = ?, reviewed_at = CURRENT_TIMESTAMP,
                     version = version + 1, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?

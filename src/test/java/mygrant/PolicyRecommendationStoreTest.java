@@ -44,7 +44,11 @@ class PolicyRecommendationStoreTest {
         when(users.findByEmail("user")).thenReturn(Optional.of(user));
         when(profiles.findById(1L)).thenReturn(Optional.of(profile));
         when(jdbc.queryForList(anyString(), eq(String.class), eq(1L), eq(21L), anyString()))
-                .thenAnswer(call -> call.getArgument(4).equals(savedHash) ? List.of(savedJson) : List.of());
+                .thenAnswer(call -> call.getArgument(4).equals(savedHash) && !savedJson.contains("\"requiresHumanReview\":true")
+                        ? List.of(savedJson) : List.of());
+        when(jdbc.queryForObject(anyString(), eq(Long.class), eq(1L), eq(21L), anyString()))
+                .thenAnswer(call -> call.getArgument(4).equals(savedHash)
+                        && savedJson.contains("\"requiresHumanReview\":true") ? 1L : 0L);
         when(jdbc.queryForObject(anyString(), eq(Long.class), anyLong(), eq(21L), anyString(), anyString()))
                 .thenAnswer(call -> {
                     savedHash = call.getArgument(4);
@@ -62,7 +66,7 @@ class PolicyRecommendationStoreTest {
     }
 
     @Test
-    void publishingGeneratesTheChecklistForVerifiedAndUnverifiedCandidates() {
+    void publishingGeneratesTheChecklistOnlyForVisibleCandidates() {
         store().getOrGenerate("user", policy, () -> result);
         verify(actions).syncForAssessment(31L);
 
@@ -70,7 +74,7 @@ class PolicyRecommendationStoreTest {
                 List.of(), true, "OpenAI", "model", new JudgeEvaluation(JudgeEvaluation.Verdict.NO, "Unsupported", "judge"), 1);
         profile.setVisaType("J-1");
         store().getOrGenerate("user", policy, () -> rejected);
-        verify(actions, times(2)).syncForAssessment(anyLong());
+        verify(actions, times(1)).syncForAssessment(anyLong());
     }
 
     @Test
@@ -107,13 +111,13 @@ class PolicyRecommendationStoreTest {
     }
 
     @Test
-    void publishedUnverifiedCacheEntryIsReturnedAndUsedAsChatContext() throws Exception {
+    void publishedUnverifiedCacheEntryIsHiddenAndNotUsedAsChatContext() throws Exception {
         store().getOrGenerate("user",policy,()->result);
         savedJson=mapper.writeValueAsString(new ProfileImpactAssessment(ImpactUrgency.LOW,90,"Unchecked old result",
                 List.of(),List.of(),List.of(),true,"OpenAI","model",null,1));
-        assertTrue(store().findCurrent("user",policy).isPresent());
+        assertTrue(store().findCurrent("user",policy).isEmpty());
         boolean[] regenerated={false};
-        assertEquals("Unchecked old result",store().getOrGenerate("user",policy,()->{regenerated[0]=true;return result;}).summary());
+        assertEquals("This assessment is awaiting review.",store().getOrGenerate("user",policy,()->{regenerated[0]=true;return result;}).summary());
         assertFalse(regenerated[0]);
     }
 }

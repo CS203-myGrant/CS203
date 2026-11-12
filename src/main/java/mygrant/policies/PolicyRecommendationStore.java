@@ -12,6 +12,12 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import mygrant.actions.ActionItemService;
 import mygrant.impact.ImpactUrgency;
+import mygrant.impact.AssessmentReviewPolicy;
+import mygrant.impact.ImpactAssessmentProperties;
+import mygrant.impact.ImpactVisibility;
+import mygrant.impact.ImpactAssessment;
+import mygrant.impact.ImpactAssessmentRepository;
+import mygrant.impact.AssessmentReviewStatus;
 import mygrant.impact.AssessmentStatus;
 import mygrant.impact.ProfileImpactAssessment;
 import mygrant.user.UserProfile;
@@ -27,18 +33,31 @@ public class PolicyRecommendationStore {
     private final UserRepository users;
     private final UserProfileRepository profiles;
     private final ActionItemService actionItems;
+    private final AssessmentReviewPolicy reviewPolicy;
+    private final ImpactAssessmentRepository savedAssessments;
     private mygrant.impact.EvaluationStore evaluations;
 
     @org.springframework.beans.factory.annotation.Autowired
     void setEvaluationStore(mygrant.impact.EvaluationStore evaluations) { this.evaluations = evaluations; }
 
+    /** Compatibility constructor for isolated callers using the default threshold. */
     public PolicyRecommendationStore(JdbcTemplate jdbc, ObjectMapper mapper,
             UserRepository users, UserProfileRepository profiles, ActionItemService actionItems) {
+        this(jdbc, mapper, users, profiles, actionItems,
+                new AssessmentReviewPolicy(new ImpactAssessmentProperties(60)), null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public PolicyRecommendationStore(JdbcTemplate jdbc, ObjectMapper mapper,
+            UserRepository users, UserProfileRepository profiles, ActionItemService actionItems,
+            AssessmentReviewPolicy reviewPolicy, ImpactAssessmentRepository savedAssessments) {
         this.jdbc = jdbc;
         this.mapper = mapper;
         this.users = users;
         this.profiles = profiles;
         this.actionItems = actionItems;
+        this.reviewPolicy = reviewPolicy;
+        this.savedAssessments = savedAssessments;
     }
 
     @Transactional
@@ -46,14 +65,21 @@ public class PolicyRecommendationStore {
             Supplier<ProfileImpactAssessment> generate) {
         var user = users.findByEmail(email).orElseThrow(() -> new IllegalStateException("User not found"));
         var profile = profiles.findById(user.getId()).orElseGet(() -> UserProfile.empty(user.getId()));
+        var savedIngestion = savedForProfile(user.getId(), policy.getId(), profile.getVersion());
+        if (savedIngestion.isPresent()) {
+            var saved = savedIngestion.get();
+            return savedAssessments.findVisibleByIdAndUserId(saved.getId(), user.getId())
+                    .map(this::asResponse).orElseGet(() -> saved.getStatus() == AssessmentStatus.UNAVAILABLE
+                            ? unavailableNotice() : awaitingReview(0));
+        }
         String hash = fingerprint(profile, policy);
         // Serialize concurrent clicks, including requests handled by different app instances.
         jdbc.execute("SELECT pg_advisory_xact_lock(" + user.getId().intValue() + "," + policy.getId().intValue() + ")");
         var human = jdbc.query("""
-                SELECT assessment_json, publication_status FROM policy_recommendations
-                WHERE user_id = ? AND policy_id = ? AND input_hash = ? AND reviewed_by_human = TRUE
-                FOR UPDATE
-                """, (rs, row) -> new String[] {rs.getString(1), rs.getString(2)}, user.getId(), policy.getId(), hash);
+                SELECT r.assessment_json, r.publication_status FROM policy_recommendations r
+                WHERE r.user_id = ? AND r.policy_id = ? AND r.input_hash = ?
+                  AND r.reviewed_by_human = TRUE AND r.review_status = 'APPROVED' AND """
+                + ImpactVisibility.VISIBLE + " FOR UPDATE", (rs, row) -> new String[] {rs.getString(1), rs.getString(2)}, user.getId(), policy.getId(), hash);
         if (!human.isEmpty()) {
             if (!"PUBLISHED".equals(human.getFirst()[1])) return awaitingReview(0);
             try { return mapper.readValue(human.getFirst()[0], ProfileImpactAssessment.class); }
@@ -62,10 +88,8 @@ public class PolicyRecommendationStore {
             }
         }
         List<String> saved = jdbc.queryForList("""
-                SELECT assessment_json FROM policy_recommendations
-                WHERE user_id = ? AND policy_id = ? AND input_hash = ?
-                  AND publication_status = 'PUBLISHED'
-                """, String.class, user.getId(), policy.getId(), hash);
+                SELECT r.assessment_json FROM policy_recommendations r
+                WHERE r.user_id = ? AND r.policy_id = ? AND r.input_hash = ? AND """ + ImpactVisibility.VISIBLE, String.class, user.getId(), policy.getId(), hash);
         if (!saved.isEmpty()) {
             try {
                 var assessment = mapper.readValue(saved.getFirst(), ProfileImpactAssessment.class);
@@ -74,6 +98,12 @@ public class PolicyRecommendationStore {
                 // A previously saved response may no longer match the current response format.
             }
         }
+        // A waiting/rejected result must not be regenerated or leaked by the recommendation endpoint.
+        Long hidden = jdbc.queryForObject("""
+                SELECT count(*) FROM policy_recommendations r
+                WHERE r.user_id = ? AND r.policy_id = ? AND r.input_hash = ? AND NOT """
+                + ImpactVisibility.VISIBLE, Long.class, user.getId(), policy.getId(), hash);
+        if (hidden != null && hidden > 0) return awaitingReview(0);
         ProfileImpactAssessment result = generate.get();
         if (result.status() == AssessmentStatus.UNAVAILABLE && result.evaluation() != null
                 && result.evaluation().evaluationId() != null && evaluations != null) {
@@ -91,30 +121,34 @@ public class PolicyRecommendationStore {
                 }
             }
         }
-        // Generation outages with no candidate remain retryable. A successful candidate
-        // remains visible if independent review is unavailable or rejects it; its saved
-        // evaluation and requiresHumanReview flag make that state explicit to the user.
+        result = reviewPolicy.apply(result);
+        // Save review-bound candidates, but return only a safe notice until a reviewer approves them.
         if (result.status() == AssessmentStatus.COMPLETED) {
             Long id = jdbc.queryForObject("""
                     INSERT INTO policy_recommendations
-                        (user_id, policy_id, input_hash, assessment_json, publication_status, severity)
-                    VALUES (?, ?, ?, ?, '%s', '%s')
+                        (user_id, policy_id, input_hash, assessment_json, publication_status, severity,
+                         requires_review, review_status)
+                    VALUES (?, ?, ?, ?, '%s', '%s', %s, '%s')
                     ON CONFLICT (user_id, policy_id, input_hash) DO UPDATE SET
                         assessment_json = EXCLUDED.assessment_json,
                         publication_status = EXCLUDED.publication_status,
                         severity = EXCLUDED.severity,
+                        requires_review = EXCLUDED.requires_review,
+                        review_status = EXCLUDED.review_status,
                         version = policy_recommendations.version + 1,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE policy_recommendations.reviewed_by_human = FALSE
                     RETURNING id
-                    """.formatted("PUBLISHED", severity(result)),
+                    """.formatted(result.requiresHumanReview() ? "PENDING_REVIEW" : "PUBLISHED", severity(result),
+                            result.requiresHumanReview(), result.requiresHumanReview() ? "PENDING_REVIEW" : "NOT_REQUIRED"),
                     Long.class, user.getId(), policy.getId(), hash, json(result));
             if (evaluations != null && result.evaluation() != null && result.evaluation().evaluationId() != null) {
                 evaluations.attachAssessment(result.evaluation().evaluationId(), id, user.getId(), policy.getId());
             }
-            actionItems.syncForAssessment(id);
+            if (!result.requiresHumanReview()) actionItems.syncForAssessment(id);
         }
-        return result;
+        return result.status() == AssessmentStatus.COMPLETED && result.requiresHumanReview()
+                ? awaitingReview(result.attempts()) : result;
     }
 
     /** Queues an uncertain source extraction in the existing CS203-6 per-profile review queue. */
@@ -138,8 +172,8 @@ public class PolicyRecommendationStore {
                         "Extraction was ambiguous; no automatic match was made.", "System"), 0);
         jdbc.update("""
                 INSERT INTO policy_recommendations
-                    (user_id, policy_id, input_hash, assessment_json, publication_status, severity)
-                VALUES (?, ?, ?, ?, 'PENDING_REVIEW', 'MEDIUM')
+                    (user_id, policy_id, input_hash, assessment_json, publication_status, severity, requires_review, review_status)
+                VALUES (?, ?, ?, ?, 'PENDING_REVIEW', 'MEDIUM', TRUE, 'PENDING_REVIEW')
                 ON CONFLICT (user_id, policy_id, input_hash) DO NOTHING
                 """, user.getId(), policy.getId(), hash, json(draft));
     }
@@ -157,17 +191,36 @@ public class PolicyRecommendationStore {
     public java.util.Optional<ProfileImpactAssessment> findCurrent(String email, PolicyDocument policy) {
         var user = users.findByEmail(email).orElseThrow(() -> new IllegalStateException("User not found"));
         var profile = profiles.findById(user.getId()).orElseGet(() -> UserProfile.empty(user.getId()));
+        var savedIngestion = savedForProfile(user.getId(), policy.getId(), profile.getVersion());
+        if (savedIngestion.isPresent()) {
+            return savedAssessments.findVisibleByIdAndUserId(savedIngestion.get().getId(), user.getId()).map(this::asResponse);
+        }
         List<String> saved = jdbc.queryForList("""
-                SELECT assessment_json FROM policy_recommendations
-                WHERE user_id = ? AND policy_id = ? AND input_hash = ?
-                  AND publication_status = 'PUBLISHED'
-                """, String.class, user.getId(), policy.getId(), fingerprint(profile, policy));
+                SELECT r.assessment_json FROM policy_recommendations r
+                WHERE r.user_id = ? AND r.policy_id = ? AND r.input_hash = ? AND """ + ImpactVisibility.VISIBLE, String.class, user.getId(), policy.getId(), fingerprint(profile, policy));
         if (saved.isEmpty()) return java.util.Optional.empty();
         try {
             return java.util.Optional.of(mapper.readValue(saved.getFirst(), ProfileImpactAssessment.class));
         } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
             return java.util.Optional.empty();
         }
+    }
+
+    private java.util.Optional<ImpactAssessment> savedForProfile(Long userId, Long policyId, int version) {
+        return savedAssessments == null ? java.util.Optional.empty()
+                : savedAssessments.findByUserIdAndPolicyIdAndProfileVersion(userId, policyId, version);
+    }
+
+    private ProfileImpactAssessment asResponse(ImpactAssessment saved) {
+        return new ProfileImpactAssessment(saved.getUrgency(), saved.getConfidence(), saved.getSummary(),
+                saved.getReasons(), saved.getRecommendedActions(), List.of(),
+                saved.isRequiresReview() && saved.getReviewStatus() != AssessmentReviewStatus.APPROVED,
+                saved.getProvider(), saved.getModel(), null, 0);
+    }
+
+    private ProfileImpactAssessment unavailableNotice() {
+        return new ProfileImpactAssessment(null, 0, "Urgency assessment is temporarily unavailable.",
+                List.of(), List.of(), List.of(), true, "Assessment store", "", null, 0);
     }
 
     private String json(Object value) {

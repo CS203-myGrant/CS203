@@ -21,13 +21,15 @@ public class OutputPublicationService {
     private final ObjectMapper mapper;
     private final ImpactJudgeService judge;
     private final ActionItemService actions;
+    private final AssessmentReviewPolicy reviewPolicy;
 
     public OutputPublicationService(JdbcTemplate jdbc, ObjectMapper mapper,
-            ImpactJudgeService judge, ActionItemService actions) {
+            ImpactJudgeService judge, ActionItemService actions, AssessmentReviewPolicy reviewPolicy) {
         this.jdbc = jdbc;
         this.mapper = mapper;
         this.judge = judge;
         this.actions = actions;
+        this.reviewPolicy = reviewPolicy;
     }
 
     public record Result(UUID outputId, JudgeEvaluation evaluation, String publicationStatus,
@@ -98,22 +100,22 @@ public class OutputPublicationService {
         boolean human = humanReviewed(output.reviewId());
         if (human) return new Result(output.id(), evaluation, status(output.reviewId()), true, output.reviewId());
         boolean passed = evaluation.verdict() == JudgeEvaluation.Verdict.YES;
-        // A successful assessment remains visible if its judge cannot verify it.
-        // Policy Q&A responses remain fail-closed.
-        String state = "ASSESSMENT".equals(output.type()) || passed ? "PUBLISHED" : "PENDING_REVIEW";
+        String state = passed ? "PUBLISHED" : "PENDING_REVIEW";
         Long reviewId = output.reviewId();
         if ("ASSESSMENT".equals(output.type())) {
             if (reviewId == null) throw new IllegalStateException("Assessment is not attached to its review state");
             var candidate = read(output.candidate(), ProfileImpactAssessment.class);
-            var assessed = new ProfileImpactAssessment(candidate.urgency(), candidate.confidence(), candidate.summary(),
+            var assessed = reviewPolicy.apply(new ProfileImpactAssessment(candidate.urgency(), candidate.confidence(), candidate.summary(),
                     candidate.reasons(), candidate.recommendedActions(), candidate.missingInformation(),
                     candidate.requiresHumanReview() || !passed, candidate.provider(), candidate.model(),
-                    evaluation, candidate.attempts());
+                    evaluation, candidate.attempts()));
+            state = assessed.requiresHumanReview() ? "PENDING_REVIEW" : "PUBLISHED";
             jdbc.update("""
                     UPDATE policy_recommendations SET assessment_json = ?, publication_status = ?,
-                        version = version + 1, updated_at = CURRENT_TIMESTAMP
+                        requires_review = ?, review_status = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP
                     WHERE id = ? AND reviewed_by_human = FALSE
-                    """, json(assessed), state, reviewId);
+                    """, json(assessed), state, assessed.requiresHumanReview(),
+                    assessed.requiresHumanReview() ? "PENDING_REVIEW" : "NOT_REQUIRED", reviewId);
             actions.syncForAssessment(reviewId);
         } else {
             if (!passed && reviewId == null) {

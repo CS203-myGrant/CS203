@@ -57,12 +57,12 @@ class SeverityContractIntegrationTest extends PgvectorIntegrationTestBase {
                 List.of(), List.of(), false, "Test", "test", null, 1);
         var parsed = mapper.readValue(mapper.writeValueAsString(result), ProfileImpactAssessment.class);
         assertThat(parsed).isEqualTo(result);
+        recommendations.getOrGenerate(owner.getEmail(), policy, () -> result);
         var saved = assessments.saveAndFlush(new ImpactAssessment(owner.getId(), policy.getId(), 1,
                 AssessmentStatus.COMPLETED, urgency, 90, result.summary(), result.reasons(),
                 result.recommendedActions(), false, AssessmentReviewStatus.NOT_REQUIRED, "Test", "test"));
         entityManager.clear();
         assertThat(assessments.findById(saved.getId()).orElseThrow().getUrgency()).isEqualTo(urgency);
-        recommendations.getOrGenerate(owner.getEmail(), policy, () -> result);
         assertThat(jdbc.queryForObject("SELECT severity FROM policy_recommendations WHERE user_id = ?",
                 String.class, owner.getId())).isEqualTo(urgency.name());
         mvc.perform(post("/api/v1/policies/" + policy.getId() + "/recommendation")

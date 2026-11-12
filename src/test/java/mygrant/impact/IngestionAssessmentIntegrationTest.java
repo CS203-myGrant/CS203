@@ -63,8 +63,11 @@ import mygrant.user.UserRepository;
         "mygrant.impact.review-confidence-threshold=75",
         "jwt.secret=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
 })
+@org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 @Import(IngestionAssessmentIntegrationTest.ProviderConfiguration.class)
 class IngestionAssessmentIntegrationTest extends PgvectorIntegrationTestBase {
+    @Autowired org.springframework.test.web.servlet.MockMvc mvc;
+    @Autowired mygrant.auth.JwtService jwt;
     @Autowired PolicyIngestionService ingestion;
     @Autowired FederalRegisterIngestionService federalRegister;
     @Autowired IngestionAssessmentService worker;
@@ -148,6 +151,16 @@ class IngestionAssessmentIntegrationTest extends PgvectorIntegrationTestBase {
         var savedLate = results.findByUserIdAndPolicyIdAndProfileVersion(late.getUserId(), policyId, 1).orElseThrow();
         assertThat(savedEarly.getSummary()).isEqualTo("Earlier expiry");
         assertThat(savedLate.getSummary()).isEqualTo("Later expiry");
+        String earlyToken = "Bearer " + jwt.generateAccessToken(users.findById(early.getUserId()).orElseThrow());
+        String lateToken = "Bearer " + jwt.generateAccessToken(users.findById(late.getUserId()).orElseThrow());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/v1/impact-assessments/" + savedEarly.getId())
+                        .header("Authorization", earlyToken))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.summary").value("Earlier expiry"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/v1/impact-assessments/" + savedEarly.getId())
+                        .header("Authorization", lateToken))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isNotFound());
+
         assertThat(savedEarly.getProvider()).isEqualTo("OpenAI");
         assertThat(savedEarly.getModel()).isEqualTo("test-model");
         assertThat(results.findByUserIdAndPolicyIdAndProfileVersion(nonMatching.getUserId(), policyId, 1)).isEmpty();
@@ -210,7 +223,7 @@ class IngestionAssessmentIntegrationTest extends PgvectorIntegrationTestBase {
 
     @ParameterizedTest
     @CsvSource({"74,false,true", "75,false,false", "76,false,false", "95,true,true"})
-    void reviewThresholdAndModelFlagGateVisibility(int confidence, boolean modelReview, boolean expectedReview) {
+    void reviewThresholdAndModelFlagGateVisibility(int confidence, boolean modelReview, boolean expectedReview) throws Exception {
         var owner = profile("F-1", "2028-12-01", 1);
         var stranger = profile("J-1", "2028-12-01", 1);
         when(generator.generateJson(anyString(), anyString(), any(), anyString()))
@@ -222,13 +235,33 @@ class IngestionAssessmentIntegrationTest extends PgvectorIntegrationTestBase {
         assertThat(saved.getReviewStatus()).isEqualTo(expectedReview
                 ? AssessmentReviewStatus.PENDING_REVIEW : AssessmentReviewStatus.NOT_REQUIRED);
         assertThat(results.findVisibleByUserId(owner.getUserId())).hasSize(expectedReview ? 0 : 1);
+        String listToken = "Bearer " + jwt.generateAccessToken(users.findById(owner.getUserId()).orElseThrow());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/v1/impact-assessments")
+                        .header("Authorization", listToken))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.totalElements").value(expectedReview ? 0 : 1));
+
         assertThat(results.findVisibleByUserId(stranger.getUserId())).isEmpty();
+        String token = "Bearer " + jwt.generateAccessToken(users.findById(owner.getUserId()).orElseThrow());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/v1/impact-assessments/" + saved.getId())
+                        .header("Authorization", token))
+                .andExpect(expectedReview ? org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isNotFound()
+                        : org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk());
+
         if (expectedReview) {
             jdbc.update("UPDATE impact_assessments SET review_status = 'APPROVED' WHERE id = ?", saved.getId());
             assertThat(results.findVisibleByUserId(owner.getUserId())).extracting(ImpactAssessment::getId)
                     .containsExactly(saved.getId());
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/v1/impact-assessments/" + saved.getId())
+                            .header("Authorization", token))
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk());
+
             jdbc.update("UPDATE impact_assessments SET review_status = 'REJECTED' WHERE id = ?", saved.getId());
             assertThat(results.findVisibleByUserId(owner.getUserId())).isEmpty();
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/v1/impact-assessments/" + saved.getId())
+                            .header("Authorization", token))
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isNotFound());
+
         }
     }
 

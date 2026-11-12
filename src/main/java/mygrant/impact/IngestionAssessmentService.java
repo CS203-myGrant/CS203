@@ -5,7 +5,6 @@ import java.util.Locale;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -21,25 +20,24 @@ import mygrant.user.UserProfileRepository;
 
 /** Fan out per captured profile; no transaction or DB connection is held during provider calls. */
 @Service
-@EnableConfigurationProperties(ImpactAssessmentProperties.class)
 public class IngestionAssessmentService {
     private static final Logger log = LoggerFactory.getLogger(IngestionAssessmentService.class);
     private final PolicyDocumentRepository policies;
     private final UserProfileRepository profiles;
     private final ImpactAssessmentRepository results;
     private final ProfileImpactAssessmentService generator;
-    private final ImpactAssessmentProperties properties;
+    private final AssessmentReviewPolicy reviewPolicy;
     private final TransactionTemplate read;
     private final TransactionTemplate write;
 
     public IngestionAssessmentService(PolicyDocumentRepository policies, UserProfileRepository profiles,
             ImpactAssessmentRepository results, ProfileImpactAssessmentService generator,
-            ImpactAssessmentProperties properties, PlatformTransactionManager transactions) {
+            AssessmentReviewPolicy reviewPolicy, PlatformTransactionManager transactions) {
         this.policies = policies;
         this.profiles = profiles;
         this.results = results;
         this.generator = generator;
-        this.properties = properties;
+        this.reviewPolicy = reviewPolicy;
         this.read = new TransactionTemplate(transactions);
         read.setReadOnly(true);
         read.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -80,8 +78,7 @@ public class IngestionAssessmentService {
             result = generator.unavailable("Urgency assessment is temporarily unavailable.");
         }
         boolean unavailable = result.status() == AssessmentStatus.UNAVAILABLE;
-        boolean requiresReview = result.requiresHumanReview()
-                || (!unavailable && result.confidence() < properties.reviewConfidenceThreshold());
+        boolean requiresReview = reviewPolicy.requiresReview(result);
         ImpactAssessment saved = new ImpactAssessment(profile.getUserId(), policyId, profile.getVersion(),
                 unavailable ? AssessmentStatus.UNAVAILABLE : AssessmentStatus.COMPLETED,
                 unavailable ? null : result.urgency(), unavailable ? null : result.confidence(),

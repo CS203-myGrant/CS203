@@ -36,10 +36,15 @@ override that ordering. Filtering and ownership apply before pagination and coun
 For example: `GET /api/v1/impact-assessments?urgency=HIGH&page=0&size=10`.
 Reading either endpoint never triggers generation.
 
-These endpoints expose saved records and their recommended actions. They do not
-add a new approval API or connect ingestion records to the existing dashboard's
-checklist/archive machinery; that integration and CS203-42's review workflow remain
-follow-up tasks. Reviewer roles do not bypass these owner-facing gates.
+These endpoints expose saved records and their recommended actions. The dashboard
+reads these saved records directly, preserving the API ordering and
+using its urgency filter and pagination. Confidence labels use HIGH at 80% or above,
+MEDIUM at 60% or above, and LOW otherwise, matching the existing feed convention.
+Card navigation reads the saved-assessment detail endpoint without generating AI
+output. Refresh fetches the latest available page after asynchronous processing.
+These views do not add approval actions or attach saved records to the legacy
+checklist/archive machinery; those remain separate tasks. Reviewer roles do not
+bypass these owner-facing gates.
 
 ## Existing recommendation/feed/checklist paths
 
