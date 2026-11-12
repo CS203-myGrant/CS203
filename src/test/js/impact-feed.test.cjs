@@ -4,13 +4,13 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 
 const html=fs.readFileSync('app/mygrant-prototype.html','utf8');
-const source=html.slice(html.indexOf('async function loadImpacts(){'),
+const source=html.slice(html.indexOf('async function loadImpacts('),
   html.indexOf("window.addEventListener('beforeunload'"));
 const item=(id,assessmentId,title,status='PENDING')=>({id,assessmentId,policyId:1,
   policyTitle:`Policy ${assessmentId}`,title,description:null,priority:'HIGH',status,
   deadline:'2026-11-05',urgent:false,overdue:false,completedAt:null,dismissedAt:null,text:title});
-const impact=(id,severity,summary)=>({id,severity,summary,policyTitle:`Policy ${id}`,
-  confidence:85,confidenceLabel:'HIGH',createdAt:'2026-10-30T00:00:00Z',
+const impact=(id,severity,summary)=>({id,urgency:severity,summary,policyTitle:`Policy ${id}`,
+  status:'COMPLETED',reviewStatus:'NOT_REQUIRED',requiresReview:false,confidence:85,confidenceLabel:'HIGH',createdAt:'2026-10-30T00:00:00Z',
   actionItems:[item(id*10,id,'Check the official source')],citations:[],archived:false,
   reviewedByHuman:false});
 function page(fetch){
@@ -18,36 +18,115 @@ function page(fetch){
     policyRecords:[{visaType:'F-1'}],impacts:null,impactsArchived:false,
     impactsPage:0,impactsTotalPages:0};
   const context=vm.createContext({state,apiFetch:fetch,parseApiResponse:async x=>x,
-    render(){},showToast(){},goto(view){state.view=view;},markReportUpdatesSeen(){},
+    render(){},showToast(){},goto(view){state.view=view;},
     escapeHtml:x=>String(x).replaceAll('<','&lt;'),
     escapeAttribute:x=>String(x).replaceAll('"','&quot;'),
     formatTimestamp:x=>x,formatDate:x=>x});
   vm.runInContext(source,context);
   return context;
 }
-test('loads current published feed in severity order and shows critical warning first',async()=>{
+test('loads saved feed in API order and renders card metadata and navigation',async()=>{
   const calls=[];
-  const view=page(async path=>{calls.push(path);return {content:[
+  const view=page(async(path,options)=>{calls.push([path,options]);return {content:[
     impact(2,'HIGH','Act now'),impact(1,'LOW','Reminder')],totalPages:1};});
   await view.loadImpacts();
-  assert.match(calls[0],/sort=severity,desc&archived=false/);
+  assert.equal(calls.length,1);
+  assert.equal(calls[0][0],'/api/v1/impact-assessments?page=0&size=20');
+  assert.equal(calls[0][1],undefined);
   const rendered=view.renderImpactFeed();
-  assert.ok(rendered.indexOf('HIGH')<rendered.indexOf('Reminder'));
-  assert.match(rendered,/View details and checklist/);
-  assert.doesNotMatch(rendered,/Check the official source/);
+  assert.ok(rendered.indexOf('Act now')<rendered.indexOf('Reminder'));
+  assert.match(rendered,/Policy 2/);
+  assert.match(rendered,/HIGH confidence/);
+  assert.match(rendered,/2026-10-30T00:00:00Z/);
+  assert.match(rendered,/impact-critical/);
+  assert.match(rendered,/openSavedImpact\(2\)/);
+  assert.doesNotMatch(rendered,/Archive|Check the official source|See how this impacts me/);
 });
-test('archives through PATCH and switches to the archived list',async()=>{
+test('urgency filters reset pagination and next and previous retain the filter',async()=>{
   const calls=[];
-  const view=page(async(path,options)=>{
-    calls.push([path,options]);
-    return options?.method==='PATCH'?{...impact(2,'HIGH','Act now'),archived:true}
-      :{content:[],totalPages:0};
-  });
-  await view.setImpactArchived(2,true);
-  assert.equal(calls[0][0],'/api/v1/impacts/2');
-  assert.equal(calls[0][1].method,'PATCH');
-  assert.equal(JSON.parse(calls[0][1].body).archived,true);
-  assert.match(calls[1][0],/archived=true/);
+  const view=page(async path=>{calls.push(path);return {content:[impact(1,'MEDIUM','Summary')],totalPages:3};});
+  view.state.impactsPage=2;
+  await view.showImpactUrgency('MEDIUM');
+  assert.equal(calls[0],'/api/v1/impact-assessments?page=0&size=20&urgency=MEDIUM');
+  assert.equal(view.state.impactsPage,0);
+  assert.match(view.renderImpactFeed(),/value="MEDIUM" selected/);
+  await view.loadMoreImpacts();
+  assert.equal(calls[1],'/api/v1/impact-assessments?page=1&size=20&urgency=MEDIUM');
+  assert.equal(view.state.impacts.length,1,'pages replace rather than append records');
+  assert.match(view.renderImpactFeed(),/Page 2 of 3/);
+  assert.match(view.renderImpactFeed(),/onclick="loadImpacts\(0\)"/);
+  await view.loadImpacts(0);
+  await view.showImpactUrgency('');
+  assert.equal(calls.at(-1),'/api/v1/impact-assessments?page=0&size=20');
+});
+test('saved card opens its own detail endpoint without generation or legacy checklist operations',async()=>{
+  const calls=[];
+  const view=page(async(path,options)=>{calls.push([path,options]);return {
+    ...impact(7,'MEDIUM','Saved summary'),reasons:['Dates match'],recommendedActions:['Read the rule'],
+    sourceUrl:'https://example.org/rule'};});
+  await view.openSavedImpact(7);
+  assert.equal(view.state.view,'impactDetail');
+  assert.deepEqual(calls,[['/api/v1/impact-assessments/7',undefined]]);
+  const rendered=view.renderImpactDetail();
+  assert.match(rendered,/Saved summary|Dates match|Read the rule/);
+  assert.match(rendered,/Original policy source/);
+  assert.doesNotMatch(rendered,/setImpactArchived|setActionStatus/);
+});
+test('confidence labels and canonical urgency colours are consistent',()=>{
+  const view=page(async()=>({}));
+  view.state.impacts=[impact(1,'HIGH','A'),impact(2,'MEDIUM','B'),impact(3,'LOW','C'),impact(4,'NOT_APPLICABLE','D')];
+  view.state.impacts[1].confidence=60;
+  view.state.impacts[2].confidence=59;
+  const rendered=view.renderImpactFeed();
+  for(const urgency of ['HIGH','MEDIUM','LOW','NOT_APPLICABLE']) assert.match(rendered,new RegExp(urgency));
+  for(const cls of ['impact-critical','impact-medium','impact-low']) assert.ok(rendered.includes(cls));
+  assert.match(rendered,/HIGH confidence/);
+  assert.match(rendered,/MEDIUM confidence/);
+  assert.match(rendered,/LOW confidence/);
+});
+test('late filter responses cannot replace the selected filter results',async()=>{
+  const pending=[];
+  const view=page(()=>new Promise(resolve=>pending.push(resolve)));
+  const first=view.showImpactUrgency('HIGH');
+  const second=view.showImpactUrgency('LOW');
+  pending[1]({content:[impact(2,'LOW','Latest')],totalPages:1});
+  await second;
+  pending[0]({content:[impact(1,'HIGH','Stale')],totalPages:1});
+  await first;
+  assert.equal(view.state.impacts[0].summary,'Latest');
+});
+test('responses arriving after an account change do not populate the next account',async()=>{
+  let resolve;
+  const view=page(()=>new Promise(done=>resolve=done));
+  const loading=view.loadImpacts();
+  view.state={view:'dashboard',user:{email:'another@example.org'},impacts:null};
+  resolve({content:[impact(1,'HIGH','Private')],totalPages:1});
+  await loading;
+  assert.equal(view.state.impacts,null);
+});
+test('loading, filtered empty and failed reads are represented without generation links',async()=>{
+  const view=page(async()=>{throw new Error('Service unavailable');});
+  view.state.impactsLoading=true;
+  assert.match(view.renderImpactFeed(),/Loading your assessments/);
+  await view.loadImpacts();
+  assert.match(view.renderImpactFeed(),/Service unavailable/);
+  assert.match(view.renderImpactFeed(),/Try again/);
+  view.state.impactsError=null;
+  view.state.impactsUrgency='HIGH';
+  assert.match(view.renderImpactFeed(),/No assessments match this urgency filter/);
+  view.state.impactsUrgency='';
+  assert.match(view.renderImpactFeed(),/No assessments are available yet/);
+  assert.doesNotMatch(view.renderImpactFeed(),/create one|See how this impacts me/);
+});
+test('the live dashboard renders the saved feed without rebuilding cards in policy order',()=>{
+  const view=page(async()=>({}));
+  vm.runInContext(html.slice(html.indexOf('function renderLiveDashboard(){'),html.indexOf('async function loadForecastAlerts(){')),view);
+  view.state.impacts=[impact(2,'HIGH','API first'),impact(1,'LOW','API second')];
+  Object.assign(view,{window:{},permissionPromptedThisSession:false,renderProcessingTimeline:()=>'',renderActionChecklist:()=>''});
+  const rendered=view.renderLiveDashboard();
+  assert.ok(rendered.indexOf('API first')<rendered.indexOf('API second'));
+  assert.match(rendered,/Your impact assessments/);
+  assert.doesNotMatch(rendered,/openPolicyDetail|setImpactArchived/);
 });
 test('detail shows human correction, citation, disclaimer and escaped text',()=>{
   const view=page(async()=>({}));
@@ -69,108 +148,16 @@ test('empty state explains incomplete profile',()=>{
   assert.match(view.renderImpactFeed(),/Complete your profile/);
 });
 
-test('report posts a category, details and the viewed version, then lists it and keeps the form open',async()=>{
-  const calls=[];
-  const view=page(async(path,options)=>{calls.push([path,options]);
-    return {id:3,assessmentId:5,assessmentVersion:2,category:'WRONG_SEVERITY',details:'Not urgent for me',status:'OPEN',createdAt:'2026-11-11T00:00:00Z'};});
-  view.state.view='impactDetail';
-  view.state.impactDetail={...impact(5,'HIGH','Urgent'),version:2};
-  view.state.impactRecommendationReport={category:'',text:'Not urgent for me',sending:false,history:[],justSent:false,error:null};
-
-  await view.reportImpactRecommendation({preventDefault(){}});
-  assert.equal(calls.length,0);
-  assert.match(view.state.impactRecommendationReport.error,/Choose what kind of problem/);
-
-  view.state.impactRecommendationReport.category='WRONG_SEVERITY';
-  await view.reportImpactRecommendation({preventDefault(){}});
-  assert.equal(calls.length,1);
-  assert.equal(calls[0][0],'/api/v1/impacts/5/reports');
-  assert.equal(calls[0][1].method,'POST');
-  assert.deepEqual(JSON.parse(calls[0][1].body),{category:'WRONG_SEVERITY',details:'Not urgent for me',version:2});
-  assert.equal(view.state.impactRecommendationReport.history[0].status,'OPEN');
-  assert.doesNotMatch(calls.map(call=>call[0]).join(' '),/feedback/);
-
-  const rendered=view.renderImpactRecommendationReport(view.state.impactDetail);
-  assert.match(rendered,/Your reports on this assessment/);
-  assert.match(rendered,/The severity is wrong/);
-  assert.match(rendered,/Waiting for review/);
-  assert.match(rendered,/version 2/);
-  // Another problem can still be reported.
-  assert.match(rendered,/<form/);
-  assert.match(rendered,/Send another report/);
+test('all inline scripts compile as browser JavaScript',()=>{
+  for(const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) new vm.Script(match[1]);
 });
-
-test('report history shows whether each report was corrected, dismissed or is still waiting',async()=>{
-  const view=page(async path=>{
-    if(path==='/api/v1/impacts/5/reports') return [
-      {id:3,assessmentId:5,assessmentVersion:2,category:'UNCLEAR',details:'Which dates?',status:'OPEN',createdAt:'2026-11-11T00:00:00Z'},
-      {id:2,assessmentId:5,assessmentVersion:1,category:'WRONG_SEVERITY',details:'Not urgent',status:'RESOLVED',createdAt:'2026-11-09T00:00:00Z',resolvedAt:'2026-11-10T00:00:00Z'},
-      {id:1,assessmentId:5,assessmentVersion:1,category:'OTHER',details:'Typo',status:'DISMISSED',createdAt:'2026-11-08T00:00:00Z',resolvedAt:'2026-11-08T12:00:00Z'}];
-    if(path==='/api/v1/impacts/5') return {...impact(5,'LOW','Reminder'),policyId:1,version:2};
-    return [];
-  });
-  view.loadPolicyChatHistory=async()=>{};
-  await view.openImpact(5);
-  assert.equal(view.state.impactRecommendationReport.history.length,3);
-  const rendered=view.renderImpactRecommendationReport(view.state.impactDetail);
-  assert.match(rendered,/Waiting for review/);
-  assert.match(rendered,/Corrected 2026-11-10/);
-  assert.match(rendered,/Reviewed — no change/);
-  assert.match(rendered,/found it correct as published/);
-  assert.match(rendered,/<form/);
-});
-
-test('form is replaced by a notice once five reports are waiting',()=>{
-  const view=page(async()=>[]);
-  const open=n=>({id:n,assessmentId:5,assessmentVersion:1,category:'OTHER',details:`P${n}`,status:'OPEN',createdAt:'2026-11-11T00:00:00Z'});
-  view.state.impactRecommendationReport={category:'',text:'',sending:false,history:[1,2,3,4,5].map(open),justSent:false,error:null};
-  const rendered=view.renderImpactRecommendationReport({...impact(5,'LOW','Reminder'),version:1});
-  assert.doesNotMatch(rendered,/<form/);
-  assert.match(rendered,/5 reports waiting for review/);
-});
-
-test('a closed report shows the reviewer note to the applicant',()=>{
-  const view=page(async()=>[]);
-  view.state.impactRecommendationReport={category:'',text:'',sending:false,justSent:false,error:null,history:[
-    {id:1,assessmentId:5,assessmentVersion:1,category:'WRONG_SEVERITY',details:'Not urgent',status:'RESOLVED',
-      createdAt:'2026-11-09',resolvedAt:'2026-11-10',resolutionNote:'Lowered to LOW: your program ends after the rule.'}]};
-  const rendered=view.renderImpactRecommendationReport({...impact(5,'LOW','Reminder'),version:2});
-  assert.match(rendered,/Reviewer's note/);
-  assert.match(rendered,/Lowered to LOW: your program ends after the rule\./);
-});
-
-test('answered reports can be archived and restored; open ones cannot',async()=>{
-  const calls=[];
-  const view=page(async(path,options)=>{calls.push([path,options]);
-    const body=JSON.parse(options.body);
-    return {id:2,assessmentId:5,assessmentVersion:1,category:'OTHER',details:'Typo',status:'DISMISSED',
-      createdAt:'2026-11-08',resolvedAt:'2026-11-09',archivedAt:body.archived?'2026-11-11':null};});
-  view.loadReportUpdates=async()=>{};
-  view.state.view='impactDetail';
-  view.state.impactDetail={...impact(5,'LOW','Reminder'),version:1};
-  view.state.impactRecommendationReport={category:'',text:'',sending:false,justSent:false,error:null,history:[
-    {id:3,assessmentId:5,assessmentVersion:1,category:'UNCLEAR',details:'Open one',status:'OPEN',createdAt:'2026-11-11'},
-    {id:2,assessmentId:5,assessmentVersion:1,category:'OTHER',details:'Typo',status:'DISMISSED',createdAt:'2026-11-08',resolvedAt:'2026-11-09'}]};
-
-  let rendered=view.renderImpactRecommendationReport(view.state.impactDetail);
-  assert.equal((rendered.match(/archiveImpactReport\(/g) || []).length,1,'only the answered report offers Archive');
-
-  await view.archiveImpactReport(2,true);
-  assert.equal(calls[0][0],'/api/v1/impacts/5/reports/2');
-  assert.equal(calls[0][1].method,'PATCH');
-  assert.deepEqual(JSON.parse(calls[0][1].body),{archived:true});
-  rendered=view.renderImpactRecommendationReport(view.state.impactDetail);
-  assert.match(rendered,/Show archived reports \(1\)/);
-  assert.doesNotMatch(rendered,/Typo/);
-
-  view.toggleArchivedImpactReports();
-  rendered=view.renderImpactRecommendationReport(view.state.impactDetail);
-  assert.match(rendered,/Typo/);
-  assert.match(rendered,/Restore/);
-
-  await view.archiveImpactReport(2,false);
-  assert.deepEqual(JSON.parse(calls[1][1].body),{archived:false});
-  assert.doesNotMatch(view.renderImpactRecommendationReport(view.state.impactDetail),/Show archived/);
+test('card metadata and summaries are escaped',()=>{
+  const view=page(async()=>({}));
+  view.state.impacts=[{...impact(1,'HIGH','<script>private</script>'),policyTitle:'<img src=x>'}];
+  const rendered=view.renderImpactFeed();
+  assert.match(rendered,/&lt;script>/);
+  assert.match(rendered,/&lt;img src=x>/);
+  assert.doesNotMatch(rendered,/<script>|<img src=x>/);
 });
 
 // CS203-175: a banner when the sources behind the assessments have stopped updating.

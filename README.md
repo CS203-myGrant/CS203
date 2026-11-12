@@ -2181,3 +2181,5 @@ Assessment code, prompts, storage and APIs use `HIGH / MEDIUM / LOW / NOT_APPLIC
 See [definitions, availability and migration](docs/impact-severity.md) and
 [aligned story descriptions](docs/impact-severity-stories.md). `UNAVAILABLE` is a
 processing status with null urgency, not a severity.
+
+Assessment review and visibility: see [shared review rules, owner-scoped reads and migration](docs/assessment-review-visibility.md).

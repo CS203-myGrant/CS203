@@ -1,6 +1,6 @@
 # Impact assessment storage
 
-V43 introduces `impact_assessments` and removes the three V7 impact columns from
+V46 introduces `impact_assessments` and removes the three V7 impact columns from
 `notifications`. Each row belongs to a user, policy and captured profile version;
 the database enforces uniqueness on that combination and cascades deletion when
 the user or policy is deleted.
@@ -56,7 +56,7 @@ Background assessment therefore publishes into that table through
    saves the processing row and stores the result (published or held). An existing
    row for the fingerprint is never replaced by background work, and a
    human-reviewed row is never replaced by anything automated.
-4. V53 adds `impact_assessments.recommendation_id`, the feed row the result was
+4. V54 adds `impact_assessments.recommendation_id`, the feed row the result was
    published as. When a reviewer approves a held result, the processing row's
    `review_status` becomes `APPROVED`.
 
@@ -70,8 +70,12 @@ fingerprint serialises the policy's country and category sets, which used to be
 silently invalidated the saved result of every multi-country policy. They are now
 sorted.
 
-`ImpactAssessmentRepository.findVisibleByUserId` excludes pending, rejected and
-unavailable results; it still has no callers, since users read the feed table.
+Saved owner-scoped reads at `/api/v1/impact-assessments` exclude pending, rejected
+and unavailable records. The dashboard and policy detail read these saved records
+without generation. Legacy reports, review decisions, action items and severity
+emails retain their recommendation IDs. V56 synchronizes linked saved records when
+the recommendation is corrected, approved, rejected or re-evaluated, so both views
+show the same content and visibility. See [review visibility](assessment-review-visibility.md).
 
 Provider failures persist as `UNAVAILABLE` without interrupting other profiles.
 Reprocessing skips existing rows, including unavailable results; retry execution

@@ -288,10 +288,13 @@ class ImpactFeedIntegrationTest extends mygrant.support.PgvectorIntegrationTestB
         insert(owner, visaPolicy, "HIGH", "PUBLISHED", approved(ImpactUrgency.HIGH, "H-1B impact"));
         // A newer draft for the same policy must not replace the current published assessment.
         insert(owner, visaPolicy, "HIGH", "PENDING_REVIEW", pending(ImpactUrgency.HIGH, "Unreviewed draft"));
-        insert(owner, nationalityPolicy, "MEDIUM", "PUBLISHED", new ProfileImpactAssessment(
+        long nationalityAssessment = insert(owner, nationalityPolicy, "MEDIUM", "PUBLISHED", new ProfileImpactAssessment(
                 ImpactUrgency.MEDIUM, 60, "Nationality impact", List.of("Country rule applies"),
                 List.of("Check the source"), List.of("countryOfCitizenship"), true, "OpenAI", "test",
                 new JudgeEvaluation(JudgeEvaluation.Verdict.YES, "Supported with uncertainty", "test"), 1));
+        jdbc.update("UPDATE policy_recommendations SET requires_review = TRUE, review_status = 'APPROVED', reviewed_by_human = TRUE WHERE id = ?",
+                nationalityAssessment);
+
 
         mvc.perform(get("/api/v1/impacts/consolidated").header("Authorization", token(owner)))
                 .andExpect(status().isOk())

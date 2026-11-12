@@ -76,6 +76,8 @@ class PolicyRecommendationStoreTest {
             when(rs.getString("publication_status")).thenReturn(row.status);
             when(rs.getString(2)).thenReturn(row.status);
             when(rs.getBoolean("reviewed_by_human")).thenReturn(row.human);
+            when(rs.getBoolean("eligible")).thenReturn("PUBLISHED".equals(row.status)
+                    && (row.human || !mapper.readTree(row.json).path("requiresHumanReview").asBoolean(true)));
             return List.of(((RowMapper<Object>) call.getArgument(1)).mapRow(rs, 0));
         });
         // INSERT ... ON CONFLICT ... RETURNING id: empty when the existing row is kept.
@@ -94,7 +96,9 @@ class PolicyRecommendationStoreTest {
         when(jdbc.queryForList(contains("publication_status = 'PUBLISHED'"), eq(String.class), any(), any(), any()))
                 .thenAnswer(call -> {
                     Row row = table.get(key(call.getArgument(2), call.getArgument(3), call.getArgument(4)));
-                    return row != null && "PUBLISHED".equals(row.status) ? List.of(row.json) : List.of();
+                    return row != null && "PUBLISHED".equals(row.status)
+                            && (row.human || !mapper.readTree(row.json).path("requiresHumanReview").asBoolean(true))
+                            ? List.of(row.json) : List.of();
                 });
     }
 
@@ -230,14 +234,14 @@ class PolicyRecommendationStoreTest {
     }
 
     @Test
-    void publishedUnverifiedCacheEntryIsReturnedAndUsedAsChatContext() throws Exception {
+    void unreviewedCacheEntryIsWithheldFromOwnerAndChatContext() throws Exception {
         store().getOrGenerate("user",policy,()->result);
-        // Rows published before the shared review policy existed stay as they are.
+        // A historical publication flag cannot bypass an outstanding model review request.
         table.values().iterator().next().json = mapper.writeValueAsString(new ProfileImpactAssessment(ImpactUrgency.LOW,
                 90,"Unchecked old result",List.of(),List.of(),List.of(),true,"OpenAI","model",null,1));
-        assertTrue(store().findCurrent("user",policy).isPresent());
+        assertTrue(store().findCurrent("user",policy).isEmpty());
         boolean[] regenerated={false};
-        assertEquals("Unchecked old result",store().getOrGenerate("user",policy,()->{regenerated[0]=true;return result;}).summary());
+        assertEquals("This assessment is awaiting review.",store().getOrGenerate("user",policy,()->{regenerated[0]=true;return result;}).summary());
         assertFalse(regenerated[0]);
     }
 
