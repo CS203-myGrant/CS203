@@ -70,8 +70,50 @@ class SourceFreshnessServiceTest {
     }
 
     @Test
-    void theGraceFactorCannotBeBelowOne() {
+    void theGraceFactorCannotBeBelowOneOrInfinite() {
         assertThatThrownBy(() -> new SourceFreshnessService(repository, 0.5, Clock.systemUTC()))
                 .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new SourceFreshnessService(repository, Double.POSITIVE_INFINITY, Clock.systemUTC()))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    private static PolicySource at(String name, PolicySourceType type, String url, Duration sinceSuccess) {
+        PolicySource source = new PolicySource(name, type, url, 3600);
+        if (sinceSuccess != null) source.recordSuccess(NOW.minus(sinceSuccess));
+        return source;
+    }
+
+    /** One assessment is judged only by the sources whose host matches a URL it cites. */
+    @Test
+    void anAssessmentIsJudgedByTheSourcesItCites() {
+        when(repository.findAllByEnabledTrueOrderByIdAsc()).thenReturn(List.of(
+                at("register", PolicySourceType.FEDERAL_REGISTER,
+                        "https://api.federalregister.gov/v1/documents.json?per_page=20", Duration.ofHours(1)),
+                at("uscis news", PolicySourceType.RSS, "https://www.uscis.gov/news/rss-feed/59144", Duration.ofDays(5))));
+        var snapshot = service.snapshot();
+
+        // The API host and the document pages are the same provider; "www." is ignored.
+        var register = snapshot.forUrls(List.of("https://federalregister.gov/documents/2026/11/01/2026-1/rule"));
+        assertThat(register.stale()).isFalse();
+        assertThat(register.sources()).extracting(SourceFreshnessService.SourceFreshness::name).containsExactly("register");
+
+        var uscis = snapshot.forUrls(List.of("https://www.uscis.gov/newsroom/alerts/item", "not a url"));
+        assertThat(uscis.stale()).isTrue();
+        assertThat(uscis.staleSince()).isEqualTo(NOW.minus(Duration.ofDays(5)));
+
+        // A page citing no known source has nothing to warn about; the whole feed still does.
+        assertThat(snapshot.forUrls(List.of("https://www.whitehouse.gov/proclamation")).stale()).isFalse();
+        assertThat(snapshot.forUrls(List.of()).sources()).isEmpty();
+        assertThat(snapshot.all().stale()).isTrue();
+    }
+
+    @Test
+    void onlyHttpUrlsHaveAHost() {
+        assertThat(SourceFreshnessService.host("HTTPS://WWW.Example.org/path")).isEqualTo("example.org");
+        assertThat(SourceFreshnessService.host("https://api.federalregister.gov/v1")).isEqualTo("federalregister.gov");
+        assertThat(SourceFreshnessService.host("ftp://example.org/file")).isNull();
+        assertThat(SourceFreshnessService.host("mailto:someone@example.org")).isNull();
+        assertThat(SourceFreshnessService.host("not a url")).isNull();
+        assertThat(SourceFreshnessService.host(null)).isNull();
     }
 }

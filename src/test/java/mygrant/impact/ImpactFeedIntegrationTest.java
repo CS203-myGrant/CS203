@@ -90,7 +90,11 @@ class ImpactFeedIntegrationTest extends mygrant.support.PgvectorIntegrationTestB
                         .contentType(MediaType.APPLICATION_JSON).content("{\"archived\":true}"))
                 .andExpect(status().isNotFound());
         mvc.perform(get("/api/v1/impacts").header("Authorization", token(stranger)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0))
+                // CS203-175: an empty feed still says whether the sources are updating.
+                .andExpect(jsonPath("$.sourceFreshness.stale").isBoolean())
+                .andExpect(jsonPath("$.sourceFreshness.sources").isArray())
+                .andExpect(jsonPath("$.content").isEmpty());
 
         for (int i = 0; i < 2; i++) {
             mvc.perform(patch("/api/v1/impacts/" + critical).header("Authorization", token(owner))

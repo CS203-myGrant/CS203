@@ -128,17 +128,23 @@ The impact feed (`GET /api/v1/impacts`), one assessment (`GET /api/v1/impacts/{i
 - **Sources covered:** the enabled sources that produce policy documents (`FEDERAL_REGISTER`,
   `NEWS`, `RSS`). The Visa Bulletin and USCIS sources feed other pages.
 - **When a source is stale:** it has never synced, or its `lastSuccessAt` is older than
-  `pollIntervalSeconds` × `SOURCE_STALE_GRACE_FACTOR` (default `3`, minimum `1`). The factor
-  allows for a missed run or two, from a slow provider or a redeploy, before users are warned.
+  `pollIntervalSeconds` × `SOURCE_STALE_GRACE_FACTOR` (default `2`, minimum `1`). The factor
+  allows for one missed run, from a slow provider or a redeploy, before users are warned.
 - **`staleSince`:** the oldest `lastSuccessAt` among stale sources. It is `null` when nothing is
   stale, or when a stale source has never synced.
-- **What the page shows:** the dashboard feed and the assessment detail page show "Some sources
-  haven't updated since <date>; information may be out of date." Freshness is read once per
-  request. Every item in a page carries the same value, because a Spring `Page` cannot carry
-  extra top-level fields.
+- **Which sources, where:**
+  - A page of the feed (`FreshnessPage`) carries a top-level `sourceFreshness` covering every
+    enabled policy source. It is there even when the page is empty, because a feed can be empty
+    precisely because the sources stopped updating.
+  - Each assessment carries the sources it cites. A policy records its URL but not the source
+    that found it, so a source matches when its URL has the same host as a cited URL. `www.` is
+    ignored, and `api.federalregister.gov` counts as `federalregister.gov`. An assessment that
+    cites no known source has an empty, non-stale `sourceFreshness`.
+- **What the page shows:** "Some sources haven't updated since <date>; information may be out of
+  date." Sources are read once per request, never once per assessment.
 
-Tests: `SourceFreshnessServiceTest`, `ImpactFeedIntegrationTest`, and the node tests in
-`impact-feed.test.cjs`.
+Tests: `SourceFreshnessServiceTest` (staleness, host matching), `ImpactFeedIntegrationTest`, and
+the node tests in `impact-feed.test.cjs`.
 
 ## Rate limits (CS203-176)
 

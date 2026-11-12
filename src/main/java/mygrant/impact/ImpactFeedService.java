@@ -7,8 +7,6 @@ import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -21,6 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import mygrant.actions.ActionItemService;
 import mygrant.actions.ActionItemView;
+import mygrant.sources.FreshnessPage;
 import mygrant.sources.SourceFreshnessService;
 import mygrant.sources.SourceFreshnessService.Freshness;
 import mygrant.user.UserRepository;
@@ -55,7 +54,7 @@ public class ImpactFeedService {
     }
 
     @Transactional(readOnly = true)
-    public Page<ImpactView> list(String email, Pageable pageable, String severity, boolean archived) {
+    public FreshnessPage<ImpactView> list(String email, Pageable pageable, String severity, boolean archived) {
         if (pageable.getPageSize() > 100 || pageable.getPageSize() < 1) {
             throw new IllegalArgumentException("Page size must be between 1 and 100");
         }
@@ -69,12 +68,13 @@ public class ImpactFeedService {
             where += " AND r.severity = :severity";
         }
         Long total = jdbc.queryForObject("SELECT count(*) " + where, params, Long.class);
+        var sources = freshness.snapshot();
         List<ImpactView> rows = withActionItems(userId, jdbc.query(
                 "SELECT r.*, p.title AS policy_title, p.agency AS policy_agency, "
                 + "p.source_url AS policy_source_url, " + citationSql() + " " + where + " ORDER BY " + order
-                + " LIMIT :limit OFFSET :offset", params, (rs, row) -> map(rs)));
-        return new PageImpl<>(rows, PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
-                pageable.getSort()), total == null ? 0 : total);
+                + " LIMIT :limit OFFSET :offset", params, (rs, row) -> map(rs)), sources);
+        return new FreshnessPage<>(rows, PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+                pageable.getSort()), total == null ? 0 : total, sources.all());
     }
 
     /** One current assessment per policy, projected as a combined consumer-facing view. */
@@ -86,8 +86,9 @@ public class ImpactFeedService {
                         + "p.agency AS policy_agency, p.source_url AS policy_source_url, " + citationSql()
                         + " " + CONSOLIDATED + " ORDER BY r.generated_at DESC, r.id DESC", params,
                 (rs, row) -> map(rs));
-        breakdown = withActionItems(userId, breakdown);
-        return aggregate(breakdown).withSourceFreshness(freshness.current());
+        var sources = freshness.snapshot();
+        breakdown = withActionItems(userId, breakdown, sources);
+        return aggregate(breakdown).withSourceFreshness(sources.all());
     }
 
     static ConsolidatedAssessment aggregate(List<ImpactView> breakdown) {
@@ -168,10 +169,15 @@ public class ImpactFeedService {
      * freshness of the sources behind them, read once per request.
      */
     private List<ImpactView> withActionItems(long userId, List<ImpactView> impacts) {
+        return withActionItems(userId, impacts, freshness.snapshot());
+    }
+
+    private List<ImpactView> withActionItems(long userId, List<ImpactView> impacts,
+            SourceFreshnessService.Snapshot sources) {
         var items = actionItems.itemsForAssessments(userId, impacts.stream().map(ImpactView::id).toList());
-        Freshness sources = impacts.isEmpty() ? Freshness.UNKNOWN : freshness.current();
         return impacts.stream().map(impact -> impact.withActionItems(items.getOrDefault(impact.id(), List.of()))
-                .withSourceFreshness(sources)).toList();
+                .withSourceFreshness(sources.forUrls(impact.citations().stream().map(Citation::url).toList())))
+                .toList();
     }
 
     private ImpactView map(ResultSet rs) throws SQLException {
@@ -270,7 +276,7 @@ public class ImpactFeedService {
             List<ActionItemView> actionItems, boolean reviewedByHuman, Instant reviewedAt,
             boolean archived, Instant createdAt, Instant updatedAt, int version, String disclaimer,
             @io.swagger.v3.oas.annotations.media.Schema(description =
-                    "CS203-175: whether the policy sources are still updating; the same for every item in a response")
+                    "CS203-175: freshness of enabled sources matching this assessment’s cited provider hosts")
             Freshness sourceFreshness) {
         ImpactView withActionItems(List<ActionItemView> items) {
             return new ImpactView(id, policyId, policyTitle, policyAgency, severity, urgency,
