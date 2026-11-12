@@ -1,0 +1,13 @@
+Historical source fixture. Publication date: 2025-06-10. Signed: 2025-06-04. Effective date: 2025-06-09.
+Official source: https://www.federalregister.gov/documents/2025/06/10/2025-10669/restricting-the-entry-of-foreign-nationals-to-protect-the-united-states-from-foreign
+This saved excerpt is a regression input, not a statement of current law.
+
+Presidential Proclamation 10949
+Section 2. Full Suspension of Entry.
+The entry into the United States of nationals of Afghanistan, Burma, Chad, Republic of the Congo, Equatorial Guinea, Eritrea, Haiti, Iran, Libya, Somalia, Sudan, and Yemen is suspended.
+
+Section 3. Partial Suspension of Entry.
+The entry into the United States of nationals of Burundi, Cuba, Laos, Sierra Leone, Togo, Turkmenistan, and Venezuela is partially suspended.
+
+Section 4. Scope and Implementation of Suspension.
+The suspension applies to foreign nationals who are outside the United States on the effective date and do not have a valid visa on that date. The proclamation states exceptions for lawful permanent residents, dual nationals traveling on a passport issued by a non-designated country, specified visa categories, and case-by-case national-interest determinations.
