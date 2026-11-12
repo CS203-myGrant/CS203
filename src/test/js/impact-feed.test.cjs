@@ -181,7 +181,7 @@ test('the feed warns from the page-level freshness, even when it is empty',async
   await view.loadImpacts();
   const rendered=view.renderImpactFeed();
   assert.match(rendered,/Some sources haven't updated since 2026-11-01; information may be out of date\./);
-  assert.match(rendered,/No assessments are available yet/);
+  assert.match(rendered,/No assessments have been published yet/);
 });
 
 test('no feed banner while sources are fresh, while loading, or after an error',async()=>{
@@ -189,7 +189,9 @@ test('no feed banner while sources are fresh, while loading, or after an error',
   await view.loadImpacts();
   assert.doesNotMatch(view.renderImpactFeed(),/haven't updated/);
   let release;
-  const slow=page(()=>new Promise(resolve=>{release=resolve;}));
+  const slow=page(path=>path.includes('archived=true')
+    ? Promise.resolve({content:[],totalPages:0})
+    : new Promise(resolve=>{release=resolve;}));
   slow.state.impactSourceFreshness=staleSources;
   const loading=slow.loadImpacts();
   assert.equal(slow.state.impactSourceFreshness,null,'a new load forgets the previous page');
