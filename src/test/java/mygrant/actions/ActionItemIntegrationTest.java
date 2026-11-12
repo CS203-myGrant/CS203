@@ -110,8 +110,9 @@ class ActionItemIntegrationTest extends mygrant.support.PgvectorIntegrationTestB
     }
 
     @Test
-    void unverifiedPublishedDraftsReceiveItemsWhileBlankAssessmentsDoNot() throws Exception {
+    void heldDraftsAndBlankAssessmentsReceiveNoItems() throws Exception {
         User owner = account(UserRole.APPLICANT);
+        // The judge did not pass it, so the shared review policy holds it for a reviewer.
         recommendations.getOrGenerate(owner.getEmail(), policy(null),
                 () -> rejected(List.of("Draft step that must stay hidden")));
         long held = jdbc.queryForObject("SELECT id FROM policy_recommendations WHERE user_id = ?",
@@ -120,26 +121,26 @@ class ActionItemIntegrationTest extends mygrant.support.PgvectorIntegrationTestB
         long none = publish(owner, policy(null), "HIGH", List.of());
         long blank = publish(owner, policy(null), "LOW", List.of("   ", "\t\n"));
 
-        assertThat(rows(held)).extracting(Row::title, Row::priority).containsExactly(
-                org.assertj.core.groups.Tuple.tuple("Draft step that must stay hidden", "MEDIUM"));
+        assertThat(rows(held)).isEmpty();
         assertThat(rows(none)).isEmpty();
         assertThat(rows(blank)).isEmpty();
-        assertThat(list(owner, "").path("totalElements").asLong()).isEqualTo(1);
+        assertThat(list(owner, "").path("totalElements").asLong()).isZero();
     }
 
     @Test
-    void regeneratingAHeldDraftAsApprovedPublishesItsChecklist() throws Exception {
+    void askingAgainDoesNotRegenerateAHeldDraftOrPublishItsChecklist() throws Exception {
         User owner = account(UserRole.APPLICANT);
         PolicyDocument policy = policy(null);
         recommendations.getOrGenerate(owner.getEmail(), policy, () -> rejected(List.of("Check the rule")));
+        // Even an explicit refresh waits for the reviewer instead of rolling the model again.
         recommendations.getOrGenerate(owner.getEmail(), policy,
-                () -> approved(ImpactUrgency.MEDIUM, List.of("Check the rule")));
-        // The same fingerprint, so the upsert updated the held row instead of adding one.
+                () -> { throw new AssertionError("A held draft was regenerated"); }, true);
         long assessment = jdbc.queryForObject("SELECT id FROM policy_recommendations WHERE user_id = ?",
                 Long.class, owner.getId());
 
-        assertThat(rows(assessment)).extracting(Row::title, Row::priority).containsExactly(
-                org.assertj.core.groups.Tuple.tuple("Check the rule", "MEDIUM"));
+        assertThat(rows(assessment)).isEmpty();
+        assertThat(jdbc.queryForObject("SELECT publication_status FROM policy_recommendations WHERE id = ?",
+                String.class, assessment)).isEqualTo("PENDING_REVIEW");
     }
 
     @Test
@@ -380,7 +381,7 @@ class ActionItemIntegrationTest extends mygrant.support.PgvectorIntegrationTestB
         recommendations.getOrGenerate(owner.getEmail(), policy(null), () -> rejected(List.of("Draft step")));
         long assessment = jdbc.queryForObject("SELECT id FROM policy_recommendations WHERE user_id = ?",
                 Long.class, owner.getId());
-        assertThat(rows(assessment)).extracting(Row::title).containsExactly("Draft step");
+        assertThat(rows(assessment)).isEmpty();
 
         mvc.perform(patch("/api/v1/review/impacts/" + assessment).header("Authorization", token(manager))
                         .contentType(MediaType.APPLICATION_JSON).content("""

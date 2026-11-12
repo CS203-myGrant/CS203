@@ -84,9 +84,11 @@ class PublicationGateIntegrationTest extends mygrant.support.PgvectorIntegration
         var withheld = new ProfileImpactAssessment(null, 0, "Unavailable notice",
                 List.of(), List.of(), List.of(), true, "OpenAI", "test", evaluation, 1);
         var response = recommendations.getOrGenerate(owner.getEmail(), policy, () -> withheld);
-        assertThat(response.summary()).isEqualTo("Raw draft");
-        assertThat(response.recommendedActions()).containsExactly("Read the rule");
-        assertThat(response.requiresHumanReview()).isTrue();
+        // The judge did not pass the stored candidate, or could not check it: it is held for review.
+        assertThat(response.status()).isEqualTo(AssessmentStatus.AWAITING_REVIEW);
+        assertThat(response.summary()).doesNotContain("Raw draft");
+        assertThat(jdbc.queryForObject("SELECT publication_status FROM policy_recommendations WHERE user_id = ?",
+                String.class, owner.getId())).isEqualTo("PENDING_REVIEW");
         return evaluation.evaluationId();
     }
 
@@ -100,16 +102,20 @@ class PublicationGateIntegrationTest extends mygrant.support.PgvectorIntegration
                 .when(judge).evaluateAnswer(anyString(), anyString(), anyList());
     }
 
-    @Test void evaluatorOutageKeepsRawAssessmentVisibleAndUnverified() throws Exception {
+    @Test void evaluatorOutageHoldsTheAssessmentForReviewUntilACheckPasses() throws Exception {
         UUID id = assessment("UNAVAILABLE");
         stubAssessment("NO");
         var first = publication.evaluate(id);
         var second = publication.evaluate(id);
         assertThat(second.reviewId()).isEqualTo(first.reviewId());
-        assertThat(second.publicationStatus()).isEqualTo("PUBLISHED");
-        assertThat(review.pending(admin.getEmail())).isEmpty();
+        assertThat(second.publicationStatus()).isEqualTo("PENDING_REVIEW");
+        assertThat(review.pending(admin.getEmail())).extracting(ImpactReviewService.PendingImpact::id)
+                .containsExactly(first.reviewId());
+        assertThat(review.pending(admin.getEmail()).getFirst().holdReasons())
+                .containsExactly("Independent check did not pass");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM action_items WHERE assessment_id = ?",
-                Long.class, first.reviewId())).isEqualTo(1L);
+                Long.class, first.reviewId())).isZero();
+        assertThat(recommendations.findCurrent(owner.getEmail(), policy)).isEmpty();
     }
 
     @Test void passingReevaluationPublishesHeldAssessmentAndCreatesActions() throws Exception {
@@ -155,9 +161,9 @@ class PublicationGateIntegrationTest extends mygrant.support.PgvectorIntegration
         UUID id = assessment("NO");
         jdbc.update("UPDATE policy_recommendations SET reviewed_by_human = TRUE WHERE user_id = ?", owner.getId());
         stubAssessment("YES");
-        assertThat(publication.evaluate(id).publicationStatus()).isEqualTo("PUBLISHED");
-        assertThat(recommendations.getOrGenerate(owner.getEmail(), policy, () -> { throw new AssertionError("Human hold bypassed"); }).urgency())
-                .isEqualTo(ImpactUrgency.LOW);
+        assertThat(publication.evaluate(id).publicationStatus()).isEqualTo("PENDING_REVIEW");
+        assertThat(recommendations.getOrGenerate(owner.getEmail(), policy, () -> { throw new AssertionError("Human hold bypassed"); }).status())
+                .isEqualTo(AssessmentStatus.AWAITING_REVIEW);
     }
 
     UUID answer(String text, String verdict) throws Exception {

@@ -21,13 +21,15 @@ public class OutputPublicationService {
     private final ObjectMapper mapper;
     private final ImpactJudgeService judge;
     private final ActionItemService actions;
+    private final ImpactReviewPolicy reviewPolicy;
 
     public OutputPublicationService(JdbcTemplate jdbc, ObjectMapper mapper,
-            ImpactJudgeService judge, ActionItemService actions) {
+            ImpactJudgeService judge, ActionItemService actions, ImpactReviewPolicy reviewPolicy) {
         this.jdbc = jdbc;
         this.mapper = mapper;
         this.judge = judge;
         this.actions = actions;
+        this.reviewPolicy = reviewPolicy;
     }
 
     public record Result(UUID outputId, JudgeEvaluation evaluation, String publicationStatus,
@@ -98,9 +100,8 @@ public class OutputPublicationService {
         boolean human = humanReviewed(output.reviewId());
         if (human) return new Result(output.id(), evaluation, status(output.reviewId()), true, output.reviewId());
         boolean passed = evaluation.verdict() == JudgeEvaluation.Verdict.YES;
-        // A successful assessment remains visible if its judge cannot verify it.
-        // Policy Q&A responses remain fail-closed.
-        String state = "ASSESSMENT".equals(output.type()) || passed ? "PUBLISHED" : "PENDING_REVIEW";
+        // Policy Q&A responses are published only when the judge passes them.
+        String state = passed ? "PUBLISHED" : "PENDING_REVIEW";
         Long reviewId = output.reviewId();
         if ("ASSESSMENT".equals(output.type())) {
             if (reviewId == null) throw new IllegalStateException("Assessment is not attached to its review state");
@@ -109,6 +110,8 @@ public class OutputPublicationService {
                     candidate.reasons(), candidate.recommendedActions(), candidate.missingInformation(),
                     candidate.requiresHumanReview() || !passed, candidate.provider(), candidate.model(),
                     evaluation, candidate.attempts());
+            // Assessments follow the shared review policy: a failed or unavailable check holds them.
+            state = reviewPolicy.requiresReview(assessed) ? "PENDING_REVIEW" : "PUBLISHED";
             jdbc.update("""
                     UPDATE policy_recommendations SET assessment_json = ?, publication_status = ?,
                         version = version + 1, updated_at = CURRENT_TIMESTAMP

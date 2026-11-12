@@ -223,6 +223,9 @@ class IngestionAssessmentIntegrationTest extends PgvectorIntegrationTestBase {
                 ? AssessmentReviewStatus.PENDING_REVIEW : AssessmentReviewStatus.NOT_REQUIRED);
         assertThat(results.findVisibleByUserId(owner.getUserId())).hasSize(expectedReview ? 0 : 1);
         assertThat(results.findVisibleByUserId(stranger.getUserId())).isEmpty();
+        // CS203-153: the same decision publishes the owner's feed item or holds it for review.
+        assertThat(jdbc.queryForObject("SELECT publication_status FROM policy_recommendations WHERE id = ?",
+                String.class, saved.getRecommendationId())).isEqualTo(expectedReview ? "PENDING_REVIEW" : "PUBLISHED");
         if (expectedReview) {
             jdbc.update("UPDATE impact_assessments SET review_status = 'APPROVED' WHERE id = ?", saved.getId());
             assertThat(results.findVisibleByUserId(owner.getUserId())).extracting(ImpactAssessment::getId)
@@ -250,6 +253,8 @@ class IngestionAssessmentIntegrationTest extends PgvectorIntegrationTestBase {
         assertThat(results.findVisibleByUserId(student.getUserId())).isEmpty();
         assertThat(results.findVisibleByUserId(exchangeVisitor.getUserId())).isEmpty();
         assertThat(results.findVisibleByUserId(workerProfile.getUserId())).isEmpty();
+        assertThat(jdbc.queryForList("SELECT publication_status FROM policy_recommendations WHERE policy_id = ?",
+                String.class, policyId)).containsExactly("PENDING_REVIEW", "PENDING_REVIEW");
     }
 
     @Test
