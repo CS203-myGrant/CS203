@@ -16,3 +16,18 @@ for (const status of [401, 403, 503]) {
     assert.equal(loggedOut, status === 401);
   });
 }
+
+test('missing consent names only the filled profile fields without repeating the generic error', async () => {
+  const context = vm.createContext({ state: { token: 'valid-session' } });
+  vm.runInContext(source, context);
+  const error = 'Consent is required before this field can be used.';
+  const response = { status: 400, ok: false, json: async () => ({
+    message: 'Request validation failed',
+    validationErrors: { visaType: error, academicLevel: error, programEndDate: error }
+  }) };
+  await assert.rejects(context.parseApiResponse(response), exception => {
+    assert.equal(exception.message, 'Tick the consent boxes for: Visa category, Academic level, Program end date.');
+    assert.equal(exception.message.includes(error), false);
+    return true;
+  });
+});

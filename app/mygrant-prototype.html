@@ -1098,7 +1098,20 @@ async function parseApiResponse(response){
     throw new Error(body?.message || 'Your session is invalid or has expired. Please sign in again.');
   }
   if(!response.ok){
-    const validation=body?.validationErrors ? Object.values(body.validationErrors).join(' ') : '';
+    const entries=Object.entries(body?.validationErrors || {});
+    const consentError='Consent is required before this field can be used.';
+    const fieldLabel=field=>({
+      visaType:'Visa category', optStartDate:'OPT start date',
+      i140FilingDate:'I-140 filing date', i765FilingDate:'I-765 filing date',
+      i539FilingDate:'I-539 filing date'
+    })[field] || field.replace(/([a-z])([A-Z])/g,'$1 $2').toLowerCase().replace(/^./,letter=>letter.toUpperCase());
+    const missingConsent=entries.filter(([,message])=>message===consentError)
+      .map(([field])=>fieldLabel(field));
+    const validation=[
+      missingConsent.length ? `Tick the consent ${missingConsent.length===1?'box':'boxes'} for: ${missingConsent.join(', ')}.` : '',
+      ...entries.filter(([,message])=>message!==consentError)
+        .map(([field,message])=>`${fieldLabel(field)}: ${message}`)
+    ].filter(Boolean).join(' ');
     throw new Error(validation || body?.message || body?.error || `Backend returned HTTP ${response.status}`);
   }
   return body;
@@ -3000,10 +3013,11 @@ function profileConsentControls(profile){
   ];
   return `<section class="consent-panel">
     <h2>Consent and removal</h2>
-    <p class="sub">Only populated fields with your consent are included in future assessments. A checked box without a value is not saved. Remove a saved optional field to withdraw it.</p>
+    <p class="sub">Every filled field needs its consent box ticked before Save profile succeeds. To withdraw consent, use Remove saved value to delete that field from your profile.</p>
     <div class="consent-list">
     ${fields.map(([name, key, purpose, required]) => `<div class="consent-entry">${consentControl(name, purpose, required, Boolean(consents[name]))}
-      ${!required && profile[key] ? `<button class="btn ghost small consent-card__remove" type="button" onclick="withdrawProfileField('${name}')">Remove</button>` : ''}</div>`).join('')}
+      ${!required && profile[key] && !consents[name] ? '<p class="consent-card__meta">Saved without consent from an earlier edit. Tick this box or remove the saved value before saving.</p>' : ''}
+      ${!required && profile[key] ? `<button class="btn ghost small consent-card__remove" type="button" onclick="withdrawProfileField('${name}')">Remove saved value</button>` : ''}</div>`).join('')}
     </div>
   </section>`;
 }
@@ -3013,7 +3027,7 @@ async function withdrawProfileField(field){
     const response = await apiFetch('/api/v1/profiles/me', {
       method: 'PUT',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({clearFields: [field], consentedFields: []})
+      body: JSON.stringify({clearFields: [field]})
     });
     state.profile = await parseApiResponse(response);
     showToast('Information removed. It will not be used in future assessments.');
