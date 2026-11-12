@@ -19,6 +19,11 @@ spring:
     username: ${DATABASE_USERNAME:policy_user}
     password: ${DATABASE_PASSWORD:policy_password}
 
+  flyway:
+    # V45 was added after staging had already applied later migrations. Run it
+    # in version order on existing databases instead of failing validation.
+    out-of-order: true
+
   jpa:
     hibernate:
       ddl-auto: validate
