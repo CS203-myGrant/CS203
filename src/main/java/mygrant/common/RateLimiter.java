@@ -75,17 +75,18 @@ public class RateLimiter {
         Instant windowStart = now.minus(limit.window());
         Map<String, Deque<Instant>> users = requests.get(allowance);
         sweepIfDue(allowance, users, limit.window(), now, windowStart);
-        Deque<Instant> times = users.computeIfAbsent(user, key -> new ArrayDeque<>());
-        synchronized (times) {
+        // Acquisition and expiry both use the map's per-key lock. A sweep cannot detach a
+        // queue another request is updating, which would otherwise lose accepted requests.
+        users.compute(user, (key, existing) -> {
+            Deque<Instant> times = existing == null ? new ArrayDeque<>() : existing;
             dropExpired(times, windowStart);
             if (times.size() >= limit.maxRequests()) {
                 throw new RateLimitExceededException(Duration.between(windowStart, times.peekFirst()),
                         allowance.message());
             }
             times.addLast(now);
-            // Another thread may have swept this user's emptied queue away meanwhile; put it back.
-            users.putIfAbsent(user, times);
-        }
+            return times;
+        });
     }
 
     private static void dropExpired(Deque<Instant> times, Instant windowStart) {
@@ -101,12 +102,9 @@ public class RateLimiter {
             return;
         }
         lastSweep.put(allowance, now);
-        users.entrySet().removeIf(entry -> {
-            Deque<Instant> times = entry.getValue();
-            synchronized (times) {
-                dropExpired(times, windowStart);
-                return times.isEmpty();
-            }
-        });
+        users.keySet().forEach(user -> users.computeIfPresent(user, (key, times) -> {
+            dropExpired(times, windowStart);
+            return times.isEmpty() ? null : times;
+        }));
     }
 }

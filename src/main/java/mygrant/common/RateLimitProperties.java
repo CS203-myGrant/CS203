@@ -23,7 +23,13 @@ public record RateLimitProperties(
     public record Limit(
             @DefaultValue("true") boolean enabled,
             @DefaultValue("10") @Min(1) int maxRequests,
-            @DefaultValue("1m") @NotNull Duration window) {}
+            @DefaultValue("1m") @NotNull Duration window) {
+        public Limit {
+            if (window == null || window.isZero() || window.isNegative() || maxRequests < 1) {
+                throw new IllegalArgumentException("Rate limits need a positive window and allowance");
+            }
+        }
+    }
 
     public Limit limit(RateLimiter.Allowance allowance) {
         return switch (allowance) {

@@ -125,4 +125,49 @@ class RateLimiterTest {
             limiter.acquire(EVALUATIONS, "a@example.org");
         }
     }
+
+    /** Concurrent requests by one user are counted exactly: never over the limit, none lost. */
+    @Test
+    void concurrentRequestsByOneUserAreAcceptedExactlyUpToTheLimit() throws Exception {
+        RateLimiter limiter = limiter(true, 10, Duration.ofMinutes(1));
+        // An expired request from earlier makes the first acquisition sweep while others run.
+        limiter.acquire(QUESTIONS, "other@example.org");
+        clock.advance(Duration.ofMinutes(2));
+        int threads = 32;
+        var start = new java.util.concurrent.CountDownLatch(1);
+        var accepted = new java.util.concurrent.atomic.AtomicInteger();
+        var rejected = new java.util.concurrent.atomic.AtomicInteger();
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(threads);
+        try {
+            var futures = new java.util.ArrayList<java.util.concurrent.Future<?>>();
+            for (int i = 0; i < threads; i++) {
+                futures.add(pool.submit(() -> {
+                    start.await();
+                    try {
+                        limiter.acquire(QUESTIONS, "a@example.org");
+                        accepted.incrementAndGet();
+                    } catch (RateLimitExceededException expected) {
+                        rejected.incrementAndGet();
+                    }
+                    return null;
+                }));
+            }
+            start.countDown();
+            for (var future : futures) future.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(accepted).hasValue(10);
+        assertThat(rejected).hasValue(threads - 10);
+        assertThatThrownBy(() -> limiter.acquire(QUESTIONS, "a@example.org")).isInstanceOf(RateLimitExceededException.class);
+    }
+
+    @Test
+    void aLimitNeedsAPositiveWindowAndAllowance() {
+        assertThatThrownBy(() -> new RateLimitProperties.Limit(true, 10, Duration.ZERO))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new RateLimitProperties.Limit(true, 0, Duration.ofMinutes(1)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 }
