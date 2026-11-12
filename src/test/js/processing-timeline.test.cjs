@@ -4,7 +4,7 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 
 const html=fs.readFileSync('app/mygrant-prototype.html','utf8');
-const source=html.slice(html.indexOf('async function loadForecasts(){'),html.indexOf('async function loadImpacts('));
+const source=html.slice(html.indexOf('async function loadForecasts(){'),html.indexOf('async function loadImpacts(){'));
 function page(fetch){
   const state={role:'student',view:'dashboard',user:{email:'first@example.org'},processingForecasts:null,
     processingForecastError:null,forecastSeries:{}};

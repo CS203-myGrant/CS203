@@ -47,9 +47,7 @@ import mygrant.user.UserRole;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
-@org.springframework.test.annotation.DirtiesContext(
-        classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
-class OpenApiContractTest extends mygrant.support.PgvectorIntegrationTestBase {
+class OpenApiContractTest {
 
     private static final Set<String> METHODS = Set.of("get", "put", "post", "delete", "patch");
     private static final String ROLE_NOTE = "Requires the ";

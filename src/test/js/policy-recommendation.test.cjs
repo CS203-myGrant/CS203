@@ -3,29 +3,26 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const html=fs.readFileSync('app/mygrant-prototype.html','utf8');
-const savedSource=html.slice(html.indexOf('async function loadImpacts('),html.indexOf("window.addEventListener('beforeunload'"));
-const escaping=html.slice(html.indexOf('function escapeHtml(value){'),html.indexOf('function formatDate(value){'));
-const record={id:70,policyId:7,policyTitle:'Saved policy',status:'COMPLETED',urgency:'HIGH',summary:'Impact',confidence:85,
-  reviewStatus:'NOT_REQUIRED',requiresReview:false,reasons:['Saved reason'],recommendedActions:['Read the source'],createdAt:'2026-11-10'};
 const source=html.slice(html.indexOf('async function openPolicyDetail('),html.indexOf('function renderNotificationDetail('));
 function setup(fetch){
   const context=vm.createContext({state:{},apiFetch:fetch,parseApiResponse:async response=>response,
-    goto(view){context.state.view=view;},render(){},fetchAllPages:async()=>[],formatTimestamp:x=>x,formatDate:x=>x});
-  vm.runInContext(escaping+savedSource+source,context);
+    goto(view){context.state.view=view;},render(){},fetchAllPages:async()=>[]});
+  vm.runInContext(source,context);
   return context;
 }
-test('loads policy and saved assessment with read requests only',async()=>{
+test('loads stored policy and personalized recommendation',async()=>{
   const calls=[];
-  const context=setup(async(path,options)=>{calls.push([path,options]);return path.startsWith('/api/v1/impact-assessments')?{content:[record]}:{id:7};});
+  const context=setup(async(path,options)=>{calls.push([path,options]);return path.endsWith('recommendation')?{summary:'Impact'}:{id:7};});
   await context.openPolicyDetail(7);
   assert.equal(calls[0][0],'/api/v1/policies/7');
-  assert.equal(calls[1][0],'/api/v1/impact-assessments?policyId=7&page=0&size=1');
-  assert.ok(calls.every(([,options])=>options===undefined));
+  assert.equal(calls[1][0],'/api/v1/policies/7/recommendation');
+  assert.equal(calls[1][1].method,'POST');
+  assert.equal(calls[2][0],'/api/v1/impacts/policy/7/latest');
   assert.equal(context.state.policyDetail.assessment.summary,'Impact');
   assert.equal(context.state.policyDetail.loading,false);
 });
 test('retains source details when recommendation fails',async()=>{
-  const context=setup(async path=>{if(path.startsWith('/api/v1/impact-assessments'))throw Error('Unavailable');return {id:7};});
+  const context=setup(async path=>{if(path.endsWith('recommendation'))throw Error('Unavailable');return {id:7};});
   await context.openPolicyDetail(7);
   assert.equal(context.state.policyDetail.policy.id,7);
   assert.equal(context.state.policyDetail.error,'Unavailable');
@@ -43,18 +40,14 @@ test('policy detail report is linked to the saved assessment and review queue',a
   assert.equal(context.state.policyDetail.reported,true);
 });
 
-test('only the displayed saved assessment can be linked to a recommendation report',async()=>{
-  const calls=[];
-  const context=setup(async(path,options)=>{
-    calls.push([path,options]);
-    if(path.startsWith('/api/v1/impact-assessments')) return {content:[record]};
-    if(path.includes('/impacts/policy/')) return {ok:true,id:42,version:1,summary:'Older advice',urgency:'LOW'};
-    return {id:7};
-  });
+test('only the displayed saved assessment may be linked for reporting',async()=>{
+  const context=setup(async path=>path.endsWith('recommendation')
+    ? {summary:'Current advice',urgency:'MEDIUM',status:'COMPLETED'}
+    : path.includes('/impacts/policy/')
+      ? {ok:true,summary:'Older advice',urgency:'LOW',id:42,version:1}
+      : {id:7});
   await context.openPolicyDetail(7);
-  assert.equal(context.state.policyDetail.assessment.summary,record.summary);
   assert.equal(context.state.policyDetail.impact,null);
-  assert.ok(calls.every(([,options])=>options===undefined));
 });
 test('extracts official summary from HTML Federal Register fixture',()=>{
   const context=setup(async()=>({}));
@@ -65,30 +58,12 @@ test('extracts official summary from HTML Federal Register fixture',()=>{
 test('does not substitute boilerplate for a missing summary',()=>{
   assert.match(setup(async()=>({})).policySummary('<html><title>Boilerplate</title>Text</html>'),/not available/);
 });
-test('policy with no visible saved assessment retains the source and does not generate',async()=>{
-  const calls=[];
-  const context=setup(async(path,options)=>{calls.push([path,options]);return path.startsWith('/api/v1/impact-assessments')?{content:[]}:{id:21};});
+test('missing endpoint retains policy with readable error',async()=>{
+  const context=setup(async path=>path.endsWith('recommendation')?{status:404}:{id:21});
   await context.openPolicyDetail(21);
   assert.equal(context.state.policyDetail.policy.id,21);
-  assert.equal(context.state.policyDetail.error,null);
+  assert.match(context.state.policyDetail.error,/latest backend has been deployed/);
   assert.equal(context.state.policyDetail.assessment,null);
-  assert.equal(context.state.policyDetail.assessmentUnavailable,true);
-  assert.ok(calls.every(([,options])=>options===undefined));
-  assert.match(context.renderPolicyDetail(),/No saved assessment is currently available/);
-});
-test('policy detail reuses saved detail rendering and canonical review markers',async()=>{
-  const approved={...record,reviewStatus:'APPROVED',requiresReview:true};
-  const context=setup(async path=>path.startsWith('/api/v1/impact-assessments')?{content:[approved]}:{id:7,title:'Policy'});
-  await context.openPolicyDetail(7);
-  const rendered=context.renderPolicyDetail();
-  for(const value of ['Saved policy','Saved reason','Read the source','HIGH confidence','Reviewed by a human']) assert.ok(rendered.includes(value));
-  assert.doesNotMatch(rendered,/Not independently verified|Needs human review/);
-});
-test('hidden saved assessment is not displayed or regenerated in policy detail',async()=>{
-  const context=setup(async path=>path.startsWith('/api/v1/impact-assessments')?{content:[{...record,reviewStatus:'PENDING_REVIEW',requiresReview:true}]}:{id:7});
-  await context.openPolicyDetail(7);
-  assert.equal(context.state.policyDetail.assessment,null);
-  assert.doesNotMatch(context.renderPolicyDetail(),/Saved reason/);
 });
 test('unavailable processing is separate from severity and hides next-step advice',()=>{
   const context=setup(async()=>({}));
@@ -109,4 +84,13 @@ test('completed HIGH impact retains the canonical label and next steps',()=>{
   assert.match(rendered,/HIGH/);
   assert.match(rendered,/What to do next/);
   assert.doesNotMatch(rendered,/CRITICAL|WARNING|INFORMATIONAL|NO_IMPACT/);
+});
+test('a draft awaiting review shows no draft content or advice',()=>{
+  const context=setup(async()=>({}));
+  context.escapeHtml=value=>String(value ?? '');
+  const rendered=context.renderPolicyRecommendation({status:'AWAITING_REVIEW',urgency:null,
+    summary:'This assessment is awaiting review.',requiresHumanReview:true,recommendedActions:[]});
+  assert.match(rendered,/Awaiting review/);
+  assert.match(rendered,/reviewer is checking/);
+  assert.doesNotMatch(rendered,/What to do next|Unavailable|Not independently verified/);
 });
