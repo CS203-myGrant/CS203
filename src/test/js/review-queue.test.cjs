@@ -41,3 +41,22 @@ test('an untouched reported assessment counts as unchanged, ignoring spacing and
   assert.equal(view.reviewCorrectionUnchanged(reported,{severity:'LOW',confidence:90,summary:'No impact',
     analysis:['Not immigration','Checked the rule text'],actionItems:['None'],missingInformation:[]}),false);
 });
+
+test('draft verification sends its current version and review note',async()=>{
+  const view=queue([draft]);
+  view.state.reviewEditing=draft;
+  view.state.view='queue';
+  view.reviewNoteOrError=()=> 'Checked the official source';
+  view.confirm=()=>true;
+  view.closeQueueEditor=()=>{};
+  view.showToast=()=>{};
+  view.loadReviewQueue=async()=>{};
+  view.parseApiResponse=async response=>response;
+  let request;
+  view.apiFetch=async (url,options)=>{request={url,options};return {};};
+  await view.decideQueueDraft('VERIFY');
+  assert.equal(request.url,'/api/v1/review/impacts/7/decision');
+  assert.deepEqual(JSON.parse(request.options.body),{
+    decision:'VERIFY',version:1,note:'Checked the official source'
+  });
+});
