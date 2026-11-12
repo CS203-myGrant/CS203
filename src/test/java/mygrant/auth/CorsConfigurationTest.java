@@ -20,6 +20,7 @@ import mygrant.user.UserController;
 import mygrant.user.UserRepository;
 import mygrant.user.UserService;
 import mygrant.user.dto.LoginResponse;
+import mygrant.email.EmailVerificationService;
 
 /** CORS is decided once, in SecurityConfig: local frontend origins are allowed and every other origin is refused. */
 @WebMvcTest(UserController.class)
@@ -32,6 +33,7 @@ class CorsConfigurationTest {
 
     @Autowired MockMvc mvc;
     @MockBean UserService userService;
+    @MockBean EmailVerificationService emailVerificationService;
     @MockBean UserRepository userRepository;
     @MockBean JwtService jwtService;
 

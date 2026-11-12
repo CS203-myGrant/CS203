@@ -18,6 +18,8 @@ import mygrant.user.dto.UserCreation;
 import mygrant.user.dto.UserLogin;
 import mygrant.user.dto.LoginResponse;
 import mygrant.user.dto.RefreshTokenRequest;
+import mygrant.user.dto.EmailVerificationRequest;
+import mygrant.email.EmailVerificationService;
 
 
 @RestController
@@ -25,9 +27,11 @@ import mygrant.user.dto.RefreshTokenRequest;
 public class UserController {
 
     private final UserService userService;
+    private final EmailVerificationService emailVerificationService;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, EmailVerificationService emailVerificationService) {
         this.userService = userService;
+        this.emailVerificationService = emailVerificationService;
     }
 
     @PostMapping("/api/v1/auth/register")
@@ -39,7 +43,31 @@ public class UserController {
             + "created. The message never says whether the email is already registered.")
     public ResponseEntity<LoginResponse> receiveRequest(@Valid @RequestBody UserCreation userCreation) {
         LoginResponse result = userService.createUser(userCreation);
+        emailVerificationService.issueFor(result.getUserEmail());
         return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/api/v1/auth/verify-email")
+    @SecurityRequirements
+    @Operation(summary = "Verify an email address")
+    public ResponseEntity<String> verifyEmail(@org.springframework.web.bind.annotation.RequestParam String token) {
+        emailVerificationService.confirm(token);
+        return ResponseEntity.ok("Email address verified. You can now receive alert emails.");
+    }
+
+    @PostMapping("/api/v1/auth/verify-email")
+    @SecurityRequirements
+    @Operation(summary = "Verify an email address with a token")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void verifyEmail(@Valid @RequestBody EmailVerificationRequest request) {
+        emailVerificationService.confirm(request.token());
+    }
+
+    @PostMapping("/api/v1/auth/verify-email/resend")
+    @Operation(summary = "Resend the email verification link")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void resendVerificationEmail(Authentication authentication) {
+        emailVerificationService.issueFor(authentication.getName());
     }
 
     @PostMapping("/api/v1/auth/login")

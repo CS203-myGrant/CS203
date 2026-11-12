@@ -32,6 +32,15 @@ public class User {
     @Column(name = "workos_user_id", unique = true, length = 100)
     private String workosUserId;
 
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified;
+
+    @Column(name = "email_verification_token_hash", length = 64)
+    private String emailVerificationTokenHash;
+
+    @Column(name = "email_verification_expires_at")
+    private Instant emailVerificationExpiresAt;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -99,6 +108,31 @@ public class User {
         this.workosUserId = workosUserId;
     }
 
+    public boolean isEmailVerified() {
+        // WorkOS has already verified the address before the identity reaches this application.
+        return emailVerified || (workosUserId != null && !workosUserId.isBlank());
+    }
+
+    public void setEmailVerified(boolean emailVerified) {
+        this.emailVerified = emailVerified;
+    }
+
+    public String getEmailVerificationTokenHash() {
+        return emailVerificationTokenHash;
+    }
+
+    public void setEmailVerificationTokenHash(String emailVerificationTokenHash) {
+        this.emailVerificationTokenHash = emailVerificationTokenHash;
+    }
+
+    public Instant getEmailVerificationExpiresAt() {
+        return emailVerificationExpiresAt;
+    }
+
+    public void setEmailVerificationExpiresAt(Instant emailVerificationExpiresAt) {
+        this.emailVerificationExpiresAt = emailVerificationExpiresAt;
+    }
+
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
@@ -141,6 +175,9 @@ public class User {
         this.email = null;
         this.passwordHash = null;
         this.workosUserId = null;
+        this.emailVerified = false;
+        this.emailVerificationTokenHash = null;
+        this.emailVerificationExpiresAt = null;
         this.profileComplete = false;
         this.active = false;
 

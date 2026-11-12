@@ -23,6 +23,7 @@ import mygrant.auth.JwtService;
 import mygrant.common.DuplicateEmailException;
 import mygrant.common.GlobalExceptionHandler;
 import mygrant.common.InvalidCredentialsException;
+import mygrant.email.EmailVerificationService;
 import mygrant.user.dto.LoginResponse;
 
 @WebMvcTest(UserController.class)
@@ -35,6 +36,9 @@ class UserControllerTest {
 
     @MockBean
     private UserService userService;
+
+    @MockBean
+    private EmailVerificationService emailVerificationService;
 
     // JwtAuthenticationFilter is discovered in the MVC test context even though
     // filters are disabled for these controller-focused tests.

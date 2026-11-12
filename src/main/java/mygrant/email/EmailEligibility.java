@@ -8,8 +8,8 @@ import mygrant.user.User;
 
 /**
  * The one place that decides whether an account may receive alert emails. There is no
- * email-verified flag yet (CS203-25), so a linked WorkOS identity stands in for one:
- * WorkOS sign-in rejects unverified addresses.
+ * Password accounts become eligible after confirming their email. WorkOS accounts are eligible
+ * because WorkOS has already verified their address before sign-in completes.
  */
 @Component
 public class EmailEligibility {
@@ -28,7 +28,7 @@ public class EmailEligibility {
         if (isBlank(user.getEmail())) {
             return Optional.of(IneligibleReason.NO_EMAIL_ADDRESS);
         }
-        if (!allowUnverifiedRecipients && isBlank(user.getWorkosUserId())) {
+        if (!allowUnverifiedRecipients && !user.isEmailVerified()) {
             return Optional.of(IneligibleReason.EMAIL_NOT_VERIFIED);
         }
         return Optional.empty();
