@@ -159,7 +159,7 @@ class UserProfileServiceTests {
         UpdateProfileRequest request = new UpdateProfileRequest(
                 null, null, null, null, null, null, null, null, null, null,
                 LocalDate.parse("2026-01-01"), null, null, null,
-                "EB-2", null, Set.of(), Set.of());
+                "EB-2", null, Set.of(), null);
 
         assertThatThrownBy(() -> service().updateProfile(user.getEmail(), request))
                 .isInstanceOf(ProfileValidationException.class)
@@ -186,7 +186,7 @@ class UserProfileServiceTests {
                 null, null, null, null, null, null, null, null,
                 null, null,
                 Set.of("EMPLOYER"),
-                Set.of()
+                null
         );
 
         ProfileResponse response = service().updateProfile(user.getEmail(), request);
@@ -214,7 +214,7 @@ class UserProfileServiceTests {
                 null, null, null, null, null, null, null, null,
                 null, null,
                 Set.of("COUNTRY_OF_CITIZENSHIP"),
-                Set.of("COUNTRY_OF_CITIZENSHIP"));
+                null);
 
         ProfileResponse response = service().updateProfile(user.getEmail(), request);
 
@@ -314,17 +314,66 @@ class UserProfileServiceTests {
                 null, null, null, null, null, null, null, null,
                 null, null,
                 Set.of(),
-                Set.of("COUNTRY_OF_CITIZENSHIP")
+                Set.of("VISA_TYPE", "ACADEMIC_LEVEL", "PROGRAM_END_DATE", "COUNTRY_OF_CITIZENSHIP")
         );
 
         service().updateProfile(user.getEmail(), request);
 
-        verify(consentRepository).save(consentCaptor.capture());
+        verify(consentRepository, times(4)).save(consentCaptor.capture());
 
-        ProfileFieldConsent savedConsent = consentCaptor.getValue();
+        ProfileFieldConsent savedConsent = consentCaptor.getAllValues().stream()
+                .filter(consent -> consent.getFieldName() == ProfileFieldDefinition.COUNTRY_OF_CITIZENSHIP)
+                .findFirst().orElseThrow();
         assertThat(savedConsent.getFieldName())
                 .isEqualTo(ProfileFieldDefinition.COUNTRY_OF_CITIZENSHIP);
         assertThat(savedConsent.getConsentedAt()).isNotNull();
+    }
+
+    @Test
+    void existingProfileSaveRejectsUncheckedConsentForFilledField() {
+        User user = user();
+        UserProfile profile = profile(user);
+        profile.setCountryOfCitizenship("Malaysia");
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        when(userProfileRepository.findById(user.getId())).thenReturn(Optional.of(profile));
+
+        UpdateProfileRequest request = new UpdateProfileRequest(
+                null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null,
+                null, null, Set.of(),
+                Set.of("VISA_TYPE", "ACADEMIC_LEVEL", "PROGRAM_END_DATE"));
+
+        assertThatThrownBy(() -> service().updateProfile(user.getEmail(), request))
+                .isInstanceOf(ProfileValidationException.class)
+                .extracting(error -> ((ProfileValidationException) error).getValidationErrors())
+                .isEqualTo(Map.of("countryOfCitizenship",
+                        "Consent is required before this field can be used."));
+        assertThat(profile.getCountryOfCitizenship()).isEqualTo("Malaysia");
+        verify(consentRepository, times(0)).deleteByUserIdAndFieldName(
+                user.getId(), ProfileFieldDefinition.COUNTRY_OF_CITIZENSHIP);
+    }
+
+    @Test
+    void partialUpdateWithoutConsentListKeepsExistingPermission() {
+        User user = user();
+        UserProfile profile = profile(user);
+        profile.setCountryOfCitizenship("Malaysia");
+        ProfileFieldConsent existing = new ProfileFieldConsent(user.getId(),
+                ProfileFieldDefinition.COUNTRY_OF_CITIZENSHIP, Instant.now());
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        when(userProfileRepository.findById(user.getId())).thenReturn(Optional.of(profile));
+        when(userProfileRepository.save(any(UserProfile.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(consentRepository.findByUserId(user.getId())).thenReturn(List.of(existing));
+
+        UpdateProfileRequest request = new UpdateProfileRequest(
+                null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null,
+                null, null, Set.of(), null);
+        ProfileResponse response = service().updateProfile(user.getEmail(), request);
+
+        assertThat(response.consents()).containsKey("COUNTRY_OF_CITIZENSHIP");
+        verify(consentRepository, times(0)).deleteByUserIdAndFieldName(
+                user.getId(), ProfileFieldDefinition.COUNTRY_OF_CITIZENSHIP);
     }
 
     @Test

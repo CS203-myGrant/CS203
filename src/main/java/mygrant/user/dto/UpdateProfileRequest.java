@@ -63,7 +63,7 @@ public record UpdateProfileRequest(
                 visaStartDate, visaExpiryDate, optStartDate,
                 i140FilingDate, priorityDate, academicLevel,
                 programEndDate, upcomingTravelDate,
-                null, null, Set.of(), Set.of(), null, null
+                null, null, Set.of(), null, null, null
         );
     }
 }
