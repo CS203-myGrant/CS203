@@ -483,13 +483,18 @@
   .evidence-pill{font-size:13px;font-weight:600;padding:2px 8px;border-radius:2px;color:var(--text);background:var(--base-lightest);}
   .warning-list{margin:8px 0 0;padding-left:20px;color:var(--text);font-size:15px;line-height:1.6;}
   .chat-shell{border:1px solid var(--base-lighter);border-radius:8px;overflow:hidden;background:#fff;max-width:820px;box-shadow:0 1px 4px rgba(0,0,0,.07);}.chat-head{padding:14px 18px;border-bottom:1px solid var(--base-lighter);background:var(--base-lightest);display:flex;justify-content:space-between;align-items:center;}.chat-log{height:min(52vh,520px);min-height:320px;overflow:auto;padding:16px 20px;display:flex;flex-direction:column;gap:6px;background:#fafbfc;}.chat-row{display:flex;flex-direction:column;align-self:flex-start;max-width:72%;gap:3px;}.chat-row.mine{align-self:flex-end;}.chat-message{padding:9px 13px;border-radius:8px;background:#fff;border:1px solid var(--base-lighter);line-height:1.55;white-space:pre-wrap;word-break:break-word;font-size:15px;}.chat-row.mine .chat-message{background:var(--primary);color:#fff;border-color:var(--primary);}.chat-meta{font-size:11.5px;font-weight:600;color:var(--muted);padding:0 2px;}.chat-row.mine .chat-meta{text-align:right;}.chat-compose{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--base-lighter);background:#fff;align-items:center;}.chat-compose input{flex:1;padding:8px 12px;height:38px;font-size:15px;font-family:var(--sans);border:1px solid var(--field-border);border-radius:4px;}.chat-compose input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-light);}.conversation-layout{display:grid;grid-template-columns:minmax(220px,280px) 1fr;gap:18px;}.conversation-list{border:1px solid var(--base-lighter);background:#fff;}.conversation-item{width:100%;text-align:left;padding:14px;border:0;border-bottom:1px solid var(--base-lighter);border-left:4px solid transparent;background:#fff;cursor:pointer;font-size:16px;}.conversation-item.active{background:var(--primary-light);border-left-color:var(--primary);}.conversation-item strong,.conversation-item span{display:block;}.conversation-item span{font-size:14px;color:var(--muted);margin-top:4px;}
-  .feedback-fab{position:sticky;bottom:24px;z-index:15;width:max-content;margin:24px 0 0 auto;padding:12px 20px;border:0;border-radius:4px;background:var(--primary);color:#fff;font-family:var(--sans);font-size:16px;font-weight:700;letter-spacing:0;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;align-items:center;gap:8px;}.feedback-fab:hover{background:var(--primary-dark);}.feedback-fab:focus-visible{outline:4px solid var(--focus);outline-offset:3px;}.fab-badge{font-size:11px;font-weight:700;background:#fff;color:var(--urgent);padding:0 5px;border-radius:9px;min-width:18px;text-align:center;line-height:17px;}
+  .feedback-fab{position:fixed;right:32px;bottom:32px;z-index:15;width:max-content;margin:0;padding:12px 20px;border:0;border-radius:4px;background:var(--primary);color:#fff;font-family:var(--sans);font-size:16px;font-weight:700;letter-spacing:0;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;align-items:center;gap:8px;transition:bottom .12s ease-out;}.feedback-fab:hover{background:var(--primary-dark);}.feedback-fab:focus-visible{outline:4px solid var(--focus);outline-offset:3px;}.fab-badge{font-size:11px;font-weight:700;background:#fff;color:var(--urgent);padding:0 5px;border-radius:9px;min-width:18px;text-align:center;line-height:17px;}
+  /* Reserve a side lane so the floating control cannot cover page content. */
+  .main:has(.feedback-fab){max-width:min(1100px,calc(100% - 176px));margin-left:auto;margin-right:max(176px,calc((100% - 1100px)/2));}
+  .feedback-fab{right:16px;transition:none;}
 
   .site-footer{background:var(--ink);color:#D9E8F6;font-size:14px;margin-top:40px;}
   .site-footer-inner{max-width:1100px;margin:0 auto;padding:22px 24px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;}
   .site-footer strong{color:#fff;font-family:var(--serif);}
 
   @media (max-width:800px){
+    .main:has(.feedback-fab){max-width:calc(100% - 64px);margin-right:64px;}
+    .feedback-fab{right:8px;writing-mode:vertical-rl;padding:16px 10px;}
     .site-header-inner{flex-wrap:wrap;padding:14px 16px;}
     .brand-divider,.brand-text{display:none;}
     .header-tools .role-tag{display:none;}
@@ -509,7 +514,6 @@
     .entry .flag{grid-row:1 / span 2;}
     .entry-action{grid-column:2;padding:0 18px 16px;}
     .conversation-layout{grid-template-columns:1fr;}.chat-row{max-width:90%;}.chat-compose{flex-wrap:wrap;}.chat-compose input{flex-basis:100%;}
-    .feedback-fab{bottom:16px;}
   }
 </style>
 </head>
@@ -1725,9 +1729,31 @@ function render(){
   else if(state.view==='feedback') main.innerHTML = renderFeedback();
   else if(state.view==='feedbackInbox') main.innerHTML = renderFeedbackInbox();
   main.insertAdjacentHTML('beforeend', feedbackAccessButton());
+  requestAnimationFrame(observeFeedbackFooter);
 }
 
 /* Available on every signed-in screen; login intentionally has no support control. */
+let feedbackFooterPositionHandler;
+function positionFeedbackAboveFooter(){
+  const fab=document.querySelector('.feedback-fab');
+  const footer=document.querySelector('.site-footer');
+  if(!fab || !footer) return;
+
+  const baseOffset=window.innerWidth<=1100?20:32;
+  const footerOverlap=Math.max(0,window.innerHeight-footer.getBoundingClientRect().top);
+  /* Keep a visible gap between the floating control and the footer. */
+  fab.style.bottom=`${baseOffset+footerOverlap+(footerOverlap?16:0)}px`;
+}
+function observeFeedbackFooter(){
+  if(!feedbackFooterPositionHandler){
+    feedbackFooterPositionHandler=()=>requestAnimationFrame(positionFeedbackAboveFooter);
+    document.addEventListener('scroll',feedbackFooterPositionHandler,{passive:true,capture:true});
+    window.addEventListener('resize',feedbackFooterPositionHandler);
+    new ResizeObserver(feedbackFooterPositionHandler).observe(document.body);
+  }
+  positionFeedbackAboveFooter();
+}
+
 function feedbackAccessButton(){
   if(!state.token || state.view==='feedback' || state.view==='feedbackInbox') return '';
   return `<button class="feedback-fab" type="button" onclick="openFeedback()" aria-label="Contact myGRANT support">Feedback</button>`;
