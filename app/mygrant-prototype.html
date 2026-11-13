@@ -123,15 +123,19 @@
   /* ---------- APP SHELL ---------- */
   #app{display:none;min-height:100vh;}
   #app.active{display:block;}
-  .nav-group{display:flex;}
+  /* font-size:0 stops the whitespace between tabs from adding a gap when the group is shown as a block. */
+  .nav-group{display:flex;font-size:0;}
   .nav-label{display:none;}
   .nav-link{
     display:inline-flex;align-items:center;gap:8px;padding:12px 14px;font-size:15px;font-weight:700;color:#fff;
-    text-decoration:none;border-bottom:4px solid transparent;margin-bottom:-4px;cursor:pointer;
+    text-decoration:none;border-bottom:4px solid transparent;margin:0 0 -4px;cursor:pointer;
+    vertical-align:top;line-height:1.5;
   }
+  .nav-link + .nav-link{margin-left:4px;}
   button.nav-link{background:none;border:0;border-bottom:4px solid transparent;font-family:inherit;}
-  .nav-link:hover{background:var(--ink-soft);color:#fff;}
-  .nav-link.active{border-bottom-color:#fff;background:var(--ink-soft);}
+  /* Clip the fill to the padding box so a hovered tab doesn't cover the gold rule underneath. */
+  .nav-link:hover{background:var(--ink-soft);background-clip:padding-box;color:#fff;}
+  .nav-link.active{border-bottom-color:#fff;background:var(--ink-soft);background-clip:padding-box;}
   .nav-badge{font-size:12px;font-weight:700;background:var(--urgent);color:#fff;padding:0 7px;border-radius:10px;min-width:20px;text-align:center;line-height:18px;}
   .switch-role{background:var(--primary);border:0;border-radius:4px;color:#fff;font-size:15px;font-weight:700;padding:8px 16px;}
   .switch-role:hover{background:#2378C3;}
