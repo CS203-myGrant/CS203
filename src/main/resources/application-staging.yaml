@@ -3,6 +3,10 @@ spring:
     url: ${DATABASE_URL}
     username: ${DATABASE_USERNAME}
     password: ${DATABASE_PASSWORD}
+  flyway:
+    # Staging already applied V46 before V45 was introduced.  Permit that one
+    # backfilled migration; fresh databases still apply migrations in order.
+    out-of-order: true
   ai:
     openai:
       # No placeholder here: a hosted app without a key fails at startup, not on first import.

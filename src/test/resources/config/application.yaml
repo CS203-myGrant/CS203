@@ -1,6 +1,13 @@
 # Loaded on top of src/main/resources/application.yaml for every test, including IDE runs.
 # Scheduled email jobs never run in tests; tests call the email services directly. Nor does the
 # startup rule backfill, which would link documents other tests create; PolicyRuleBackfillTest runs it.
+spring:
+  # A developer's persistent local test database may already have V46 before the
+  # subsequently introduced V45. CI starts from an empty database, but local
+  # integration tests must be able to apply that backfilled migration too.
+  flyway:
+    out-of-order: true
+
 mygrant:
   # Async assessment integration tests opt in with mocked providers.
   impact:
