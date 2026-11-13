@@ -132,7 +132,6 @@
     vertical-align:top;line-height:1.5;
   }
   .nav-link + .nav-link{margin-left:4px;}
-  button.nav-link{background:none;border:0;border-bottom:4px solid transparent;font-family:inherit;}
   /* Clip the fill to the padding box so a hovered tab doesn't cover the gold rule underneath. */
   .nav-link:hover{background:var(--ink-soft);background-clip:padding-box;color:#fff;}
   .nav-link.active{border-bottom-color:#fff;background:var(--ink-soft);background-clip:padding-box;}
@@ -611,7 +610,7 @@
     <div id="nav-student" class="nav-group" style="display:none;">
       <div class="nav-label">Case</div>
       <a class="nav-link" data-view="dashboard" onclick="goto('dashboard')">Impact dashboard<span id="nav-unread" class="nav-badge" style="display:none;">0</span></a>
-      <button class="nav-link" data-view="applicationProgress" type="button" onclick="goto('applicationProgress')">Application tracker</button>
+      <a class="nav-link" data-view="applicationProgress" onclick="goto('applicationProgress')">Application tracker</a>
     </div>
 
     <div id="nav-manager" class="nav-group" style="display:none;">
