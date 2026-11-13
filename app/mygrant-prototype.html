@@ -480,10 +480,9 @@
   .evidence-pill{font-size:13px;font-weight:600;padding:2px 8px;border-radius:2px;color:var(--text);background:var(--base-lightest);}
   .warning-list{margin:8px 0 0;padding-left:20px;color:var(--text);font-size:15px;line-height:1.6;}
   .chat-shell{border:1px solid var(--base-lighter);border-radius:8px;overflow:hidden;background:#fff;max-width:820px;box-shadow:0 1px 4px rgba(0,0,0,.07);}.chat-head{padding:14px 18px;border-bottom:1px solid var(--base-lighter);background:var(--base-lightest);display:flex;justify-content:space-between;align-items:center;}.chat-log{height:min(52vh,520px);min-height:320px;overflow:auto;padding:16px 20px;display:flex;flex-direction:column;gap:6px;background:#fafbfc;}.chat-row{display:flex;flex-direction:column;align-self:flex-start;max-width:72%;gap:3px;}.chat-row.mine{align-self:flex-end;}.chat-message{padding:9px 13px;border-radius:8px;background:#fff;border:1px solid var(--base-lighter);line-height:1.55;white-space:pre-wrap;word-break:break-word;font-size:15px;}.chat-row.mine .chat-message{background:var(--primary);color:#fff;border-color:var(--primary);}.chat-meta{font-size:11.5px;font-weight:600;color:var(--muted);padding:0 2px;}.chat-row.mine .chat-meta{text-align:right;}.chat-compose{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--base-lighter);background:#fff;align-items:center;}.chat-compose input{flex:1;padding:8px 12px;height:38px;font-size:15px;font-family:var(--sans);border:1px solid var(--field-border);border-radius:4px;}.chat-compose input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-light);}.conversation-layout{display:grid;grid-template-columns:minmax(220px,280px) 1fr;gap:18px;}.conversation-list{border:1px solid var(--base-lighter);background:#fff;}.conversation-item{width:100%;text-align:left;padding:14px;border:0;border-bottom:1px solid var(--base-lighter);border-left:4px solid transparent;background:#fff;cursor:pointer;font-size:16px;}.conversation-item.active{background:var(--primary-light);border-left-color:var(--primary);}.conversation-item strong,.conversation-item span{display:block;}.conversation-item span{font-size:14px;color:var(--muted);margin-top:4px;}
-  .feedback-fab{position:fixed;right:32px;bottom:32px;z-index:15;width:max-content;margin:0;padding:12px 20px;border:0;border-radius:4px;background:var(--primary);color:#fff;font-family:var(--sans);font-size:16px;font-weight:700;letter-spacing:0;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;align-items:center;gap:8px;}.feedback-fab:hover{background:var(--primary-dark);}.feedback-fab:focus-visible{outline:4px solid var(--focus);outline-offset:3px;}.fab-badge{font-size:11px;font-weight:700;background:#fff;color:var(--urgent);padding:0 5px;border-radius:9px;min-width:18px;text-align:center;line-height:17px;}
+  .feedback-fab{position:fixed;right:32px;bottom:calc(32px + var(--footer-lift,0px));z-index:15;width:max-content;margin:0;padding:12px 20px;border:0;border-radius:4px;background:var(--primary);color:#fff;font-family:var(--sans);font-size:16px;font-weight:700;letter-spacing:0;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;align-items:center;gap:8px;transition:bottom .12s ease-out;}.feedback-fab:hover{background:var(--primary-dark);}.feedback-fab:focus-visible{outline:4px solid var(--focus);outline-offset:3px;}.fab-badge{font-size:11px;font-weight:700;background:#fff;color:var(--urgent);padding:0 5px;border-radius:9px;min-width:18px;text-align:center;line-height:17px;}
   @media (min-width:1440px){.feedback-fab{right:max(32px,calc((100vw - 1100px)/2 - 96px));}}
   @media (max-width:1100px){.feedback-fab{right:20px;bottom:20px;}}
-  .feedback-fab.footer-visible{visibility:hidden;pointer-events:none;}
 
   .site-footer{background:var(--ink);color:#D9E8F6;font-size:14px;margin-top:40px;}
   .site-footer-inner{max-width:1100px;margin:0 auto;padding:22px 24px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;}
@@ -1724,15 +1723,28 @@ function render(){
 
 /* Available on every signed-in screen; login intentionally has no support control. */
 let feedbackFooterObserver;
+let feedbackFooterPositionHandler;
 function observeFeedbackFooter(){
   feedbackFooterObserver?.disconnect();
+  if(feedbackFooterPositionHandler){
+    window.removeEventListener('scroll',feedbackFooterPositionHandler);
+    window.removeEventListener('resize',feedbackFooterPositionHandler);
+  }
   const fab=document.querySelector('.feedback-fab');
   const footer=document.querySelector('.site-footer');
   if(!fab || !footer || !('IntersectionObserver' in window)) return;
-  feedbackFooterObserver=new IntersectionObserver(([entry])=>{
-    fab.classList.toggle('footer-visible',entry.isIntersecting);
-  },{rootMargin:'0px 0px 0px 0px'});
+  const positionAboveFooter=()=>{
+    const gap=16;
+    const footerTop=footer.getBoundingClientRect().top;
+    const lift=Math.max(0,window.innerHeight-footerTop+gap-32);
+    fab.style.setProperty('--footer-lift',`${lift}px`);
+  };
+  feedbackFooterObserver=new IntersectionObserver(positionAboveFooter,{rootMargin:'0px'});
   feedbackFooterObserver.observe(footer);
+  feedbackFooterPositionHandler=positionAboveFooter;
+  window.addEventListener('scroll',feedbackFooterPositionHandler,{passive:true});
+  window.addEventListener('resize',feedbackFooterPositionHandler);
+  positionAboveFooter();
 }
 
 function feedbackAccessButton(){
