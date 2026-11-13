@@ -1723,23 +1723,23 @@ function render(){
 
 /* Available on every signed-in screen; login intentionally has no support control. */
 let feedbackFooterPositionHandler;
-function observeFeedbackFooter(){
-  if(feedbackFooterPositionHandler){
-    window.removeEventListener('scroll',feedbackFooterPositionHandler);
-    window.removeEventListener('resize',feedbackFooterPositionHandler);
-  }
+function positionFeedbackAboveFooter(){
   const fab=document.querySelector('.feedback-fab');
   const footer=document.querySelector('.site-footer');
   if(!fab || !footer) return;
-  const positionAboveFooter=()=>{
-    const gap=16;
-    const footerTop=footer.getBoundingClientRect().top;
-    fab.style.bottom=`${Math.max(32,window.innerHeight-footerTop+gap)}px`;
-  };
-  feedbackFooterPositionHandler=positionAboveFooter;
-  window.addEventListener('scroll',feedbackFooterPositionHandler,{passive:true});
-  window.addEventListener('resize',feedbackFooterPositionHandler);
-  positionAboveFooter();
+
+  const baseOffset=window.innerWidth<=1100?20:32;
+  const footerOverlap=Math.max(0,window.innerHeight-footer.getBoundingClientRect().top);
+  /* Keep a visible gap between the floating control and the footer. */
+  fab.style.bottom=`${baseOffset+footerOverlap+(footerOverlap?16:0)}px`;
+}
+function observeFeedbackFooter(){
+  if(!feedbackFooterPositionHandler){
+    feedbackFooterPositionHandler=()=>requestAnimationFrame(positionFeedbackAboveFooter);
+    window.addEventListener('scroll',feedbackFooterPositionHandler,{passive:true});
+    window.addEventListener('resize',feedbackFooterPositionHandler);
+  }
+  positionFeedbackAboveFooter();
 }
 
 function feedbackAccessButton(){
