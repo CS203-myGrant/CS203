@@ -60,7 +60,7 @@ that specific person.
   intersect, produces two separate assessments rather than one combined read.
 - Assessment quality is bounded by the 6,000-character indexing limit on source
   documents. (Historical story wording; current ingestion/prompt limits are
-  documented separately in README.)
+  documented in [sources-and-ingestion.md](sources-and-ingestion.md).)
 
 ### Follow-ups
 

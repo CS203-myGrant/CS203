@@ -35,7 +35,7 @@ concept. Email's CRITICAL / OTHER buckets are the user's two delivery preference
 Since CS203-91 the assessment's severity picks the bucket: HIGH uses the critical
 setting; MEDIUM, LOW and not-yet-assessed changes use the other setting (unassessed
 ones only ever in the digest); NOT_APPLICABLE is never emailed. In-app alerts keep
-their keyword-based `actionRequired` flag. See the README's Email alerts section.
+their keyword-based `actionRequired` flag. See [Email alerts](notifications-and-email.md#email-alerts).
 
 ## Migration and API contract
 
