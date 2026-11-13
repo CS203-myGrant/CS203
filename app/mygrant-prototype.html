@@ -483,13 +483,13 @@
   .feedback-fab{position:fixed;right:32px;bottom:32px;z-index:15;width:max-content;margin:0;padding:12px 20px;border:0;border-radius:4px;background:var(--primary);color:#fff;font-family:var(--sans);font-size:16px;font-weight:700;letter-spacing:0;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;align-items:center;gap:8px;}.feedback-fab:hover{background:var(--primary-dark);}.feedback-fab:focus-visible{outline:4px solid var(--focus);outline-offset:3px;}.fab-badge{font-size:11px;font-weight:700;background:#fff;color:var(--urgent);padding:0 5px;border-radius:9px;min-width:18px;text-align:center;line-height:17px;}
   @media (min-width:1440px){.feedback-fab{right:max(32px,calc((100vw - 1100px)/2 - 96px));}}
   @media (max-width:1100px){.feedback-fab{right:20px;bottom:20px;}}
+  .feedback-fab.footer-visible{visibility:hidden;pointer-events:none;}
 
   .site-footer{background:var(--ink);color:#D9E8F6;font-size:14px;margin-top:40px;}
   .site-footer-inner{max-width:1100px;margin:0 auto;padding:22px 24px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;}
   .site-footer strong{color:#fff;font-family:var(--serif);}
 
   @media (max-width:800px){
-    .feedback-fab{position:static;margin:24px 0 0 auto;}
     .site-header-inner{flex-wrap:wrap;padding:14px 16px;}
     .brand-divider,.brand-text{display:none;}
     .header-tools .role-tag{display:none;}
@@ -1719,9 +1719,22 @@ function render(){
   else if(state.view==='feedback') main.innerHTML = renderFeedback();
   else if(state.view==='feedbackInbox') main.innerHTML = renderFeedbackInbox();
   main.insertAdjacentHTML('beforeend', feedbackAccessButton());
+  observeFeedbackFooter();
 }
 
 /* Available on every signed-in screen; login intentionally has no support control. */
+let feedbackFooterObserver;
+function observeFeedbackFooter(){
+  feedbackFooterObserver?.disconnect();
+  const fab=document.querySelector('.feedback-fab');
+  const footer=document.querySelector('.site-footer');
+  if(!fab || !footer || !('IntersectionObserver' in window)) return;
+  feedbackFooterObserver=new IntersectionObserver(([entry])=>{
+    fab.classList.toggle('footer-visible',entry.isIntersecting);
+  },{rootMargin:'0px 0px 0px 0px'});
+  feedbackFooterObserver.observe(footer);
+}
+
 function feedbackAccessButton(){
   if(!state.token || state.view==='feedback' || state.view==='feedbackInbox') return '';
   return `<button class="feedback-fab" type="button" onclick="openFeedback()" aria-label="Contact myGRANT support">Feedback</button>`;
