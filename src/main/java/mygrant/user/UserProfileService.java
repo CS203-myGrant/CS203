@@ -297,8 +297,12 @@ public class UserProfileService {
                 : request.consentedFields();
         Map<String, String> errors = new LinkedHashMap<>();
 
+        // Only the visa category is required to complete a profile. Optional
+        // registration fields must not force a user to tick additional boxes
+        // merely because they were already supplied during sign-up.
         for (ProfileFieldDefinition field : ProfileFieldDefinition.values()) {
-            if (isPopulated(profile, field) && !consentedFields.contains(field.name())) {
+            if (field.required() && isPopulated(profile, field)
+                    && !consentedFields.contains(field.name())) {
                 errors.put(field.apiName(), "Consent is required before this field can be used.");
             }
         }

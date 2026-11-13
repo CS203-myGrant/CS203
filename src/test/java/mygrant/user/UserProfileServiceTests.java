@@ -150,6 +150,38 @@ class UserProfileServiceTests {
     }
 
     @Test
+    void savesOptionalProfileInformationWithOnlyVisaConsent() {
+        User user = user();
+        user.setProfileComplete(false);
+
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        when(userProfileRepository.findById(user.getId())).thenReturn(Optional.empty());
+        when(userProfileRepository.save(any(UserProfile.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(consentRepository.findByUserId(user.getId())).thenReturn(List.of());
+
+        UpdateProfileRequest request = new UpdateProfileRequest(
+                "H-1B", "Malaysia", "Malaysia", "US", "Employed", "Example Inc.",
+                LocalDate.parse("2026-01-01"), LocalDate.parse("2027-01-01"),
+                null, null, null, "Master's", LocalDate.parse("2026-11-27"),
+                LocalDate.parse("2026-12-03"), null, null, Set.of(), Set.of("VISA_TYPE")
+        );
+
+        ProfileResponse response = service().updateProfile(user.getEmail(), request);
+
+        assertThat(user.isProfileComplete()).isTrue();
+        assertThat(response.visaType()).isEqualTo("H-1B");
+        assertThat(response.countryOfOrigin()).isEqualTo("Malaysia");
+        assertThat(response.employer()).isEqualTo("Example Inc.");
+        assertThat(response.academicLevel()).isEqualTo("Master's");
+        assertThat(response.programEndDate()).isEqualTo(LocalDate.parse("2026-11-27"));
+        assertThat(response.upcomingTravelDate()).isEqualTo(LocalDate.parse("2026-12-03"));
+        verify(consentRepository, times(1)).save(consentCaptor.capture());
+        assertThat(consentCaptor.getValue().getFieldName())
+                .isEqualTo(ProfileFieldDefinition.VISA_TYPE);
+    }
+
+    @Test
     void requiresVisaBulletinFieldsTogether() {
         User user = user();
         UserProfile profile = profile(user);
@@ -330,12 +362,15 @@ class UserProfileServiceTests {
     }
 
     @Test
-    void existingProfileSaveRejectsUncheckedConsentForFilledField() {
+    void existingProfileSaveAllowsUncheckedOptionalFields() {
         User user = user();
         UserProfile profile = profile(user);
         profile.setCountryOfCitizenship("Malaysia");
         when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
         when(userProfileRepository.findById(user.getId())).thenReturn(Optional.of(profile));
+        when(userProfileRepository.save(any(UserProfile.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(consentRepository.findByUserId(user.getId())).thenReturn(List.of());
 
         UpdateProfileRequest request = new UpdateProfileRequest(
                 null, null, null, null, null, null,
@@ -343,14 +378,8 @@ class UserProfileServiceTests {
                 null, null, Set.of(),
                 Set.of("VISA_TYPE", "ACADEMIC_LEVEL", "PROGRAM_END_DATE"));
 
-        assertThatThrownBy(() -> service().updateProfile(user.getEmail(), request))
-                .isInstanceOf(ProfileValidationException.class)
-                .extracting(error -> ((ProfileValidationException) error).getValidationErrors())
-                .isEqualTo(Map.of("countryOfCitizenship",
-                        "Consent is required before this field can be used."));
+        service().updateProfile(user.getEmail(), request);
         assertThat(profile.getCountryOfCitizenship()).isEqualTo("Malaysia");
-        verify(consentRepository, times(0)).deleteByUserIdAndFieldName(
-                user.getId(), ProfileFieldDefinition.COUNTRY_OF_CITIZENSHIP);
     }
 
     @Test
@@ -397,9 +426,7 @@ class UserProfileServiceTests {
                 .isInstanceOf(ProfileValidationException.class)
                 .extracting(error -> ((ProfileValidationException) error).getValidationErrors())
                 .isEqualTo(Map.of(
-                        "visaType", "Consent is required before this field can be used.",
-                        "academicLevel", "Consent is required before this field can be used.",
-                        "programEndDate", "Consent is required before this field can be used."
+                        "visaType", "Consent is required before this field can be used."
                 ));
     }
 

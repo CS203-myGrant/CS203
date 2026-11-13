@@ -961,21 +961,26 @@ function startWorkosLogin(){
   window.location.href = `${API_BASE}/api/v1/auth/workos/login`;
 }
 function renderProfileCompletion(){
+  // Registration creates a partial profile. Keep those values visible while the
+  // user supplies any remaining onboarding information instead of presenting a
+  // new form with its default values.
+  const registration = state.profile || state.user || {};
+  const selected = value => registration.visaType === value ? ' selected' : '';
   return `<div class="page-head"><h1>Complete your profile</h1><p class="sub">Add your visa details before using myGRANT. Your impact feed will be empty until your profile is complete.</p></div>
     <form class="form-grid" onsubmit="submitProfileCompletion(event)">
-      <div class="field"><label for="workos-visa">Visa category (Required)</label><select id="workos-visa" required><option>F-1</option><option>J-1</option><option>H-1B</option></select></div>
+      <div class="field"><label for="workos-visa">Visa category (Required)</label><select id="workos-visa" required><option value="F-1"${selected('F-1')}>F-1</option><option value="J-1"${selected('J-1')}>J-1</option><option value="H-1B"${selected('H-1B')}>H-1B</option></select></div>
       <div class="field"><label for="workos-origin">Country of origin (Optional)</label><input id="workos-origin" list="workos-country-options" autocomplete="country-name" placeholder="Start typing a country"></div>
       <div class="field"><label for="workos-citizenship">Country of citizenship (Optional)</label><input id="workos-citizenship" list="workos-country-options" autocomplete="country-name" placeholder="Start typing a country"></div>
-      <div class="field"><label for="workos-level">Academic level (Optional)</label><select id="workos-level"><option value="">Not specified</option><option>Undergraduate</option><option>Master's</option><option>PhD</option><option>Other</option></select></div>
-      <div class="field"><label for="workos-end-date">Program end date (Optional)</label><input id="workos-end-date" type="date"></div>
-      <div class="field"><label for="workos-location">Current location (Optional)</label><select id="workos-location"><option value="">Not specified</option><option value="US">US</option><option value="ABROAD">Abroad</option></select></div>
+      <div class="field"><label for="workos-level">Academic level (Optional)</label><select id="workos-level"><option value=""${!registration.academicLevel ? ' selected' : ''}>Not specified</option><option${registration.academicLevel === 'Undergraduate' ? ' selected' : ''}>Undergraduate</option><option${registration.academicLevel === "Master's" ? ' selected' : ''}>Master's</option><option${registration.academicLevel === 'PhD' ? ' selected' : ''}>PhD</option><option${registration.academicLevel === 'Other' ? ' selected' : ''}>Other</option></select></div>
+      <div class="field"><label for="workos-end-date">Program end date (Optional)</label><input id="workos-end-date" type="date" value="${escapeAttribute(registration.programEndDate || '')}"></div>
+      <div class="field"><label for="workos-location">Current location (Optional)</label><select id="workos-location"><option value=""${!registration.currentLocation ? ' selected' : ''}>Not specified</option><option value="US"${registration.currentLocation === 'US' ? ' selected' : ''}>US</option><option value="ABROAD"${registration.currentLocation === 'ABROAD' ? ' selected' : ''}>Abroad</option></select></div>
       <div class="field"><label for="workos-employment-status">Employment status (Optional)</label><input id="workos-employment-status"></div>
       <div class="field"><label for="workos-employer">Employer (Optional)</label><input id="workos-employer"></div>
       <div class="field"><label for="workos-visa-start">Visa start date (Optional)</label><input id="workos-visa-start" type="date"></div>
       <div class="field"><label for="workos-visa-expiry">Visa expiry date (Optional)</label><input id="workos-visa-expiry" type="date"></div>
       <div class="field"><label for="workos-opt-start">OPT start date (Optional)</label><input id="workos-opt-start" type="date"></div>
       <div class="field"><label for="workos-i140-date">I-140 filing date (Optional)</label><input id="workos-i140-date" type="date"></div>
-      <div class="field"><label for="workos-travel-date">Upcoming travel date (Optional)</label><input id="workos-travel-date" type="date"></div>
+      <div class="field"><label for="workos-travel-date">Upcoming travel date (Optional)</label><input id="workos-travel-date" type="date" value="${escapeAttribute(registration.upcomingTravelDate || '')}"></div>
       <div class="field"><label for="workos-immigrant-category">Immigrant category (Optional)</label><input id="workos-immigrant-category" list="immigrant-category-options" placeholder="e.g. EB-2"></div>
       <div class="field"><label for="workos-chargeability">Chargeability area (Optional)</label><select id="workos-chargeability"><option value="">Choose the Visa Bulletin chart column</option>${['ALL CHARGEABILITY AREAS EXCEPT THOSE LISTED','CHINA-MAINLAND BORN','INDIA','MEXICO','PHILIPPINES'].map(area=>`<option value="${area}">${area}</option>`).join('')}</select></div>
       <datalist id="immigrant-category-options">${['EB-1','EB-2','EB-3','EB-3 Other Workers','EB-4','EB-4 Religious Workers','EB-5','EB-5 Rural','EB-5 High Unemployment','EB-5 Infrastructure','F1','F2A','F2B','F3','F4'].map(value=>`<option value="${value}">`).join('')}</datalist>
