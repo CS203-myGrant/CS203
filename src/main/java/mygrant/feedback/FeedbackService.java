@@ -1,5 +1,6 @@
 package mygrant.feedback;
 
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -11,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import mygrant.feedback.dto.FeedbackConversationResponse;
 import mygrant.feedback.dto.FeedbackMessageResponse;
+import mygrant.manager.ManagerMembershipRepository;
 import mygrant.user.User;
 import mygrant.user.UserRepository;
 import mygrant.user.UserRole;
@@ -20,12 +22,15 @@ public class FeedbackService {
     private final FeedbackConversationRepository conversationRepository;
     private final FeedbackMessageRepository messageRepository;
     private final UserRepository userRepository;
+    private final ManagerMembershipRepository membershipRepository;
 
     public FeedbackService(FeedbackConversationRepository conversationRepository,
-            FeedbackMessageRepository messageRepository, UserRepository userRepository) {
+            FeedbackMessageRepository messageRepository, UserRepository userRepository,
+            ManagerMembershipRepository membershipRepository) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.userRepository = userRepository;
+        this.membershipRepository = membershipRepository;
     }
 
     @Transactional
@@ -53,8 +58,11 @@ public class FeedbackService {
     }
 
     public Page<FeedbackConversationResponse> staffConversations(String email, Pageable pageable) {
-        requireStaff(user(email));
-        Page<FeedbackConversation> conversations = conversationRepository.findAllByOrderByUpdatedAtDesc(pageable);
+        User staff = user(email);
+        requireStaff(staff);
+        Page<FeedbackConversation> conversations = staff.getRole() == UserRole.ADMIN
+                ? conversationRepository.findAllByOrderByUpdatedAtDesc(pageable)
+                : conversationRepository.findAllByUserIdInOrderByUpdatedAtDesc(managedApplicantIds(staff), pageable);
         Map<Long, User> users = userRepository.findAllById(conversations.stream()
                         .map(FeedbackConversation::getUserId).toList()).stream()
                 .collect(Collectors.toMap(User::getId, Function.identity()));
@@ -62,15 +70,16 @@ public class FeedbackService {
     }
 
     public Page<FeedbackMessageResponse> staffMessages(String email, Long conversationId, Pageable pageable) {
-        requireStaff(user(email));
-        return messageResponses(conversation(conversationId), pageable);
+        User staff = user(email);
+        requireStaff(staff);
+        return messageResponses(staffConversation(staff, conversationId), pageable);
     }
 
     @Transactional
     public FeedbackMessageResponse sendAsStaff(String email, Long conversationId, String body) {
         User staff = user(email);
         requireStaff(staff);
-        return saveMessage(conversation(conversationId), staff, "STAFF", body);
+        return saveMessage(staffConversation(staff, conversationId), staff, "STAFF", body);
     }
 
     private FeedbackMessageResponse saveMessage(FeedbackConversation conversation, User sender,
@@ -104,6 +113,19 @@ public class FeedbackService {
     private FeedbackConversation conversation(Long id) {
         return conversationRepository.findById(id)
                 .orElseThrow(() -> new FeedbackNotFoundException("Feedback conversation not found"));
+    }
+
+    private FeedbackConversation staffConversation(User staff, Long id) {
+        if (staff.getRole() == UserRole.ADMIN) {
+            return conversation(id);
+        }
+        return conversationRepository.findByIdAndUserIdIn(id, managedApplicantIds(staff))
+                .orElseThrow(() -> new FeedbackNotFoundException("Feedback conversation not found"));
+    }
+
+    private List<Long> managedApplicantIds(User manager) {
+        return membershipRepository.findAllByManagerIdOrderByCreatedAtAscUserIdAsc(manager.getId())
+                .stream().map(mygrant.manager.ManagerMembership::getUserId).toList();
     }
 
     private User user(String email) {

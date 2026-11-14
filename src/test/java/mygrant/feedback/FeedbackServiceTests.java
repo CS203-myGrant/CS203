@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -14,23 +15,26 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Page;
 
 import mygrant.user.User;
 import mygrant.user.UserRepository;
 import mygrant.user.UserRole;
+import mygrant.manager.ManagerMembershipRepository;
 
 @ExtendWith(MockitoExtension.class)
 class FeedbackServiceTests {
     @Mock FeedbackConversationRepository conversationRepository;
     @Mock FeedbackMessageRepository messageRepository;
     @Mock UserRepository userRepository;
+    @Mock ManagerMembershipRepository membershipRepository;
 
     private FeedbackService service;
     private User applicant;
 
     @BeforeEach
     void setUp() {
-        service = new FeedbackService(conversationRepository, messageRepository, userRepository);
+        service = new FeedbackService(conversationRepository, messageRepository, userRepository, membershipRepository);
         applicant = user(1L, "Applicant", "applicant@example.com", UserRole.APPLICANT);
     }
 
@@ -71,6 +75,31 @@ class FeedbackServiceTests {
 
         assertThat(response.senderType()).isEqualTo("STAFF");
         assertThat(response.senderName()).isEqualTo("Support");
+    }
+
+    @Test
+    void managerInboxOnlyQueriesManagedApplicants() {
+        User manager = user(2L, "Manager", "manager@example.com", UserRole.MANAGER);
+        when(userRepository.findByEmail(manager.getEmail())).thenReturn(Optional.of(manager));
+        when(membershipRepository.findAllByManagerIdOrderByCreatedAtAscUserIdAsc(2L))
+                .thenReturn(List.of(new mygrant.manager.ManagerMembership(2L, applicant.getId())));
+        when(conversationRepository.findAllByUserIdInOrderByUpdatedAtDesc(List.of(1L), PageRequest.of(0, 20)))
+                .thenReturn(Page.empty());
+
+        service.staffConversations(manager.getEmail(), PageRequest.of(0, 20));
+
+        verify(conversationRepository).findAllByUserIdInOrderByUpdatedAtDesc(List.of(1L), PageRequest.of(0, 20));
+    }
+
+    @Test
+    void managerCannotReadConversationOutsideManagedApplicants() {
+        User manager = user(2L, "Manager", "manager@example.com", UserRole.MANAGER);
+        when(userRepository.findByEmail(manager.getEmail())).thenReturn(Optional.of(manager));
+        when(membershipRepository.findAllByManagerIdOrderByCreatedAtAscUserIdAsc(2L)).thenReturn(List.of());
+        when(conversationRepository.findByIdAndUserIdIn(10L, List.of())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.staffMessages(manager.getEmail(), 10L, PageRequest.of(0, 20)))
+                .isInstanceOf(FeedbackNotFoundException.class);
     }
 
     private User user(Long id, String name, String email, UserRole role) {

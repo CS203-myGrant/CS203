@@ -4078,6 +4078,7 @@ function renderAdmin(){
   const userRows = state.adminUsers.map(user=>`
     <tr>
       <td>${escapeHtml(user.userName || 'Unnamed user')}</td>
+      <td>${escapeHtml(String(user.userId ?? ''))}</td>
       <td>${escapeHtml(user.userEmail || '')}</td>
       <td><select onchange="updateAdminUserRole(${user.userId}, this.value)">
         ${['APPLICANT','MANAGER','ADMIN'].map(role=>`<option value="${role}" ${user.role===role?'selected':''}>${role}</option>`).join('')}
@@ -4087,7 +4088,7 @@ function renderAdmin(){
     ? '<p class="rag-status">Loading users...</p>'
     : state.adminUsersError
       ? `<div class="rag-error">${escapeHtml(state.adminUsersError)}</div>`
-      : `<table><tr><th>Name</th><th>Email</th><th>Role</th></tr>${userRows || '<tr><td colspan="3">No users found.</td></tr>'}</table>`;
+      : `<table><tr><th>Name</th><th>User ID</th><th>Email</th><th>Role</th></tr>${userRows || '<tr><td colspan="4">No users found.</td></tr>'}</table>`;
   const sourceContent = state.adminSourcesLoading
     ? '<p class="rag-status">Loading monitored sources...</p>'
     : state.adminSourcesError
