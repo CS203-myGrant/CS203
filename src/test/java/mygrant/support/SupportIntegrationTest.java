@@ -9,6 +9,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.util.UUID;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import mygrant.auth.JwtService;
+import mygrant.manager.ManagerMembership;
+import mygrant.manager.ManagerMembershipRepository;
 import mygrant.user.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -31,6 +33,7 @@ class SupportIntegrationTest {
     @Autowired JwtService jwt;
     @Autowired ObjectMapper json;
     @Autowired UserProfileRepository profiles;
+    @Autowired ManagerMembershipRepository memberships;
     @MockBean VectorStore vectors;
 
     @Test
@@ -38,14 +41,18 @@ class SupportIntegrationTest {
         String applicant = account(UserRole.APPLICANT);
         String admin = account(UserRole.ADMIN);
         String manager = account(UserRole.MANAGER);
+        String unlinkedManager = account(UserRole.MANAGER);
         String stranger = account(UserRole.APPLICANT);
+        User applicantUser = users.findByEmail(jwt.extractSubject(applicant.substring(7))).orElseThrow();
+        User managerUser = users.findByEmail(jwt.extractSubject(manager.substring(7))).orElseThrow();
+        memberships.saveAndFlush(new ManagerMembership(managerUser.getId(), applicantUser.getId()));
         String sent = mvc.perform(post("/api/v1/feedback/messages")
                 .header("Authorization", applicant).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"message\":\"Support delivery test\"}"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         long messageId = json.readTree(sent).get("id").asLong();
         String inbox = mvc.perform(get("/api/v1/feedback/admin/conversations")
-                .header("Authorization", admin)).andExpect(status().isOk())
+                .header("Authorization", manager)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         long conversationId = -1;
         for (var conversation : json.readTree(inbox).get("content")) {
@@ -60,6 +67,12 @@ class SupportIntegrationTest {
             }
         }
         assertThat(conversationId).isPositive();
+        mvc.perform(get("/api/v1/feedback/admin/conversations")
+                .header("Authorization", unlinkedManager))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isEmpty());
+        mvc.perform(get("/api/v1/feedback/admin/conversations/" + conversationId + "/messages")
+                .header("Authorization", unlinkedManager)).andExpect(status().isNotFound());
         mvc.perform(post("/api/v1/feedback/admin/conversations/" + conversationId + "/messages")
                 .header("Authorization", admin).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"message\":\"We received your message\"}"))
