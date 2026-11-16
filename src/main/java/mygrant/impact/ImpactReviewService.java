@@ -77,9 +77,8 @@ public class ImpactReviewService {
         }
         String sql = """
                 SELECT r.id, r.user_id, r.policy_id, p.title, r.assessment_json, r.generated_at,
-                       r.version, p.source_url, p.content, o.id AS output_id, r.output_type,
-                       r.publication_status,
-                       r.version, r.output_type, p.source_url, p.content, o.id AS output_id,
+                       r.version, p.source_url, LEFT(p.content, 12000) AS content,
+                       o.id AS output_id, r.output_type, r.publication_status,
                        CAST(o.latest_evaluation_json::jsonb ->> 'citationsValid' AS BOOLEAN) AS citations_valid,
                        applicant.full_name AS applicant_name, applicant.email AS applicant_email
                 FROM policy_recommendations r JOIN policy_documents p ON p.id = r.policy_id
