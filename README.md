@@ -146,6 +146,32 @@ Import policy -> store and split into chunks -> OpenAI embeddings in pgvector
              -> per-user AI assessment -> judge -> publish to feed, or hold for review
 ```
 
+## Database schema
+
+49 application tables across 10 functional modules, 435 columns, 65 database foreign keys and
+one logical pgvector link. Derived from Flyway migrations V1–V56.
+
+[![Entity Relationship Diagram](docs/figures/erd.png)](docs/figures/erd.png)
+
+| Module | Tables |
+| --- | --- |
+| 01 Accounts & profiles | `users`, `user_profiles`, `immigration_documents`, `profile_field_consents`, `manager_user_memberships` |
+| 02 Authentication & support | `refresh_tokens`, `account_deletion_requests`, `account_deletion_audit`, `feedback_conversations`, `feedback_messages`, `visa_application_progress` |
+| 03 Policy catalog & retrieval | `policy_documents`, `policy_chunks`, `policy_affected_countries`, `policy_restriction_categories`, `policy_source_references`, `policy_country_restrictions`, `policy_document_identifiers` |
+| 04 Policy rules & anomalies | `policy_sources`, `policy_rules`, `policy_rule_documents`, `policy_rule_history`, `anomalies` |
+| 05 Source operations | `policy_sources`, `policy_source_change_log`, `policy_source_sync_runs`, `sync_failures` |
+| 06 AI recommendations & assessments | `policy_recommendations`, `impact_assessments`, `policy_question_history`, `ai_output_evaluations`, `stored_ai_outputs` |
+| 07 Actions & human review | `human_reviews`, `action_items`, `impact_assessment_revisions`, `impact_archive_events`, `impact_review_decisions`, `recommendation_reports` |
+| 08 Notifications & email | `notifications`, `email_preferences`, `email_deliveries`, `impact_email_alerts` |
+| 09 Visa bulletin tracking | `visa_bulletin_entries`, `visa_bulletin_health`, `visa_bulletin_imports`, `visa_bulletin_subscriptions`, `visa_bulletin_alerts` |
+| 10 Processing forecasts | `processing_time_snapshots`, `uscis_processing_time_health`, `forecast_series_selections`, `forecast_deadline_alerts` |
+
+**Reading the diagram:**
+- Underlined columns form the primary key; composite primary key parts are all underlined.
+- FK labels and solid arrows show database-enforced references to the parent key.
+- Dashed arrows show the `policy_chunks` metadata/`policy_id` link, which is not a database FK.
+- Gray parent boxes repeat a referenced key from another panel; they are not extra tables.
+
 ## Documentation
 
 | Topic | Document |
